@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+  "cavalier_contours",
+  "cavalier_contours_ffi",
+  "test_suite",
+]

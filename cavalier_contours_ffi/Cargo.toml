@@ -1,0 +1,12 @@
+[package]
+authors = ["Buck McCready <jbuckmccready@gmail.com>"]
+edition = "2018"
+name = "cavalier_contours_ffi"
+version = "0.1.0"
+
+[lib]
+# using "lib" so this crate can be referenced and used directly by rust and "cdylib" so it can be used as a dynamic lib
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+cavalier_contours = {path = "../cavalier_contours"}

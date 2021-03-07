@@ -1,0 +1,19 @@
+[package]
+authors = ["Buck McCready <jbuckmccready@gmail.com>"]
+edition = "2018"
+name = "cavalier_contours"
+version = "0.1.0"
+
+[features]
+allow_unsafe = [] # feature has no explicit dependencies
+
+[dependencies]
+num-traits = "0.2"
+static_aabb2d_index = "0.4"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+harness = false
+name = "benches"
