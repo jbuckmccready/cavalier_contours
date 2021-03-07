@@ -1,6 +1,6 @@
 ## Summary
 
-This project is a continuation of the C++ [CavalierContours](https://github.com/jbuckmccready/CavalierContours) library rewritten in Rust with the goal of building out more functionality and creating a stable C API interface. This project is still in early development, with no APIs yet solidified, the code is not fully tested, and some functions still need to be ported from C++. For tracking progress and contributing view the GitHub issues.
+This project is a continuation of the C++ [CavalierContours](https://github.com/jbuckmccready/CavalierContours) library rewritten in Rust with the goal of building out more functionality, better documentation, and creating a stable C FFI. This project is still in early development, with no APIs yet solidified, the code is not fully tested, and some functions still need to be ported from C++. For tracking progress and contributing checkout the project GitHub issues.
 
 ## Why go to Rust?
 
@@ -12,6 +12,10 @@ This project is a continuation of the C++ [CavalierContours](https://github.com/
 * Type system allows for leaning heavily on threads/concurrency without the risk of memory errors/corruption bugs
 * Discriminated unions and pattern matching as first class language features
 * Great tooling for targeting wasm
+
+## New to Rust but still want to contribute?
+
+I recommend the official rust book [here](https://doc.rust-lang.org/book/ch01-00-getting-started.html). Visual Studio Code + [rust-analyzer](https://rust-analyzer.github.io/) extension work great for editing. If you're looking for something specific to work on check the project issues labeled `good first issue`.
 
 ## License
 
