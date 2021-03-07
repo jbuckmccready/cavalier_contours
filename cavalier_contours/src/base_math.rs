@@ -238,8 +238,6 @@ where
         (point.y - p0.y) / (p1.y - p0.y)
     } else {
         // use x coordinate
-        dbg!((point.y - p0.y) / (point.x - p0.x));
-        dbg!((p1.y - p0.y) / (p1.x - p0.x));
         debug_assert!(
             point.fuzzy_eq(p0)
                 || ((point.y - p0.y) / (point.x - p0.x)).fuzzy_eq((p1.y - p0.y) / (p1.x - p0.x)),
