@@ -97,7 +97,7 @@ where
     }
 
     if v_is_point {
-        // v is point and v is not a point
+        // v is point and u is not a point
         let seg2_t = parametric_from_point(u1, u2, v1);
         if seg2_t.fuzzy_in_range(T::zero(), T::one()) {
             return TrueIntersect {
@@ -110,7 +110,7 @@ where
     }
 
     if u_is_point {
-        // u is point and u is not a point
+        // u is point and v is not a point
         let seg1_t = parametric_from_point(v1, v2, u1);
         if seg1_t.fuzzy_in_range(T::zero(), T::one()) {
             return TrueIntersect {
@@ -144,12 +144,14 @@ where
 
     if (seg2_t1 - seg2_t0).fuzzy_eq_zero() {
         // intersect is a single point (segments line up end to end)
-        // determine if seg1_t is 0.0 or 1.0 (will not match seg2_t since they only touch at ends)
-        let seg1_t = if !seg2_t0.fuzzy_eq_zero() {
+        // determine if seg1_t is 0.0 or 1.0
+        let seg1_t = if v1.fuzzy_eq(u1) || v1.fuzzy_eq(u2) {
+            // v1 touches which is start of seg1
             T::zero()
         } else {
             T::one()
         };
+
         return TrueIntersect {
             seg1_t,
             seg2_t: seg2_t0,
@@ -228,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn endpoints_true_intersect() {
+    fn end_point_start_point_touch_same_direction() {
         let u1 = Vector2::new(-1.0, -1.0);
         let u2 = Vector2::new(1.0, 1.0);
         let v1 = Vector2::new(1.0, 1.0);
@@ -261,6 +263,46 @@ mod tests {
                 result,
                 TrueIntersect {
                     seg1_t: 1.0,
+                    seg2_t: 0.0
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn start_points_touch_opposing_direction() {
+        let u1 = Vector2::new(0.0, 0.0);
+        let u2 = Vector2::new(1.0, 1.0);
+        let v1 = Vector2::new(0.0, 0.0);
+        let v2 = Vector2::new(-1.0, -1.0);
+
+        let result = line_line_intr(u1, u2, v1, v2);
+        assert_case_eq!(
+            result,
+            TrueIntersect {
+                seg1_t: 0.0,
+                seg2_t: 0.0
+            }
+        );
+
+        // flip argument order
+        let result = line_line_intr(v1, v2, u1, u2);
+        assert_case_eq!(
+            result,
+            TrueIntersect {
+                seg1_t: 0.0,
+                seg2_t: 0.0
+            }
+        );
+
+        // rotate v1->v2 should get same result
+        for &angle in TEST_ROTATION_ANGLES {
+            let v2 = v2.rotate_about(v1, angle);
+            let result = line_line_intr(u1, u2, v1, v2);
+            assert_case_eq!(
+                result,
+                TrueIntersect {
+                    seg1_t: 0.0,
                     seg2_t: 0.0
                 }
             );
@@ -314,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn coincident_intersect() {
+    fn overlapping_intersect() {
         let u1 = Vector2::new(-1.0, -1.0);
         let u2 = Vector2::new(1.0, 1.0);
         let v1 = Vector2::new(0.0, 0.0);
@@ -456,7 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn entirely_coincident_same_direction() {
+    fn entirely_overlapping_same_direction() {
         let u1 = Vector2::new(-1.0, -1.0);
         let u2 = Vector2::new(1.0, 1.0);
         let v1 = u1;
@@ -485,7 +527,7 @@ mod tests {
         }
     }
     #[test]
-    fn entirely_coincident_opposing_direction() {
+    fn entirely_overlapping_opposing_direction() {
         let u1 = Vector2::new(-1.0, -1.0);
         let u2 = Vector2::new(1.0, 1.0);
         let v1 = u2;

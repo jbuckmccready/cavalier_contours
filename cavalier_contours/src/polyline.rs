@@ -100,12 +100,24 @@ where
 
     /// Returns the next wrapping vertex index for the polyline.
     ///
-    /// If `i >= self.len()` then 0 is returned, otherwise `i + 1` is returned.
+    /// If `i + 1 >= self.len()` then 0 is returned, otherwise `i + 1` is returned.
     pub fn next_wrapping_index(&self, i: usize) -> usize {
-        if i >= self.len() {
+        let next = i + 1;
+        if next >= self.len() {
             0
         } else {
-            i + 1
+            next
+        }
+    }
+
+    /// Returns the previous wrapping vertex index for the polyline.
+    ///
+    /// If `i == 0` then `self.len() - 1` is returned, otherwise `i - 1` is returned.
+    pub fn prev_wrapping_index(&self, i: usize) -> usize {
+        if i == 0 {
+            self.len() - 1
+        } else {
+            i - 1
         }
     }
 
