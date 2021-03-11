@@ -465,7 +465,7 @@ where
     }
 
     let raw_offset_segs = create_untrimmed_raw_offset_segs(polyline, offset);
-    if raw_offset_segs.len() == 0 {
+    if raw_offset_segs.is_empty() {
         return Polyline::new();
     }
 
@@ -656,7 +656,7 @@ where
     dbg!(raw_offset_polyline);
     // dbg!(&self_intrs);
     let mut query_stack = Vec::new();
-    if self_intrs.len() == 0 {
+    if self_intrs.is_empty() {
         // no self intersects, test point on polyline is valid
         if !point_valid_for_offset(
             &original_polyline,
@@ -754,9 +754,8 @@ where
             let first_split =
                 seg_split_at_point(start_vertex, end_vertex, intr_list[0], pos_equal_eps);
             let mut prev_vertex = first_split.split_vertex;
-            for i in 1..intr_list.len() {
-                let split =
-                    seg_split_at_point(prev_vertex, end_vertex, intr_list[i], pos_equal_eps);
+            for &intr in intr_list.iter().skip(1) {
+                let split = seg_split_at_point(prev_vertex, end_vertex, intr, pos_equal_eps);
                 // update prev_vertex for next loop iteration
                 prev_vertex = split.split_vertex;
                 // skip if positions overlap
@@ -1201,9 +1200,8 @@ where
             let first_split =
                 seg_split_at_point(start_vertex, end_vertex, intr_list[0], pos_equal_eps);
             let mut prev_vertex = first_split.split_vertex;
-            for i in 1..intr_list.len() {
-                let split =
-                    seg_split_at_point(prev_vertex, end_vertex, intr_list[i], pos_equal_eps);
+            for &intr in intr_list.iter().skip(1) {
+                let split = seg_split_at_point(prev_vertex, end_vertex, intr, pos_equal_eps);
                 // update prev_vertex for next loop iteration
                 prev_vertex = split.split_vertex;
                 // skip if positions overlap
@@ -1341,7 +1339,7 @@ where
 }
 
 pub fn stitch_slices_together<T>(
-    slices: &Vec<OpenPolylineSlice<T>>,
+    slices: &[OpenPolylineSlice<T>],
     is_closed: bool,
     orig_max_index: usize,
     options: &PlineOffsetOptions<T>,
@@ -1350,7 +1348,7 @@ where
     T: Real,
 {
     let mut result = Vec::new();
-    if slices.len() == 0 {
+    if slices.is_empty() {
         return result;
     }
 

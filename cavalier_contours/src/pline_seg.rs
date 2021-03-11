@@ -29,27 +29,27 @@ where
     debug_assert!(!v1.pos().fuzzy_eq(v2.pos()), "v1 must not be on top of v2");
 
     // compute radius
-    let b = v1.bulge.abs();
-    let v = v2.pos() - v1.pos();
-    let d = v.length();
-    let r = d * (b * b + T::one()) / (T::four() * b);
+    let abs_bulge = v1.bulge.abs();
+    let chord_v = v2.pos() - v1.pos();
+    let chord_len = chord_v.length();
+    let radius = chord_len * (abs_bulge * abs_bulge + T::one()) / (T::four() * abs_bulge);
 
     // compute center
-    let s = b * d / T::two();
-    let m = r - s;
-    let mut offs_x = -m * v.y / d;
-    let mut offs_y = m * v.x / d;
+    let s = abs_bulge * chord_len / T::two();
+    let m = radius - s;
+    let mut offs_x = -m * chord_v.y / chord_len;
+    let mut offs_y = m * chord_v.x / chord_len;
     if v1.bulge_is_neg() {
         offs_x = -offs_x;
         offs_y = -offs_y;
     }
 
-    let c = Vector2::new(
-        v1.x + v.x / T::two() + offs_x,
-        v1.y + v.y / T::two() + offs_y,
+    let center = Vector2::new(
+        v1.x + chord_v.x / T::two() + offs_x,
+        v1.y + chord_v.y / T::two() + offs_y,
     );
 
-    (r, c)
+    (radius, center)
 }
 
 /// Result from splitting a segment using [seg_split_at_point].
@@ -134,10 +134,10 @@ where
     let updated_start = PlineVertex::new(v1.x, v1.y, bulge1);
     let split_vertex = PlineVertex::new(point_on_seg.x, point_on_seg.y, bulge2);
 
-    return SplitResult {
+    SplitResult {
         updated_start,
         split_vertex,
-    };
+    }
 }
 
 /// Find the tangent direction vector on a polyline segment defined by `v1` to `v2` at `point_on_seg`.

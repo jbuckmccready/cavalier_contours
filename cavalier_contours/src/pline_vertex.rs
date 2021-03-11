@@ -16,7 +16,7 @@ where
     }
 
     pub fn from_slice(slice: &[T]) -> Option<Self> {
-        if let &[x, y, bulge] = slice {
+        if let [x, y, bulge] = *slice {
             Some(PlineVertex::new(x, y, bulge))
         } else {
             None

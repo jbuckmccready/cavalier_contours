@@ -53,8 +53,8 @@ where
     let h = circle_center.x;
     let k = circle_center.y;
 
-    let a = dx * dx + dy * dy;
-    if a.fuzzy_eq_zero() {
+    let a_quad = dx * dx + dy * dy;
+    if a_quad.fuzzy_eq_zero() {
         // p0 == p1, test if point is on the circle
         let xh = p0.x - h;
         let yk = p0.y - k;
@@ -65,16 +65,18 @@ where
         return NoIntersect;
     }
 
-    let b = T::two() * (dx * (p0.x - h) + dy * (p0.y - k));
-    let c = (p0.x * p0.x - T::two() * h * p0.x + h * h)
+    let b_quad = T::two() * (dx * (p0.x - h) + dy * (p0.y - k));
+
+    let c_quad = (p0.x * p0.x - T::two() * h * p0.x + h * h)
         + (p0.y * p0.y - T::two() * k * p0.y + k * k)
         - radius * radius;
-    let discriminant = b * b - T::four() * a * c;
+
+    let discriminant = b_quad * b_quad - T::four() * a_quad * c_quad;
 
     if discriminant.fuzzy_eq_zero() {
         // 1 solution (tangent line)
         return TangentIntersect {
-            t0: -b / (T::two() * a),
+            t0: -b_quad / (T::two() * a_quad),
         };
     }
 
@@ -82,7 +84,7 @@ where
         return NoIntersect;
     }
 
-    let (sol1, sol2) = quadratic_solutions(a, b, c, discriminant);
+    let (sol1, sol2) = quadratic_solutions(a_quad, b_quad, c_quad, discriminant);
 
     let (t0, t1) = min_max(sol1, sol2);
     TwoIntersects { t0, t1 }

@@ -21,6 +21,15 @@ pub struct Polyline<T = f64> {
     is_closed: bool,
 }
 
+impl<T> Default for Polyline<T>
+where
+    T: Real,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> Polyline<T>
 where
     T: Real,
@@ -52,6 +61,11 @@ where
     /// Returns the number of vertexes currently in the polyline.
     pub fn len(&self) -> usize {
         self.vertex_data.len()
+    }
+
+    /// Returns true if `self.len() == 0`.
+    pub fn is_empty(&self) -> bool {
+        self.vertex_data.is_empty()
     }
 
     /// Reserves capacity for at least `additional` more elements.
@@ -286,7 +300,7 @@ where
     /// assert!(extents.max_y.fuzzy_eq(2.0));
     /// ```
     pub fn extents(&self) -> Option<AABB<T>> {
-        if self.len() == 0 {
+        if self.is_empty() {
             return None;
         }
 
@@ -390,9 +404,7 @@ where
     /// Iterate through all the polyline segments (represented as polyline vertex pairs, starting at indexes (0, 1)).
     ///
     /// This is equivalent to [Polyline::visit_segments] but returns an iterator rather than accepting a function.
-    pub fn iter_segments<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = (PlineVertex<T>, PlineVertex<T>)> + 'a {
+    pub fn iter_segments(&'_ self) -> impl Iterator<Item = (PlineVertex<T>, PlineVertex<T>)> + '_ {
         PlineSegIterator::new(&self)
     }
 
@@ -521,7 +533,7 @@ where
     /// assert!(result.distance.fuzzy_eq(1.0));
     /// ```
     pub fn closest_point(&self, point: Vector2<T>) -> Option<ClosestPointResult<T>> {
-        if self.len() == 0 {
+        if self.is_empty() {
             return None;
         }
 
@@ -622,25 +634,29 @@ where
                             result += 1;
                         }
                     }
-                } else {
-                    if point_is_left {
-                        // clockwise arc left of chord
-                        if !dist_to_arc_center_less_than_radius() {
-                            result += 1;
-                        }
-                        // else clockwise arc right of chord, no crossing
+                } else if point_is_left {
+                    // clockwise arc left of chord
+                    if !dist_to_arc_center_less_than_radius() {
+                        result += 1;
                     }
+                    // else clockwise arc right of chord, no crossing
                 }
             } else {
                 // not crossing arc chord and chord is below, check if point is inside arc sector
-                if is_ccw && !point_is_left {
-                    if v2.x < point.x && point.x < v1.x && dist_to_arc_center_less_than_radius() {
-                        result += 1;
-                    }
-                } else if !is_ccw && point_is_left {
-                    if v1.x < point.x && point.x < v2.x && dist_to_arc_center_less_than_radius() {
-                        result -= 1;
-                    }
+                if is_ccw
+                    && !point_is_left
+                    && v2.x < point.x
+                    && point.x < v1.x
+                    && dist_to_arc_center_less_than_radius()
+                {
+                    result += 1;
+                } else if !is_ccw
+                    && point_is_left
+                    && v1.x < point.x
+                    && point.x < v2.x
+                    && dist_to_arc_center_less_than_radius()
+                {
+                    result -= 1;
                 }
             }
         } else if v2.y <= point.y {
@@ -653,27 +669,26 @@ where
                     }
                 }
             // else counter clockwise arc left of chord, no crossing
-            } else {
-                if point_is_left {
-                    // clockwise arc left of chord
-                    if dist_to_arc_center_less_than_radius() {
-                        result -= 1;
-                    }
-                } else {
-                    // clockwise arc right of chord
+            } else if point_is_left {
+                // clockwise arc left of chord
+                if dist_to_arc_center_less_than_radius() {
                     result -= 1;
                 }
+            } else {
+                // clockwise arc right of chord
+                result -= 1;
             }
         } else {
             // not crossing arc chord and chord is above, check if point is inside arc sector
-            if is_ccw && !point_is_left {
-                if v1.x < point.x && point.x < v2.x && dist_to_arc_center_less_than_radius() {
-                    result += 1;
-                }
-            } else {
-                if v2.x < point.x && point.x < v1.x && dist_to_arc_center_less_than_radius() {
-                    result -= 1;
-                }
+            if is_ccw
+                && !point_is_left
+                && v1.x < point.x
+                && point.x < v2.x
+                && dist_to_arc_center_less_than_radius()
+            {
+                result += 1;
+            } else if v2.x < point.x && point.x < v1.x && dist_to_arc_center_less_than_radius() {
+                result -= 1;
             }
         }
 
@@ -751,8 +766,8 @@ where
         let mut result = Polyline::new();
         result.set_is_closed(self.is_closed);
 
-        // catch case where length is 0 since we may index into the last vertex later
-        if self.len() == 0 {
+        // catch case where polyline is empty since we may index into the last vertex later
+        if self.is_empty() {
             return Some(result);
         }
 
@@ -907,7 +922,7 @@ where
         } else if self.wrap_not_exhausted {
             self.wrap_not_exhausted = false;
             let ln = self.polyline.len();
-            return Some((self.polyline[ln - 1], self.polyline[0]));
+            Some((self.polyline[ln - 1], self.polyline[0]))
         } else {
             None
         }

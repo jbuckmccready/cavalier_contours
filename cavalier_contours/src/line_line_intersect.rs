@@ -53,14 +53,14 @@ where
 
     let v = v2 - v1;
     let u = u2 - u1;
-    let d = v.perp_dot(u);
+    let v_pdot_u = v.perp_dot(u);
     let w = v1 - u1;
 
     // threshold check here to avoid almost parallel lines resulting in very distant intersection
-    if !d.fuzzy_eq_zero() {
+    if !v_pdot_u.fuzzy_eq_zero() {
         // segments not parallel or collinear
-        let seg1_t = u.perp_dot(w) / d;
-        let seg2_t = v.perp_dot(w) / d;
+        let seg1_t = u.perp_dot(w) / v_pdot_u;
+        let seg2_t = v.perp_dot(w) / v_pdot_u;
         if !seg1_t.fuzzy_in_range(T::zero(), T::one())
             || !seg2_t.fuzzy_in_range(T::zero(), T::one())
         {
@@ -70,11 +70,11 @@ where
     }
 
     // segments are parallel and possibly collinear
-    let a = v.perp_dot(w);
-    let b = u.perp_dot(w);
+    let v_pdot_w = v.perp_dot(w);
+    let u_pdot_w = u.perp_dot(w);
 
     // threshold check here, we consider almost parallel lines to be parallel
-    if !a.fuzzy_eq_zero() || !b.fuzzy_eq_zero() {
+    if !v_pdot_w.fuzzy_eq_zero() || !u_pdot_w.fuzzy_eq_zero() {
         // parallel and not collinear so no intersect
         return NoIntersect;
     }
