@@ -105,11 +105,6 @@ impl<T> PlineIntersectsCollection<T> {
     pub fn new_empty() -> Self {
         Self::new(Vec::new(), Vec::new())
     }
-
-    /// Checks if there are any intersects in the collection.
-    pub fn has_intersects(&self) -> bool {
-        self.basic_intersects.len() != 0 || self.overlapping_intersects.len() != 0
-    }
 }
 
 /// Visits all local self intersects of the polyline. Local self intersects are defined as between
@@ -196,33 +191,6 @@ where
         visit_indexes(ln - 2, ln - 1, 0);
         visit_indexes(ln - 1, 0, 1);
     }
-}
-
-/// Collects all the results of [visit_local_self_intersects] into two collections.
-pub fn local_self_intersects<T>(
-    polyline: &Polyline<T>,
-    pos_equal_eps: T,
-) -> PlineIntersectsCollection<T>
-where
-    T: Real,
-{
-    let mut intrs = Vec::new();
-    let mut overlapping_intrs = Vec::new();
-    let mut visitor = |intr: PlineIntersect<T>| {
-        match intr {
-            PlineIntersect::Basic(b) => {
-                intrs.push(b);
-            }
-            PlineIntersect::Overlapping(o) => {
-                overlapping_intrs.push(o);
-            }
-        }
-        true
-    };
-
-    visit_local_self_intersects(polyline, &mut visitor, pos_equal_eps);
-
-    PlineIntersectsCollection::new(intrs, overlapping_intrs)
 }
 
 /// Visits all global self intersects of the polyline. Global self intersects are defined as between
@@ -314,33 +282,6 @@ pub fn visit_global_self_intersects<T, F>(
             break;
         }
     }
-}
-
-/// Collects all the results of [visit_global_self_intersects] into two collections.
-pub fn global_self_intersects<T>(
-    polyline: &Polyline<T>,
-    spatial_index: &StaticAABB2DIndex<T>,
-) -> PlineIntersectsCollection<T>
-where
-    T: Real,
-{
-    let mut intrs = Vec::new();
-    let mut overlapping_intrs = Vec::new();
-    let mut visitor = |intr: PlineIntersect<T>| {
-        match intr {
-            PlineIntersect::Basic(b) => {
-                intrs.push(b);
-            }
-            PlineIntersect::Overlapping(o) => {
-                overlapping_intrs.push(o);
-            }
-        }
-        true
-    };
-
-    visit_global_self_intersects(polyline, spatial_index, &mut visitor);
-
-    PlineIntersectsCollection::new(intrs, overlapping_intrs)
 }
 
 /// Find all self intersects of a polyline, returning any overlapping intersects as basic intersects at each end point of overlap segment.
@@ -506,6 +447,33 @@ where
 mod local_self_intersect_tests {
     use super::*;
     use crate::core_math::bulge_from_angle;
+
+    fn local_self_intersects<T>(
+        polyline: &Polyline<T>,
+        pos_equal_eps: T,
+    ) -> PlineIntersectsCollection<T>
+    where
+        T: Real,
+    {
+        let mut intrs = Vec::new();
+        let mut overlapping_intrs = Vec::new();
+        let mut visitor = |intr: PlineIntersect<T>| {
+            match intr {
+                PlineIntersect::Basic(b) => {
+                    intrs.push(b);
+                }
+                PlineIntersect::Overlapping(o) => {
+                    overlapping_intrs.push(o);
+                }
+            }
+            true
+        };
+
+        visit_local_self_intersects(polyline, &mut visitor, pos_equal_eps);
+
+        PlineIntersectsCollection::new(intrs, overlapping_intrs)
+    }
+
     #[test]
     fn empty_polyline() {
         let pline = Polyline::<f64>::new();
@@ -580,6 +548,32 @@ mod local_self_intersect_tests {
 mod global_self_intersect_tests {
     use super::*;
     use crate::core_math::bulge_from_angle;
+
+    fn global_self_intersects<T>(
+        polyline: &Polyline<T>,
+        spatial_index: &StaticAABB2DIndex<T>,
+    ) -> PlineIntersectsCollection<T>
+    where
+        T: Real,
+    {
+        let mut intrs = Vec::new();
+        let mut overlapping_intrs = Vec::new();
+        let mut visitor = |intr: PlineIntersect<T>| {
+            match intr {
+                PlineIntersect::Basic(b) => {
+                    intrs.push(b);
+                }
+                PlineIntersect::Overlapping(o) => {
+                    overlapping_intrs.push(o);
+                }
+            }
+            true
+        };
+
+        visit_global_self_intersects(polyline, spatial_index, &mut visitor);
+
+        PlineIntersectsCollection::new(intrs, overlapping_intrs)
+    }
 
     #[test]
     fn circle_no_intersects() {
