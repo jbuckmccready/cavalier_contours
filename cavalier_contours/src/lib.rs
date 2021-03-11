@@ -1,7 +1,7 @@
 extern crate static_aabb2d_index;
 
 #[macro_use]
-mod utils;
+mod macros;
 mod base_math;
 mod base_traits;
 mod pline_seg;

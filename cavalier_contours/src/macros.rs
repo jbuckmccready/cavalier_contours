@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[macro_export]
 macro_rules! assert_fuzzy_eq {
     ($left:expr, $right:expr) => {{
         match (&$left, &$right) {
@@ -29,4 +29,30 @@ macro_rules! assert_fuzzy_eq {
             }
         }
     }};
+}
+
+#[macro_export]
+macro_rules! pline_open {
+    ( $( $x:expr ),* ) => {
+        {
+            let mut pl = Polyline::new();
+            $(
+                pl.add($x.0, $x.1, $x.2);
+            )*
+            pl
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! pline_closed {
+    ( $( $x:expr ),* ) => {
+        {
+            let mut pl = Polyline::new_closed();
+            $(
+                pl.add($x.0, $x.1, $x.2);
+            )*
+            pl
+        }
+    };
 }

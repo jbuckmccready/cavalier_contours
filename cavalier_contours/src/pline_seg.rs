@@ -1,9 +1,8 @@
 use crate::{
     base_math::{
-        angle, bulge_from_angle, delta_angle, dist_squared, line_seg_closest_point, midpoint,
-        min_max, point_on_circle, point_within_arc_sweep,
+        angle, angle_is_within_sweep, bulge_from_angle, delta_angle, dist_squared,
+        line_seg_closest_point, midpoint, min_max, point_on_circle, point_within_arc_sweep,
     },
-    core_math::is_left,
     PlineVertex, Real, Vector2, AABB,
 };
 
@@ -276,161 +275,43 @@ where
     T: Real,
 {
     debug_assert!(!v1.bulge_is_zero(), "expected arc");
-    // initialize the arc extents with the chord extents
-    let (chord_min_x, chord_max_x) = min_max(v1.x, v2.x);
-    let (chord_min_y, chord_max_y) = min_max(v1.y, v2.y);
-    let mut arc_extents = AABB::new(chord_min_x, chord_min_y, chord_max_x, chord_max_y);
 
     let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-    let circle_max_x_pt = Vector2::new(arc_center.x + arc_radius, arc_center.y);
-    let circle_max_y_pt = Vector2::new(arc_center.x, arc_center.y + arc_radius);
+    let start_angle = angle(arc_center, v1.pos());
+    let end_angle = angle(arc_center, v2.pos());
+    let sweep_angle = delta_angle(start_angle, end_angle);
 
-    enum Quadrant {
-        I,
-        II,
-        III,
-        IV,
-    }
+    let crosses_angle = |angle| angle_is_within_sweep(angle, start_angle, sweep_angle);
 
-    // helper function to determine quadrant a point resides in (with arc_center being the origin)
-    let quadrant = |pt: Vector2<T>| -> Quadrant {
-        // is_left wont work properly for the boundary case
-        debug_assert!(
-            !(pt.x.fuzzy_eq(arc_center.x) || pt.y.fuzzy_eq(arc_center.y)),
-            "should have already checked this boundary case!"
-        );
-
-        if is_left(arc_center, circle_max_x_pt, pt) {
-            // quadrant 1 or 2
-            if is_left(arc_center, circle_max_y_pt, pt) {
-                // quadrant 2
-                return Quadrant::II;
-            }
-
-            // else quadrant 1
-            return Quadrant::I;
-        }
-        // else quadrant 3 or 4
-        if is_left(arc_center, circle_max_y_pt, pt) {
-            // quadrant 3
-            return Quadrant::III;
-        }
-        // else quadrant 4
-        Quadrant::IV
+    let min_x = if crosses_angle(T::pi()) {
+        // crosses PI
+        arc_center.x - arc_radius
+    } else {
+        num_traits::real::Real::min(v1.x, v2.x)
     };
 
-    let arc_is_ccw = v1.bulge_is_pos();
-
-    // must check if arc is an axis aligned half circle because the is_left checks in the quadrant function will not work properly
-    if v1.x.fuzzy_eq(arc_center.x) {
-        // y axis aligned half circle
-        if (v1.y > v2.y) == arc_is_ccw {
-            // update min x (half circle bulges out in the negative x direction)
-            arc_extents.min_x = arc_center.x - arc_radius;
-        } else {
-            // update max x (half circle bulges out in the positive x direction)
-            arc_extents.max_x = arc_center.x + arc_radius;
-        }
-    } else if v1.y.fuzzy_eq(arc_center.y) {
-        // x axis aligned half circle
-        if (v1.x > v2.x) == arc_is_ccw {
-            // update max y (half circle bulges out in the y positive direction)
-            arc_extents.max_y = arc_center.y + arc_radius;
-        } else {
-            // update min y (half circle bulges out in the y negative direction)
-            arc_extents.min_y = arc_center.y - arc_radius;
-        }
+    let min_y = if crosses_angle(T::from(1.5).unwrap() * T::pi()) {
+        // crosses 3PI/2
+        arc_center.y - arc_radius
     } else {
-        // not axis aligned half circle, use quadrant function to find quadrant crossings
-        let start_pt_quad = quadrant(v1.pos());
-        let end_pt_quad = quadrant(v2.pos());
-        // determine crossing from quadrants
-        // note in some quadrant pair cases there is only one possible crossing due the arc
-        // never having a sweep angle greater than PI, in other cases we must check the arc direction
-        match (start_pt_quad, end_pt_quad) {
-            (Quadrant::I, Quadrant::II) => {
-                // crosses min y
-                arc_extents.max_y = circle_max_y_pt.y;
-            }
-            (Quadrant::I, Quadrant::III) => {
-                if arc_is_ccw {
-                    // crosses max y then min x
-                    arc_extents.max_y = circle_max_y_pt.y;
-                    arc_extents.min_x = arc_center.x - arc_radius;
-                } else {
-                    // crosses max x then min y
-                    arc_extents.max_x = circle_max_x_pt.x;
-                    arc_extents.min_y = arc_center.y - arc_radius;
-                }
-            }
-            (Quadrant::I, Quadrant::IV) => {
-                // crosses max x
-                arc_extents.max_x = circle_max_x_pt.x;
-            }
-            (Quadrant::II, Quadrant::I) => {
-                // crosses max y
-                arc_extents.max_y = circle_max_y_pt.y;
-            }
-            (Quadrant::II, Quadrant::III) => {
-                // crosses min x
-                arc_extents.min_x = arc_center.x - arc_radius;
-            }
-            (Quadrant::II, Quadrant::IV) => {
-                if arc_is_ccw {
-                    // crosses min x then min y
-                    arc_extents.min_x = arc_center.x - arc_radius;
-                    arc_extents.min_y = arc_center.y - arc_radius;
-                } else {
-                    // crosses max y then max x
-                    arc_extents.max_y = circle_max_y_pt.y;
-                    arc_extents.max_x = circle_max_x_pt.x;
-                }
-            }
-            (Quadrant::III, Quadrant::I) => {
-                if arc_is_ccw {
-                    // crosses min y then max x
-                    arc_extents.min_y = arc_center.y - arc_radius;
-                    arc_extents.max_x = circle_max_x_pt.x;
-                } else {
-                    // crosses min x then max y
-                    arc_extents.min_x = arc_center.x - arc_radius;
-                    arc_extents.max_y = circle_max_y_pt.y;
-                }
-            }
-            (Quadrant::III, Quadrant::II) => {
-                // crosses min x
-                arc_extents.min_x = arc_center.x - arc_radius;
-            }
-            (Quadrant::III, Quadrant::IV) => {
-                // crosses min y
-                arc_extents.min_y = arc_center.y - arc_radius;
-            }
-            (Quadrant::IV, Quadrant::I) => {
-                // crosses max x
-                arc_extents.max_x = circle_max_x_pt.x;
-            }
-            (Quadrant::IV, Quadrant::II) => {
-                if arc_is_ccw {
-                    // crosses max x then max y
-                    arc_extents.max_x = circle_max_x_pt.x;
-                    arc_extents.max_y = circle_max_y_pt.y;
-                } else {
-                    // crosses min y then min x
-                    arc_extents.min_y = arc_center.y - arc_radius;
-                    arc_extents.min_x = arc_center.x - arc_radius;
-                }
-            }
-            (Quadrant::IV, Quadrant::III) => {
-                // crosses min y
-                arc_extents.min_y = arc_center.y - arc_radius;
-            }
+        num_traits::real::Real::min(v1.y, v2.y)
+    };
 
-            // remaining cases not possible for the arc
-            _ => {}
-        }
-    }
+    let max_x = if crosses_angle(T::zero()) {
+        // crosses 2PI
+        arc_center.x + arc_radius
+    } else {
+        num_traits::real::Real::max(v1.x, v2.x)
+    };
 
-    arc_extents
+    let max_y = if crosses_angle(T::from(0.5).unwrap() * T::pi()) {
+        // crosses PI/2
+        arc_center.y + arc_radius
+    } else {
+        num_traits::real::Real::max(v1.y, v2.y)
+    };
+
+    AABB::new(min_x, min_y, max_x, max_y)
 }
 
 /// Computes the axis aligned bounding box of a polyline segment defined by `v1` to `v2`.

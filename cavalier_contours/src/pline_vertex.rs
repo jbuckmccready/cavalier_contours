@@ -1,6 +1,6 @@
 use crate::{Real, Vector2};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct PlineVertex<T = f64> {
     pub x: T,
     pub y: T,

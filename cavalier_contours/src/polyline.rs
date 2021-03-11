@@ -132,13 +132,13 @@ where
     }
 
     /// Remove vertex at index.
-    pub fn remove(&mut self, index: usize) {
-        self.vertex_data.remove(index);
+    pub fn remove(&mut self, index: usize) -> PlineVertex<T> {
+        self.vertex_data.remove(index)
     }
 
     /// Remove last vertex.
-    pub fn remove_last(&mut self) {
-        self.remove(self.len() - 1);
+    pub fn remove_last(&mut self) -> PlineVertex<T> {
+        self.remove(self.len() - 1)
     }
 
     /// Clear all vertexes.
@@ -321,6 +321,13 @@ where
         Some(result)
     }
 
+    /// Creates a fast approximate spatial index of all the polyline's segments.
+    ///
+    /// Starting vertex index position is used for key to the segment bounding box
+    /// in the `StaticAABB2DIndex`.
+    ///
+    /// Returns `None` if polyline vertex count is less than 2 or an error occurs in constructing the
+    /// spatial index.
     pub fn create_approx_spatial_index(&self) -> Option<StaticAABB2DIndex<T>> {
         let ln = self.len();
         if ln < 2 {
@@ -331,19 +338,8 @@ where
 
         let mut builder = StaticAABB2DIndexBuilder::new(seg_count);
 
-        for i in 0..ln - 1 {
-            let approx_aabb = seg_fast_approx_bounding_box(self[i], self[i + 1]);
-            builder.add(
-                approx_aabb.min_x,
-                approx_aabb.min_y,
-                approx_aabb.max_x,
-                approx_aabb.max_y,
-            );
-        }
-
-        if self.is_closed {
-            // add final segment from last to first
-            let approx_aabb = seg_fast_approx_bounding_box(*self.last().unwrap(), self[0]);
+        for (v1, v2) in self.iter_segments() {
+            let approx_aabb = seg_fast_approx_bounding_box(v1, v2);
             builder.add(
                 approx_aabb.min_x,
                 approx_aabb.min_y,
@@ -355,7 +351,7 @@ where
         builder.build().ok()
     }
 
-    /// Visit all the polyline segments (represented as polyline vertex pairs) with a function/closure.
+    /// Visit all the polyline segments (represented as polyline vertex pairs, starting at indexes (0, 1)) with a function/closure.
     ///
     /// This is equivalent to [Polyline::iter_segments] but uses a visiting function rather than an iterator.
     pub fn visit_segments<F>(&self, visitor: &mut F)
@@ -367,24 +363,22 @@ where
             return;
         }
 
-        if self.is_closed {
-            let v1 = self.vertex_data[ln - 1];
-            let v2 = self.vertex_data[0];
+        let mut windows = self.vertex_data.windows(2);
+        while let Some(&[v1, v2]) = windows.next() {
             if !visitor(v1, v2) {
                 return;
             }
         }
 
-        let mut windows = self.vertex_data.windows(2);
-        while let Some(&[v1, v2]) = windows.next() {
-            if !visitor(v1, v2) {
-                break;
-            }
+        if self.is_closed {
+            let v1 = self.vertex_data[ln - 1];
+            let v2 = self.vertex_data[0];
+            visitor(v1, v2);
         }
     }
 
     /// Iterate through all the vertexes in the polyline.
-    pub fn iter(&self) -> impl Iterator<Item = &PlineVertex<T>> {
+    pub fn iter(&self) -> impl Iterator<Item = &PlineVertex<T>> + Clone {
         self.vertex_data.iter()
     }
 
@@ -393,7 +387,7 @@ where
         self.vertex_data.iter_mut()
     }
 
-    /// Iterate through all the polyline segments (represented as polyline vertex pairs).
+    /// Iterate through all the polyline segments (represented as polyline vertex pairs, starting at indexes (0, 1)).
     ///
     /// This is equivalent to [Polyline::visit_segments] but returns an iterator rather than accepting a function.
     pub fn iter_segments<'a>(
@@ -406,17 +400,45 @@ where
     ///
     /// Segments are represented by polyline vertex pairs, for each vertex there is
     /// an associated positional index in the polyline, this method iterates through
-    /// those positional indexes as segment pairs.
+    /// those positional indexes as segment pairs starting at (0, 1).
     pub fn iter_segment_indexes(&self) -> impl Iterator<Item = (usize, usize)> {
         PlineSegIndexIterator::new(self.vertex_data.len(), self.is_closed)
     }
 
+    /// Compute the parallel offset polylines of the polyline.
+    ///
+    /// `offset` determines what offset polylines generated, if it is positive then
+    /// the direction of the offset is to the left of the polyline segment tangent vectors
+    /// otherwise it is to the right.
+    ///
+    /// `spatial_index` is a spatial index of all the polyline's segment bounding boxes. If `None` is given then it will
+    /// be computed internally. [Polyline::create_approx_spatial_index] may be used to create the spatial index,
+    /// the only restriction is that the spatial index bounding boxes must be at least big enough to contain the segments.
+    ///
+    /// `options` is a struct that holds parameters for tweaking the behavior of the algorithm, if `None is given then
+    /// `PlineOffsetOptions::default()` will be used. See [crate::PlineOffsetOptions] for specific parameters.
+    ///
+    /// # Examples
+    /// ```
+    /// # use cavalier_contours::*;
+    /// // using the options struct to inform the algorithm that there may be self intersects
+    /// // in the polyline to be offset
+    /// let options = PlineOffsetOptions { handle_self_intersects: true, .. Default::default() };
+    /// let pline = pline_closed![(0.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
+    /// // passing in None for the spatial_index
+    /// let offset_plines = pline.parallel_offset(0.2, None, Some(options));
+    /// assert_eq!(offset_plines.len(), 1);
+    /// let offset_pline = &offset_plines[0];
+    /// assert!(offset_pline[0].fuzzy_eq(PlineVertex::new(0.2, 0.0, 1.0)));
+    /// assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
+    /// ```
     pub fn parallel_offset(
         &self,
         offset: T,
         spatial_index: Option<&StaticAABB2DIndex<T>>,
+        options: Option<PlineOffsetOptions<T>>,
     ) -> Vec<Polyline<T>> {
-        polyline_offset::parallel_offset(self, offset, spatial_index, None)
+        polyline_offset::parallel_offset(self, offset, spatial_index, options)
     }
 
     /// Compute the closed signed area of the polyline.
@@ -796,6 +818,32 @@ where
     pub distance: T,
 }
 
+/// Struct to hold options parameters passed to [Polyline::parallel_offset].
+#[derive(Debug, Clone)]
+pub struct PlineOffsetOptions<T = f64>
+where
+    T: Real,
+{
+    pub pos_equal_eps: T,
+    pub slice_join_eps: T,
+    pub offset_dist_eps: T,
+    pub handle_self_intersects: bool,
+}
+
+impl<T> Default for PlineOffsetOptions<T>
+where
+    T: Real,
+{
+    fn default() -> Self {
+        PlineOffsetOptions {
+            pos_equal_eps: T::from(1e-5).unwrap(),
+            slice_join_eps: T::from(1e-4).unwrap(),
+            offset_dist_eps: T::from(1e-4).unwrap(),
+            handle_self_intersects: false,
+        }
+    }
+}
+
 impl<T> Index<usize> for Polyline<T>
 where
     T: Real,
@@ -824,7 +872,7 @@ where
 {
     polyline: &'a Polyline<T>,
     vertex_windows: Windows<'a, PlineVertex<T>>,
-    is_closed_first_pass: bool,
+    wrap_not_exhausted: bool,
 }
 
 impl<'a, T> PlineSegIterator<'a, T>
@@ -833,7 +881,7 @@ where
 {
     fn new(polyline: &'a Polyline<T>) -> PlineSegIterator<'a, T> {
         let vertex_windows = polyline.vertex_data.windows(2);
-        let is_closed_first_pass = if polyline.vertex_data.len() < 2 {
+        let wrap_not_exhausted = if polyline.vertex_data.len() < 2 {
             false
         } else {
             polyline.is_closed
@@ -841,7 +889,7 @@ where
         PlineSegIterator {
             polyline,
             vertex_windows,
-            is_closed_first_pass,
+            wrap_not_exhausted,
         }
     }
 }
@@ -854,14 +902,12 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.is_closed_first_pass {
-            self.is_closed_first_pass = false;
-            let ln = self.polyline.vertex_data.len();
-            return Some((self.polyline[ln - 1], self.polyline[0]));
-        }
-
         if let Some(&[v1, v2]) = self.vertex_windows.next() {
             Some((v1, v2))
+        } else if self.wrap_not_exhausted {
+            self.wrap_not_exhausted = false;
+            let ln = self.polyline.len();
+            return Some((self.polyline[ln - 1], self.polyline[0]));
         } else {
             None
         }
@@ -869,11 +915,11 @@ where
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        if self.is_closed_first_pass {
-            let ln = self.polyline.vertex_data.len();
-            (ln, Some(ln))
+        let windows_hint = self.vertex_windows.size_hint();
+        if self.wrap_not_exhausted {
+            (windows_hint.0 + 1, windows_hint.1.map(|h| h + 1))
         } else {
-            self.vertex_windows.size_hint()
+            windows_hint
         }
     }
 }
@@ -881,7 +927,7 @@ where
 struct PlineSegIndexIterator {
     pos: usize,
     remaining: usize,
-    is_closed_first_pass: bool,
+    is_closed: bool,
 }
 
 impl PlineSegIndexIterator {
@@ -894,9 +940,9 @@ impl PlineSegIndexIterator {
             vertex_count - 1
         };
         PlineSegIndexIterator {
-            pos: 1,
+            pos: 0,
             remaining,
-            is_closed_first_pass: is_closed,
+            is_closed,
         }
     }
 }
@@ -912,184 +958,17 @@ impl Iterator for PlineSegIndexIterator {
 
         self.remaining -= 1;
 
-        if self.is_closed_first_pass {
-            self.is_closed_first_pass = false;
-            return Some((self.remaining, 0));
+        if self.remaining == 0 && self.is_closed {
+            return Some((self.pos, 0));
         }
 
         let pos = self.pos;
         self.pos += 1;
-        Some((pos - 1, pos))
+        Some((pos, pos + 1))
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.remaining, Some(self.remaining))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use std::f64::consts::PI;
-
-    use super::*;
-    use crate::FuzzyEq;
-
-    #[test]
-    fn iter_segments() {
-        let mut polyline = Polyline::<f64>::new();
-        assert_eq!(polyline.iter_segments().size_hint(), (0, Some(0)));
-        assert_eq!(polyline.iter_segments().collect::<Vec<_>>().len(), 0);
-
-        polyline.add(1.0, 2.0, 0.3);
-        assert_eq!(polyline.iter_segments().size_hint(), (0, Some(0)));
-        assert_eq!(polyline.iter_segments().collect::<Vec<_>>().len(), 0);
-
-        polyline.add(4.0, 5.0, 0.6);
-        assert_eq!(polyline.iter_segments().size_hint(), (1, Some(1)));
-        let one_seg = polyline.iter_segments().collect::<Vec<_>>();
-        assert_eq!(one_seg.len(), 1);
-        assert_fuzzy_eq!(one_seg[0].0, PlineVertex::new(1.0, 2.0, 0.3));
-        assert_fuzzy_eq!(one_seg[0].1, PlineVertex::new(4.0, 5.0, 0.6));
-
-        polyline.set_is_closed(true);
-        assert_eq!(polyline.iter_segments().size_hint(), (2, Some(2)));
-        let two_seg = polyline.iter_segments().collect::<Vec<_>>();
-        assert_eq!(two_seg.len(), 2);
-        assert_fuzzy_eq!(two_seg[0].0, PlineVertex::new(4.0, 5.0, 0.6));
-        assert_fuzzy_eq!(two_seg[0].1, PlineVertex::new(1.0, 2.0, 0.3));
-        assert_fuzzy_eq!(two_seg[1].0, PlineVertex::new(1.0, 2.0, 0.3));
-        assert_fuzzy_eq!(two_seg[1].1, PlineVertex::new(4.0, 5.0, 0.6));
-
-        polyline.add(0.5, 0.5, 0.5);
-        assert_eq!(polyline.iter_segments().size_hint(), (3, Some(3)));
-        let three_seg = polyline.iter_segments().collect::<Vec<_>>();
-        assert_fuzzy_eq!(three_seg[0].0, PlineVertex::new(0.5, 0.5, 0.5));
-        assert_fuzzy_eq!(three_seg[0].1, PlineVertex::new(1.0, 2.0, 0.3));
-        assert_fuzzy_eq!(three_seg[1].0, PlineVertex::new(1.0, 2.0, 0.3));
-        assert_fuzzy_eq!(three_seg[1].1, PlineVertex::new(4.0, 5.0, 0.6));
-        assert_fuzzy_eq!(three_seg[2].0, PlineVertex::new(4.0, 5.0, 0.6));
-        assert_fuzzy_eq!(three_seg[2].1, PlineVertex::new(0.5, 0.5, 0.5));
-
-        polyline.set_is_closed(false);
-        assert_eq!(polyline.iter_segments().size_hint(), (2, Some(2)));
-        let two_seg_open = polyline.iter_segments().collect::<Vec<_>>();
-        assert_fuzzy_eq!(two_seg_open[0].0, PlineVertex::new(1.0, 2.0, 0.3));
-        assert_fuzzy_eq!(two_seg_open[0].1, PlineVertex::new(4.0, 5.0, 0.6));
-        assert_fuzzy_eq!(two_seg_open[1].0, PlineVertex::new(4.0, 5.0, 0.6));
-        assert_fuzzy_eq!(two_seg_open[1].1, PlineVertex::new(0.5, 0.5, 0.5));
-    }
-
-    #[test]
-    fn iter_segment_indexes() {
-        let mut polyline = Polyline::<f64>::new();
-        assert_eq!(polyline.iter_segment_indexes().size_hint(), (0, Some(0)));
-        assert_eq!(polyline.iter_segment_indexes().collect::<Vec<_>>().len(), 0);
-
-        polyline.add(1.0, 2.0, 0.3);
-        assert_eq!(polyline.iter_segment_indexes().size_hint(), (0, Some(0)));
-        assert_eq!(polyline.iter_segment_indexes().collect::<Vec<_>>().len(), 0);
-
-        polyline.add(4.0, 5.0, 0.6);
-        assert_eq!(polyline.iter_segment_indexes().size_hint(), (1, Some(1)));
-        let one_seg = polyline.iter_segment_indexes().collect::<Vec<_>>();
-        assert_eq!(one_seg, vec![(0, 1)]);
-
-        polyline.set_is_closed(true);
-        assert_eq!(polyline.iter_segment_indexes().size_hint(), (2, Some(2)));
-        let two_seg = polyline.iter_segment_indexes().collect::<Vec<_>>();
-        assert_eq!(two_seg, vec![(1, 0), (0, 1)]);
-
-        polyline.add(0.5, 0.5, 0.5);
-        assert_eq!(polyline.iter_segment_indexes().size_hint(), (3, Some(3)));
-        let three_seg = polyline.iter_segment_indexes().collect::<Vec<_>>();
-        assert_eq!(three_seg, vec![(2, 0), (0, 1), (1, 2)]);
-
-        polyline.set_is_closed(false);
-        assert_eq!(polyline.iter_segment_indexes().size_hint(), (2, Some(2)));
-        let two_seg_open = polyline.iter_segment_indexes().collect::<Vec<_>>();
-        assert_eq!(two_seg_open, vec![(0, 1), (1, 2)]);
-    }
-
-    #[test]
-    fn invert_direction() {
-        let mut polyline = Polyline::new_closed();
-        polyline.add(0.0, 0.0, 0.1);
-        polyline.add(2.0, 0.0, 0.2);
-        polyline.add(2.0, 2.0, 0.3);
-        polyline.add(0.0, 2.0, 0.4);
-
-        polyline.invert_direction();
-
-        assert_fuzzy_eq!(polyline[0], PlineVertex::new(0.0, 2.0, -0.3));
-        assert_fuzzy_eq!(polyline[1], PlineVertex::new(2.0, 2.0, -0.2));
-        assert_fuzzy_eq!(polyline[2], PlineVertex::new(2.0, 0.0, -0.1));
-        assert_fuzzy_eq!(polyline[3], PlineVertex::new(0.0, 0.0, -0.4));
-    }
-
-    #[test]
-    fn area() {
-        {
-            let mut circle = Polyline::new_closed();
-            circle.add(0.0, 0.0, 1.0);
-            circle.add(2.0, 0.0, 1.0);
-            assert_fuzzy_eq!(circle.area(), PI);
-            circle.invert_direction();
-            assert_fuzzy_eq!(circle.area(), -PI);
-        }
-
-        {
-            let mut half_circle = Polyline::new_closed();
-            half_circle.add(0.0, 0.0, -1.0);
-            half_circle.add(2.0, 0.0, 0.0);
-            assert_fuzzy_eq!(half_circle.area(), -0.5 * PI);
-            half_circle.invert_direction();
-            assert_fuzzy_eq!(half_circle.area(), 0.5 * PI);
-        }
-
-        {
-            let mut square = Polyline::new_closed();
-            square.add(0.0, 0.0, 0.0);
-            square.add(2.0, 0.0, 0.0);
-            square.add(2.0, 2.0, 0.0);
-            square.add(0.0, 2.0, 0.0);
-            assert_fuzzy_eq!(square.area(), 4.0);
-            square.invert_direction();
-            assert_fuzzy_eq!(square.area(), -4.0);
-        }
-
-        {
-            let mut open_polyline = Polyline::new();
-            open_polyline.add(0.0, 0.0, 0.0);
-            open_polyline.add(2.0, 0.0, 0.0);
-            open_polyline.add(2.0, 2.0, 0.0);
-            open_polyline.add(0.0, 2.0, 0.0);
-            assert_fuzzy_eq!(open_polyline.area(), 0.0);
-            open_polyline.invert_direction();
-            assert_fuzzy_eq!(open_polyline.area(), 0.0);
-        }
-
-        {
-            let empty_open_polyline = Polyline::<f64>::new();
-            assert_fuzzy_eq!(empty_open_polyline.area(), 0.0);
-        }
-
-        {
-            let empty_closed_polyline = Polyline::<f64>::new_closed();
-            assert_fuzzy_eq!(empty_closed_polyline.area(), 0.0);
-        }
-
-        {
-            let mut one_vertex_open_polyline = Polyline::<f64>::new();
-            one_vertex_open_polyline.add(1.0, 1.0, 0.0);
-            assert_fuzzy_eq!(one_vertex_open_polyline.area(), 0.0);
-        }
-
-        {
-            let mut one_vertex_closed_polyline = Polyline::<f64>::new_closed();
-            one_vertex_closed_polyline.add(1.0, 1.0, 0.0);
-            assert_fuzzy_eq!(one_vertex_closed_polyline.area(), 0.0);
-        }
     }
 }
