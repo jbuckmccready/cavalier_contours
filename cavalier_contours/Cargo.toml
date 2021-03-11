@@ -1,8 +1,12 @@
 [package]
 authors = ["Buck McCready <jbuckmccready@gmail.com>"]
+categories = ["algorithms", "data-structures", "graphics", "mathematics"]
+description = "2D polyline/shape library for offsetting, combining, etc."
 edition = "2018"
+keywords = ["algorithm", "2d", "computational", "geometry", "spatial"]
 license = "MIT OR Apache-2.0"
 name = "cavalier_contours"
+repository = "https://github.com/jbuckmccready/cavalier_contours"
 version = "0.1.0"
 
 [features]
