@@ -210,68 +210,85 @@ where
 
             // check if only end points touch (because we made arc sweeps go same direction we
             // only have to test the delta angle between the start and end)
-            if delta_angle(arc1_start, arc2_end).fuzzy_eq_zero() {
-                if arc1_sweep.fuzzy_eq(arc2_sweep) {
-                    // overlapping circles with same sweep angle => arcs are non-overlapping half circles
+            match (
+                delta_angle(arc1_start, arc2_end).fuzzy_eq_zero(),
+                delta_angle(arc2_start, arc1_end).fuzzy_eq_zero(),
+            ) {
+                (true, true) => {
+                    // two half circle arcs with end points touching
                     // note: point1 and point2 are returned in order according to second segment (u1->u2) direction
                     TwoIntersects {
                         point1: u1.pos(),
                         point2: u2.pos(),
                     }
-                } else {
+                }
+                (true, false) => {
                     // only touch at start of arc1
                     OneIntersect { point: v1.pos() }
                 }
-            } else if delta_angle(arc2_start, arc1_end).fuzzy_eq_zero() {
-                if arc1_sweep.fuzzy_eq(arc2_sweep) {
-                    // overlapping circles with same sweep angle => arcs are non-overlapping half circles
-                    TwoIntersects {
-                        point1: u1.pos(),
-                        point2: u2.pos(),
-                    }
-                } else {
+                (false, true) => {
                     // only touch at start of arc2
                     OneIntersect { point: u1.pos() }
                 }
-            } else {
-                let arc2_starts_in_arc1 = angle_is_within_sweep(arc2_start, arc1_start, arc1_sweep);
-                let arc2_ends_in_arc1 = angle_is_within_sweep(arc2_end, arc1_start, arc1_sweep);
-                if arc2_starts_in_arc1 && arc2_ends_in_arc1 {
-                    // arc2 is fully overlapped by arc1
-                    OverlappingArcs {
-                        point1: u1.pos(),
-                        point2: u2.pos(),
-                    }
-                } else if arc2_starts_in_arc1 {
-                    // overlap from arc2 start to arc1 end
-                    OverlappingArcs {
-                        point1: u1.pos(),
-                        point2: v2.pos(),
-                    }
-                } else if arc2_ends_in_arc1 {
-                    OverlappingArcs {
-                        point1: v1.pos(),
-                        point2: u2.pos(),
-                    }
-                } else {
-                    let arc1_starts_in_arc2 =
-                        angle_is_within_sweep(arc1_start, arc2_start, arc2_sweep);
-                    if arc1_starts_in_arc2 {
-                        // arc1 is fully overlapped by arc2
-                        // ensure direction is according to second segment
+                (false, false) => {
+                    // not just the end points touch, determine how the arcs overlap
+                    let arc2_starts_in_arc1 =
+                        angle_is_within_sweep(arc2_start, arc1_start, arc1_sweep);
+                    let arc2_ends_in_arc1 = angle_is_within_sweep(arc2_end, arc1_start, arc1_sweep);
+                    if arc2_starts_in_arc1 && arc2_ends_in_arc1 {
+                        // arc2 is fully overlapped by arc1
+                        OverlappingArcs {
+                            point1: u1.pos(),
+                            point2: u2.pos(),
+                        }
+                    } else if arc2_starts_in_arc1 {
+                        // check if direction reversed to ensure the correct points are used
+                        // note: point1 and point2 are returned in order according to second segment (u1->u2) direction
                         if same_direction_arcs {
                             OverlappingArcs {
-                                point1: v1.pos(),
+                                point1: u1.pos(),
                                 point2: v2.pos(),
                             }
                         } else {
                             OverlappingArcs {
                                 point1: v2.pos(),
+                                point2: u2.pos(),
+                            }
+                        }
+                    } else if arc2_ends_in_arc1 {
+                        // check if direction reversed to ensure the correct points are used
+                        // note: point1 and point2 are returned in order according to second segment (u1->u2) direction
+                        if same_direction_arcs {
+                            OverlappingArcs {
+                                point1: v1.pos(),
+                                point2: u2.pos(),
+                            }
+                        } else {
+                            OverlappingArcs {
+                                point1: u1.pos(),
                                 point2: v1.pos(),
                             }
                         }
                     } else {
-                        NoIntersect
+                        let arc1_starts_in_arc2 =
+                            angle_is_within_sweep(arc1_start, arc2_start, arc2_sweep);
+                        if arc1_starts_in_arc2 {
+                            // arc1 is fully overlapped by arc2
+                            // note: point1 and point2 are returned in order according to second segment (u1->u2) direction
+                            if same_direction_arcs {
+                                OverlappingArcs {
+                                    point1: v1.pos(),
+                                    point2: v2.pos(),
+                                }
+                            } else {
+                                OverlappingArcs {
+                                    point1: v2.pos(),
+                                    point2: v1.pos(),
+                                }
+                            }
+                        } else {
+                            NoIntersect
+                        }
                     }
                 }
             }

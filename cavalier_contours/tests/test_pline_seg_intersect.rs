@@ -136,7 +136,7 @@ fn overlapping_same_arcs_reverse_dir() {
 }
 
 #[test]
-fn arc_arc_end_points() {
+fn arc_arc_end_points_touch() {
     let v1 = PlineVertex::new(3.0, 3.0, 1.0);
     let v2 = PlineVertex::new(1.0, 1.0, 0.0);
     let u1 = PlineVertex::new(1.0, 1.0, 1.0);
@@ -152,7 +152,7 @@ fn arc_arc_end_points() {
 }
 
 #[test]
-fn arc_arc_end_points_reverse_dir() {
+fn arc_arc_end_points_touch_reverse_dir() {
     let v1 = PlineVertex::new(1.0, 1.0, -1.0);
     let v2 = PlineVertex::new(3.0, 3.0, 0.0);
     let u1 = PlineVertex::new(1.0, 1.0, 1.0);
@@ -168,7 +168,7 @@ fn arc_arc_end_points_reverse_dir() {
 }
 
 #[test]
-fn arc_arc_overlapping_inside() {
+fn arc2_within_arc1_overlapping() {
     let v1 = PlineVertex::new(1.0, 1.0, 1.0);
     let v2 = PlineVertex::new(3.0, 1.0, 0.0);
 
@@ -181,6 +181,162 @@ fn arc_arc_overlapping_inside() {
         OverlappingArcs {
             point1: Vector2::new(2.0, 0.0),
             point2: Vector2::new(3.0, 1.0)
+        }
+    );
+}
+
+#[test]
+fn arc1_within_arc2_overlapping() {
+    let v1 = PlineVertex::new(1.0, 1.0, 1.0);
+    let v2 = PlineVertex::new(3.0, 1.0, 0.0);
+
+    let bulge = bulge_from_angle(FRAC_PI_2);
+    let u1 = PlineVertex::new(2.0, 0.0, bulge);
+    let u2 = PlineVertex::new(3.0, 1.0, 0.0);
+    let result = pline_seg_intr(u1, u2, v1, v2);
+    assert_case_eq!(
+        result,
+        OverlappingArcs {
+            point1: Vector2::new(2.0, 0.0),
+            point2: Vector2::new(3.0, 1.0)
+        }
+    );
+}
+
+#[test]
+fn arc2_within_arc1_overlapping_reverse_dir() {
+    let v1 = PlineVertex::new(1.0, 1.0, 1.0);
+    let v2 = PlineVertex::new(3.0, 1.0, 0.0);
+
+    let bulge = bulge_from_angle(FRAC_PI_2);
+    let u1 = PlineVertex::new(3.0, 1.0, -bulge);
+    let u2 = PlineVertex::new(2.0, 0.0, 0.0);
+    let result = pline_seg_intr(v1, v2, u1, u2);
+    assert_case_eq!(
+        result,
+        OverlappingArcs {
+            point1: Vector2::new(3.0, 1.0),
+            point2: Vector2::new(2.0, 0.0)
+        }
+    );
+}
+
+#[test]
+fn arc1_within_arc2_overlapping_reverse_dir() {
+    let v1 = PlineVertex::new(1.0, 1.0, 1.0);
+    let v2 = PlineVertex::new(3.0, 1.0, 0.0);
+
+    let bulge = bulge_from_angle(FRAC_PI_2);
+    let u1 = PlineVertex::new(3.0, 1.0, -bulge);
+    let u2 = PlineVertex::new(2.0, 0.0, 0.0);
+    let result = pline_seg_intr(u1, u2, v1, v2);
+    assert_case_eq!(
+        result,
+        OverlappingArcs {
+            point1: Vector2::new(2.0, 0.0),
+            point2: Vector2::new(3.0, 1.0)
+        }
+    );
+}
+
+#[test]
+fn arc_arc_partial_overlap() {
+    let v1 = PlineVertex::new(1.0, 1.0, 1.0);
+    let v2 = PlineVertex::new(3.0, 1.0, 0.0);
+
+    let u1 = PlineVertex::new(2.0, 0.0, 1.0);
+    let u2 = PlineVertex::new(2.0, 2.0, 0.0);
+    let result = pline_seg_intr(v1, v2, u1, u2);
+    assert_case_eq!(
+        result,
+        OverlappingArcs {
+            point1: Vector2::new(2.0, 0.0),
+            point2: Vector2::new(3.0, 1.0)
+        }
+    );
+}
+
+#[test]
+fn arc_arc_partial_overlap_flipped() {
+    let v1 = PlineVertex::new(1.0, 1.0, 1.0);
+    let v2 = PlineVertex::new(3.0, 1.0, 0.0);
+
+    let u1 = PlineVertex::new(2.0, 0.0, 1.0);
+    let u2 = PlineVertex::new(2.0, 2.0, 0.0);
+    let result = pline_seg_intr(u1, u2, v1, v2);
+    assert_case_eq!(
+        result,
+        OverlappingArcs {
+            point1: Vector2::new(2.0, 0.0),
+            point2: Vector2::new(3.0, 1.0)
+        }
+    );
+}
+
+#[test]
+fn arc_arc_partial_overlap_arc2_reverse_dir() {
+    let v1 = PlineVertex::new(1.0, 1.0, 1.0);
+    let v2 = PlineVertex::new(3.0, 1.0, 0.0);
+
+    let u1 = PlineVertex::new(2.0, 2.0, -1.0);
+    let u2 = PlineVertex::new(2.0, 0.0, 0.0);
+    let result = pline_seg_intr(v1, v2, u1, u2);
+    assert_case_eq!(
+        result,
+        OverlappingArcs {
+            point1: Vector2::new(3.0, 1.0),
+            point2: Vector2::new(2.0, 0.0)
+        }
+    );
+}
+
+#[test]
+fn arc_arc_partial_overlap_arc2_reverse_dir_flipped() {
+    let v1 = PlineVertex::new(1.0, 1.0, 1.0);
+    let v2 = PlineVertex::new(3.0, 1.0, 0.0);
+
+    let u1 = PlineVertex::new(2.0, 2.0, -1.0);
+    let u2 = PlineVertex::new(2.0, 0.0, 0.0);
+    let result = pline_seg_intr(u1, u2, v1, v2);
+    assert_case_eq!(
+        result,
+        OverlappingArcs {
+            point1: Vector2::new(2.0, 0.0),
+            point2: Vector2::new(3.0, 1.0)
+        }
+    );
+}
+
+#[test]
+fn arc_arc_partial_overlap_arc1_reverse_dir() {
+    let v1 = PlineVertex::new(3.0, 1.0, -1.0);
+    let v2 = PlineVertex::new(1.0, 1.0, 0.0);
+
+    let u1 = PlineVertex::new(2.0, 0.0, 1.0);
+    let u2 = PlineVertex::new(2.0, 2.0, 0.0);
+    let result = pline_seg_intr(v1, v2, u1, u2);
+    assert_case_eq!(
+        result,
+        OverlappingArcs {
+            point1: Vector2::new(2.0, 0.0),
+            point2: Vector2::new(3.0, 1.0)
+        }
+    );
+}
+
+#[test]
+fn arc_arc_partial_overlap_arc1_reverse_dir_flipped() {
+    let v1 = PlineVertex::new(3.0, 1.0, -1.0);
+    let v2 = PlineVertex::new(1.0, 1.0, 0.0);
+
+    let u1 = PlineVertex::new(2.0, 0.0, 1.0);
+    let u2 = PlineVertex::new(2.0, 2.0, 0.0);
+    let result = pline_seg_intr(u1, u2, v1, v2);
+    assert_case_eq!(
+        result,
+        OverlappingArcs {
+            point1: Vector2::new(3.0, 1.0),
+            point2: Vector2::new(2.0, 0.0)
         }
     );
 }

@@ -212,6 +212,7 @@ pub fn visit_global_self_intersects<T, F>(
     let mut visited_pairs = HashSet::with_capacity(ln);
     let mut query_stack = Vec::with_capacity(8);
     let fuzz = T::fuzzy_epsilon();
+    let pline_is_open = !polyline.is_closed();
 
     // iterate all segment bounding boxes in spatial index querying itself to test for self intersects
     let mut break_loop = false;
@@ -237,29 +238,33 @@ pub fn visit_global_self_intersects<T, F>(
 
             let u1 = polyline[hit_i];
             let u2 = polyline[hit_j];
-            let intr_at_start =
-                |intr: Vector2<T>| -> bool { v1.pos().fuzzy_eq(intr) || u1.pos().fuzzy_eq(intr) };
+            let skip_intr_at_start = |intr: Vector2<T>| -> bool {
+                // skip intersect at start position of pline segment since it will be found
+                // again for the end point that connects to the start position (unless the polyline is
+                // open and we're looking at the very start, then include the intersect)
+                (v1.pos().fuzzy_eq(intr) || u1.pos().fuzzy_eq(intr)) && !(pline_is_open && i == 0)
+            };
 
             let mut continue_visiting = true;
             match pline_seg_intr(v1, v2, u1, u2) {
                 PlineSegIntr::NoIntersect => {}
                 PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
-                    if !intr_at_start(point) {
+                    if !skip_intr_at_start(point) {
                         continue_visiting = visitor(PlineIntersect::new_basic(i, hit_i, point));
                     }
                 }
                 PlineSegIntr::TwoIntersects { point1, point2 } => {
-                    if !intr_at_start(point1) {
+                    if !skip_intr_at_start(point1) {
                         continue_visiting = visitor(PlineIntersect::new_basic(i, hit_i, point1));
                     }
 
-                    if continue_visiting && !intr_at_start(point2) {
+                    if continue_visiting && !skip_intr_at_start(point2) {
                         continue_visiting = visitor(PlineIntersect::new_basic(i, hit_i, point2));
                     }
                 }
                 PlineSegIntr::OverlappingLines { point1, point2 }
                 | PlineSegIntr::OverlappingArcs { point1, point2 } => {
-                    if !intr_at_start(point1) {
+                    if !skip_intr_at_start(point1) {
                         continue_visiting =
                             visitor(PlineIntersect::new_overlapping(i, hit_i, point1, point2));
                     }
@@ -534,9 +539,9 @@ mod local_self_intersect_tests {
     fn long_open_polyline_circle() {
         let mut pline = Polyline::new();
         pline.add(0.0, 0.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
-        pline.add(1.0, 1.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
-        pline.add(2.0, 0.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
         pline.add(1.0, -1.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
+        pline.add(2.0, 0.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
+        pline.add(1.0, 1.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
         pline.add(0.0, 0.0, 0.0);
         let intrs = local_self_intersects(&pline, 1e-5);
         assert_eq!(intrs.basic_intersects.len(), 0);
@@ -619,9 +624,9 @@ mod global_self_intersect_tests {
     fn long_open_polyline_circle() {
         let mut pline = Polyline::new();
         pline.add(0.0, 0.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
-        pline.add(1.0, 1.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
-        pline.add(2.0, 0.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
         pline.add(1.0, -1.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
+        pline.add(2.0, 0.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
+        pline.add(1.0, 1.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
         pline.add(0.0, 0.0, 0.0);
         let intrs = global_self_intersects(&pline, &pline.create_approx_spatial_index().unwrap());
         assert_eq!(intrs.basic_intersects.len(), 1);
