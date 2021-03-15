@@ -17,6 +17,16 @@ mod polyline;
 mod polyline_intersects;
 mod polyline_offset;
 
+/// Internal modules made public for visualization, benchmarking, and testing purposes.
+pub mod internal {
+    pub mod polyline_intersects {
+        pub use crate::polyline_intersects::*;
+    }
+    pub mod polyline_offset {
+        pub use crate::polyline_offset::*;
+    }
+}
+
 pub mod core_math {
     pub use crate::base_math::*;
     pub use crate::pline_seg::*;
