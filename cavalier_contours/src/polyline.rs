@@ -859,10 +859,7 @@ where
     }
 }
 
-impl<T> Index<usize> for Polyline<T>
-where
-    T: Real,
-{
+impl<T> Index<usize> for Polyline<T> {
     type Output = PlineVertex<T>;
 
     #[inline]
@@ -871,10 +868,7 @@ where
     }
 }
 
-impl<T> IndexMut<usize> for Polyline<T>
-where
-    T: Real,
-{
+impl<T> IndexMut<usize> for Polyline<T> {
     #[inline]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.vertex_data[index]
