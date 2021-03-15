@@ -4,9 +4,10 @@ mod error_handling;
 use cavalier_contours::{PlineVertex, Polyline, Vector2};
 use core::slice;
 use error_handling::{set_last_error, LAST_ERROR};
-use std::{ffi::CStr, os::raw::c_char, panic};
+use std::{convert::TryFrom, ffi::CStr, os::raw::c_char, panic};
 
-/// Helper macro to catch unwind and return -1 if panic was caught otherwise returns whatever the expression returned.
+/// Helper macro to catch unwind and return -1 if panic was caught otherwise returns whatever the
+/// expression returned.
 macro_rules! ffi_catch_unwind {
     ($body: expr) => {
         match panic::catch_unwind(move || $body) {
@@ -62,13 +63,20 @@ pub struct cavc_pline(Polyline<f64>);
 
 /// Gets the last error message set as a null terminated c string.
 ///
-/// The c string returned is in thread local storage and is only valid until another function that can error is called!
-pub unsafe extern "C" fn cavc_last_error_msg() -> *const c_char {
-    let mut result = CStr::from_bytes_with_nul_unchecked(b"0").as_ptr();
+/// The c string returned is in thread local storage and is only valid until another function that
+/// can error is called!
+pub extern "C" fn cavc_last_error_msg() -> *const c_char {
+    // Safety: constructing CStr from static empty null terminated string, no null check required.
+    let mut result = unsafe { CStr::from_bytes_with_nul_unchecked(b"0").as_ptr() };
     LAST_ERROR.with(|last_error| {
         if let Some(error_data) = last_error.borrow().as_ref() {
-            result = CStr::from_bytes_with_nul_unchecked(&error_data.error_msg.as_bytes_with_nul())
-                .as_ptr();
+            // Safety: Constructing CStr from thread local null terminated string, no null check
+            // required.
+            unsafe {
+                result =
+                    CStr::from_bytes_with_nul_unchecked(&error_data.error_msg.as_bytes_with_nul())
+                        .as_ptr();
+            }
         }
     });
 
@@ -77,15 +85,21 @@ pub unsafe extern "C" fn cavc_last_error_msg() -> *const c_char {
 
 /// Gets the last error report data set as a null terminated c string.
 ///
-/// The c string returned is in thread local storage and is only valid until another function that can error is called!
-pub unsafe extern "C" fn cavc_last_error_report() -> *const c_char {
-    let mut result = CStr::from_bytes_with_nul_unchecked(b"0").as_ptr();
+/// The c string returned is in thread local storage and is only valid until another function that
+/// can error is called!
+pub extern "C" fn cavc_last_error_report() -> *const c_char {
+    // Safety: constructing CStr from static empty null terminated string, no null check required.
+    let mut result = unsafe { CStr::from_bytes_with_nul_unchecked(b"0").as_ptr() };
     LAST_ERROR.with(|last_error| {
         if let Some(error_data) = last_error.borrow().as_ref() {
-            result = CStr::from_bytes_with_nul_unchecked(
-                &error_data.error_report_data.as_bytes_with_nul(),
-            )
-            .as_ptr();
+            // Safety: constructing CStr from static empty null terminated string, no null check
+            // required.
+            unsafe {
+                result = CStr::from_bytes_with_nul_unchecked(
+                    &error_data.error_report_data.as_bytes_with_nul(),
+                )
+                .as_ptr();
+            }
         }
     });
 
@@ -94,10 +108,17 @@ pub unsafe extern "C" fn cavc_last_error_report() -> *const c_char {
 
 /// Create a new polyline object.
 ///
-/// `vertexes` is an array of [cavc_vertex] to create the polyline with (may be null if `n_vertexes` is 0).
+/// `vertexes` is an array of [cavc_vertex] to create the polyline with (may be null if `n_vertexes`
+/// is 0).
 /// `n_vertexes` contains the number of vertexes in the array.
 /// `is_closed` sets the polyline to be closed if non-zero.
 /// `pline` is an out parameter to hold the created polyline.
+///
+/// # Safety
+///
+/// `vertexes` may be null if `n_vertexes` is 0 or must point to a valid contiguous buffer of
+/// [cavc_vertex] with length of at least `n_vertexes`.
+/// `pline` must point to a pointer that can be safely assigned a reference to a cavc_pline.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_create(
@@ -127,6 +148,11 @@ pub unsafe extern "C" fn cavc_pline_create(
 /// Free an existing polyline object.
 ///
 /// Nothing happens if `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not already been freed.
 #[no_mangle]
 pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
     if !pline.is_null() {
@@ -136,10 +162,16 @@ pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
 
 /// Get whether the polyline is closed or not.
 ///
-/// `is_closed` is used as an out parameter to hold the whether `pline` is closed (non-zero) or not (0).
+/// `is_closed` is used as an out parameter to hold the whether `pline` is closed (non-zero) or not
+/// (zero).
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_is_closed(
@@ -161,6 +193,11 @@ pub unsafe extern "C" fn cavc_pline_get_is_closed(
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_set_is_closed(pline: *mut cavc_pline, is_closed: u8) -> i32 {
@@ -168,9 +205,7 @@ pub unsafe extern "C" fn cavc_pline_set_is_closed(pline: *mut cavc_pline, is_clo
         if pline.is_null() {
             return 1;
         }
-        (*pline)
-            .0
-            .set_is_closed(if is_closed == 0 { false } else { true });
+        (*pline).0.set_is_closed(is_closed != 0);
         0
     })
 }
@@ -181,6 +216,11 @@ pub unsafe extern "C" fn cavc_pline_set_is_closed(pline: *mut cavc_pline, is_clo
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_vertex_count(
@@ -191,7 +231,10 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_count(
         if pline.is_null() {
             return 1;
         }
-        *count = (*pline).0.len() as u32;
+
+        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        *count = u32::try_from((*pline).0.len()).unwrap();
         0
     })
 }
@@ -201,10 +244,17 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_count(
 /// You must use [cavc_pline_get_vertex_count] to ensure the buffer given has adequate length
 /// to be filled with all vertexes!
 ///
-/// `vertex_data` should point to a buffer that can be filled with all `pline` vertexes.
+/// `vertex_data` must point to a buffer that can be filled with all `pline` vertexes.
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
+/// overrun will happen.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_vertex_data(
@@ -232,6 +282,12 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_data(
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `vertex_data` must be a valid pointer to a buffer of at least `n_vertexes` of [cavc_vertex].
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_set_vertex_data(
@@ -258,6 +314,11 @@ pub unsafe extern "C" fn cavc_pline_set_vertex_data(
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_clear(pline: *mut cavc_pline) -> i32 {
@@ -275,6 +336,11 @@ pub unsafe extern "C" fn cavc_pline_clear(pline: *mut cavc_pline) -> i32 {
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_add(pline: *mut cavc_pline, x: f64, y: f64, bulge: f64) -> i32 {
@@ -296,6 +362,12 @@ pub unsafe extern "C" fn cavc_pline_add(pline: *mut cavc_pline, x: f64, y: f64, 
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 /// * 2 = `position` is out of bounds for the `pline` given.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `vertex` must point to valid place in memory for which a [cavc_vertex] can be written.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_vertex(
@@ -325,6 +397,11 @@ pub unsafe extern "C" fn cavc_pline_get_vertex(
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 /// * 2 = `position` is out of bounds for the `pline` given.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32) -> i32 {
@@ -348,6 +425,11 @@ pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_eval_path_length(
@@ -371,6 +453,11 @@ pub unsafe extern "C" fn cavc_pline_eval_path_length(
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_eval_area(pline: *const cavc_pline, area: *mut f64) -> i32 {
@@ -394,6 +481,12 @@ pub unsafe extern "C" fn cavc_pline_eval_area(pline: *const cavc_pline, area: *m
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `winding_number` must point to a valid place in memory for which an i32 can be written.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_eval_wn(
