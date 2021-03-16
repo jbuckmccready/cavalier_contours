@@ -1,6 +1,6 @@
-use cavalier_contours::{
-    intersects::{line_circle_intr, LineCircleIntr::*},
-    FuzzyEq, Vector2,
+use cavalier_contours::core::{
+    math::{line_circle_intr, LineCircleIntr::*, Vector2},
+    traits::FuzzyEq,
 };
 
 macro_rules! assert_case_eq {

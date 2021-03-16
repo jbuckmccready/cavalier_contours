@@ -1,6 +1,9 @@
+use cavalier_contours::{
+    assert_fuzzy_eq,
+    core::traits::FuzzyEq,
+    polyline::{PlineVertex, Polyline},
+};
 use std::f64::consts::PI;
-
-use cavalier_contours::{assert_fuzzy_eq, FuzzyEq, PlineVertex, Polyline};
 
 #[test]
 fn iter_segments() {

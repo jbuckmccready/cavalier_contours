@@ -1,21 +1,21 @@
-use core::panic;
-use std::collections::{BTreeMap, HashMap};
-
-use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder};
-
 use crate::{
-    core_math::{
-        angle, bulge_from_angle, delta_angle, dist_squared, point_from_parametric,
-        point_within_arc_sweep, seg_arc_radius_and_center, seg_closest_point,
-        seg_fast_approx_bounding_box, seg_midpoint, seg_split_at_point,
+    core::{
+        math::{
+            angle, bulge_from_angle, circle_circle_intr, delta_angle, dist_squared,
+            line_circle_intr, line_line_intr, point_from_parametric, point_within_arc_sweep,
+            CircleCircleIntr, LineCircleIntr, LineLineIntr, Vector2,
+        },
+        traits::Real,
     },
-    intersects::{
-        circle_circle_intr, line_circle_intr, line_line_intr, pline_seg_intr, CircleCircleIntr,
-        LineCircleIntr, LineLineIntr, PlineSegIntr,
+    polyline::{
+        internal::pline_intersects::{all_self_intersects_as_basic, find_intersects},
+        pline_seg_intr, seg_arc_radius_and_center, seg_closest_point, seg_fast_approx_bounding_box,
+        seg_midpoint, seg_split_at_point, PlineOffsetOptions, PlineSegIntr, PlineVertex, Polyline,
     },
-    polyline_intersects::{all_self_intersects_as_basic, find_intersects},
-    PlineOffsetOptions, PlineVertex, Polyline, Real, Vector2,
 };
+use core::panic;
+use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder};
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Copy, Clone)]
 pub struct RawPlineOffsetSeg<T>
@@ -68,7 +68,8 @@ where
 
         let (new_v1_bulge, collapsed_arc) = if radius_after_offset.fuzzy_lt(T::zero()) {
             // collapsed arc, offset arc start and end points towards arc center and turn into line
-            // handles case where offset vertexes are equal and simplifies path for clipping algorithm
+            // handles case where offset vertexes are equal and simplifies path for clipping
+            // algorithm
             (T::zero(), true)
         } else {
             (v1.bulge, false)
@@ -307,8 +308,8 @@ fn arc_line_join<T>(
                 let (_, prev_arc_center) = seg_arc_radius_and_center(*prev_vertex, *v2);
                 let prev_arc_start_angle = angle(prev_arc_center, prev_vertex.pos());
                 let updated_prev_theta = delta_angle(prev_arc_start_angle, a);
-                // ensure the sign matches (may get flipped if intersect is at the very end of the arc,
-                // in which case we do not want to update the bulge)
+                // ensure the sign matches (may get flipped if intersect is at the very end of the
+                // arc, in which case we do not want to update the bulge)
                 if (updated_prev_theta > T::zero()) == prev_vertex.bulge_is_pos() {
                     result.last_mut().unwrap().bulge = bulge_from_angle(updated_prev_theta);
                 }
@@ -398,8 +399,8 @@ fn arc_arc_join<T>(
                 let (_, prev_arc_center) = seg_arc_radius_and_center(*prev_vertex, *v2);
                 let prev_arc_start_angle = angle(prev_arc_center, prev_vertex.pos());
                 let updated_prev_theta = delta_angle(prev_arc_start_angle, a1);
-                // ensure the sign matches (may get flipped if intersect is at the very end of the arc,
-                // in which case we do not want to update the bulge)
+                // ensure the sign matches (may get flipped if intersect is at the very end of the
+                // arc, in which case we do not want to update the bulge)
                 if (updated_prev_theta > T::zero()) == prev_vertex.bulge_is_pos() {
                     result.last_mut().unwrap().bulge = bulge_from_angle(updated_prev_theta);
                 }
@@ -554,8 +555,8 @@ where
             }
         }
 
-        // must do final singularity prune between last, first, and second vertex because after joining segments,
-        // (n, 0) and (0, 1) they may have been introduced
+        // must do final singularity prune between last, first, and second vertex because after
+        // joining segments (n, 0) and (0, 1) they may have been introduced
         if result.len() > 1 {
             if result[0]
                 .pos()
@@ -749,8 +750,8 @@ where
         let start_vertex = raw_offset_polyline[start_index];
         let end_vertex = raw_offset_polyline[next_index];
         if intr_list.len() != 1 {
-            // build all the slices between the N intersects in intr_list (N > 1), skipping the first
-            // slice (to be processed at the end)
+            // build all the slices between the N intersects in intr_list (N > 1), skipping the
+            // first slice (to be processed at the end)
             let first_split =
                 seg_split_at_point(start_vertex, end_vertex, intr_list[0], pos_equal_eps);
             let mut prev_vertex = first_split.split_vertex;
@@ -1000,8 +1001,8 @@ where
         &raw_offset_index,
     );
 
-    // using BTreeMap rather than  HashMap since we want to construct the slices in vertex index order
-    // and we do so by looping through all intersects (required later when slices are stitched
+    // using BTreeMap rather than  HashMap since we want to construct the slices in vertex index
+    // order and we do so by looping through all intersects (required later when slices are stitched
     // together, because slices may not all form closed loops/polylines so must go in order of
     // indexes to ensure longest stitched results are formed)
     let mut intersects_lookup = BTreeMap::<usize, Vec<Vector2<T>>>::new();
@@ -1012,7 +1013,8 @@ where
     };
 
     if !original_polyline.is_closed() {
-        // add intersects between circles generated at original open polyline end points and raw offset polyline
+        // add intersects between circles generated at original open polyline end points and raw
+        // offset polyline
         let circle_radius = offset.abs();
         visit_circle_intersects(
             raw_offset_polyline,
@@ -1038,7 +1040,8 @@ where
         add_intr(si.start_index2, si.point);
     }
 
-    // only add intersects with start_index1 from dual intersects (corresponds to the the raw offset polyline)
+    // only add intersects with start_index1 from dual intersects (corresponds to the the raw offset
+    // polyline)
     for &intr in dual_intrs.basic_intersects.iter() {
         add_intr(intr.start_index1, intr.point);
     }
@@ -1195,8 +1198,8 @@ where
         let start_vertex = raw_offset_polyline[start_index];
         let end_vertex = raw_offset_polyline[next_index];
         if intr_list.len() != 1 {
-            // build all the slices between the N intersects in intr_list (N > 1), skipping the first
-            // slice (to be processed at the end)
+            // build all the slices between the N intersects in intr_list (N > 1), skipping the
+            // first slice (to be processed at the end)
             let first_split =
                 seg_split_at_point(start_vertex, end_vertex, intr_list[0], pos_equal_eps);
             let mut prev_vertex = first_split.split_vertex;

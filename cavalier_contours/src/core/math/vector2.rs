@@ -1,6 +1,5 @@
+use crate::core::traits::Real;
 use std::ops;
-
-use crate::Real;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Vector2<T = f64> {

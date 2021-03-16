@@ -1,11 +1,12 @@
-use crate::{Real, Vector2};
+use super::Vector2;
+use crate::core::traits::Real;
 
 /// Returns the (min, max) values from `v1` and `v2`.
 ///
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::core::math::*;
 /// let (min_val, max_val) = min_max(8, 4);
 /// assert_eq!(min_val, 4);
 /// assert_eq!(max_val, 8);
@@ -21,13 +22,14 @@ where
     }
 }
 
-/// Normalize radians to be between `0` and `2PI`, e.g. `-PI/4` becomes `7PI/4` and `5PI` becomes `PI`.
+/// Normalize radians to be between `0` and `2PI`, e.g. `-PI/4` becomes `7PI/4` and `5PI` becomes
+/// `PI`.
 ///
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::core::math::*;
+/// # use cavalier_contours::core::traits::*;
 /// use std::f64::consts::PI;
 /// assert!(normalize_radians(5.0 * PI).fuzzy_eq(PI));
 /// assert!(normalize_radians(-PI / 4.0).fuzzy_eq(7.0 * PI / 4.0));
@@ -55,8 +57,8 @@ where
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::core::math::*;
+/// # use cavalier_contours::core::traits::*;
 /// use std::f64::consts::PI;
 /// assert!(delta_angle(5.0 * PI, 5.0 * PI).fuzzy_eq(0.0));
 /// // note here the return is positive in both cases (since there is PI difference)
@@ -86,8 +88,7 @@ where
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::core::math::*;
 /// use std::f64::consts::PI;
 /// assert!(angle_is_between_eps(PI / 2.0, 0.0, PI, 1e-5));
 /// assert!(angle_is_between_eps(0.0, 0.0, PI, 1e-5));
@@ -108,8 +109,8 @@ where
 
 /// Same as [angle_is_between_eps] using default epsilon.
 ///
-/// Default epsilon is [fuzzy_epsilon](crate::base_traits::FuzzyEq::fuzzy_epsilon)
-/// from [FuzzyEq](crate::base_traits::FuzzyEq) trait.
+/// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
+/// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
 pub fn angle_is_between<T>(test_angle: T, start_angle: T, end_angle: T) -> bool
 where
     T: Real,
@@ -140,8 +141,8 @@ where
 
 /// Same as [angle_is_within_sweep_eps] using default epsilon.
 ///
-/// Default epsilon is [fuzzy_epsilon](crate::base_traits::FuzzyEq::fuzzy_epsilon)
-/// from [FuzzyEq](crate::base_traits::FuzzyEq) trait.
+/// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
+/// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
 pub fn angle_is_within_sweep<T>(test_angle: T, start_angle: T, sweep_angle: T) -> bool
 where
     T: Real,
@@ -164,7 +165,8 @@ where
         (b * b - T::four() * a * c).fuzzy_eq(discriminant),
         "discriminant is not valid"
     );
-    // Avoids loss in precision due to taking the difference of two floating point values that are very near each other in value.
+    // Avoids loss in precision due to taking the difference of two floating point values that are
+    // very near each other in value.
     // https://math.stackexchange.com/questions/311382/solving-a-quadratic-equation-with-precision-when-using-floating-point-variables
     let sqrt_discr = discriminant.sqrt();
     let denom = T::two() * a;
@@ -223,8 +225,8 @@ where
 
 /// Returns the parametric value on the line segment going from `p0` to `p1` at the `point` given.
 ///
-/// Note this function assumes the `point` is on the line and properly handles the cases of vertical and
-/// horizontal lines.
+/// Note this function assumes the `point` is on the line and properly handles the cases of vertical
+/// and horizontal lines.
 pub fn parametric_from_point<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> T
 where
     T: Real,
@@ -285,8 +287,7 @@ where
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::core::math::*;
 /// let p0 = Vector2::new(1.0, 1.0);
 /// let p1 = Vector2::new(2.0, 2.0);
 /// assert!(is_left(p0, p1, Vector2::new(0.0, 1.0)));
@@ -328,8 +329,8 @@ where
 
 /// Same as [is_left_or_coincident_eps] using default epsilon.
 ///
-/// Default epsilon is [fuzzy_epsilon](crate::base_traits::FuzzyEq::fuzzy_epsilon)
-/// from [FuzzyEq](crate::base_traits::FuzzyEq) trait.
+/// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
+/// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
 pub fn is_left_or_coincident<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
     T: Real,
@@ -358,8 +359,8 @@ where
 
 /// Same as [is_right_or_coincident_eps] using default epsilon.
 ///
-/// Default epsilon is [fuzzy_epsilon](crate::base_traits::FuzzyEq::fuzzy_epsilon)
-/// from [FuzzyEq](crate::base_traits::FuzzyEq) trait.
+/// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
+/// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
 pub fn is_right_or_coincident<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
     T: Real,
@@ -372,13 +373,13 @@ where
 /// Arc is defined by `center`, `arc_start`, `arc_end`, and arc direction parameter `is_clockwise`.
 /// The angle region is defined as if the arc had infinite radius projected outward in a cone.
 ///
-/// This function uses the Default epsilon of [fuzzy_epsilon](crate::base_traits::FuzzyEq::fuzzy_epsilon)
-/// from [FuzzyEq](crate::base_traits::FuzzyEq) trait.
+/// This function uses the default epsilon of
+/// [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon) from
+/// [FuzzyEq](crate::core::traits::FuzzyEq) trait.
 ///
 /// # Examples
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::core::math::*;
 /// // defining an arc that projects an angle region covering all of
 /// // quadrant I (x positive, y positive space)
 /// let arc_center = Vector2::new(0.0, 0.0);

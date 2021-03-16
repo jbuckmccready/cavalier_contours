@@ -1,4 +1,4 @@
-use cavalier_contours::{intersects::circle_circle_intr, intersects::CircleCircleIntr::*, Vector2};
+use cavalier_contours::core::math::{circle_circle_intr, CircleCircleIntr::*, Vector2};
 
 macro_rules! assert_case_eq {
     ($left:expr, $right:expr) => {

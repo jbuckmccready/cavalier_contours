@@ -1,14 +1,13 @@
-use crate::{
-    base_math::{
-        angle, angle_from_bulge, angle_is_within_sweep, delta_angle, dist_squared,
-        normalize_radians, point_from_parametric, point_within_arc_sweep,
+use super::pline_seg::seg_arc_radius_and_center;
+use super::PlineVertex;
+use crate::core::{
+    math::Vector2,
+    math::{
+        angle, angle_from_bulge, angle_is_within_sweep, circle_circle_intr, delta_angle,
+        dist_squared, line_circle_intr, line_line_intr, normalize_radians, point_from_parametric,
+        point_within_arc_sweep, CircleCircleIntr, LineCircleIntr, LineLineIntr,
     },
-    intersects::{
-        circle_circle_intr, line_circle_intr, line_line_intr, CircleCircleIntr, LineCircleIntr,
-        LineLineIntr,
-    },
-    pline_seg::seg_arc_radius_and_center,
-    PlineVertex, Real, Vector2,
+    traits::Real,
 };
 
 /// Holds the result of finding the intersect between two polyline segments.

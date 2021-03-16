@@ -1,4 +1,4 @@
-use crate::{Real, Vector2};
+use crate::core::{math::Vector2, traits::Real};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct PlineVertex<T = f64> {
@@ -54,12 +54,4 @@ where
     pub fn fuzzy_eq(&self, other: Self) -> bool {
         self.fuzzy_eq_eps(other, T::fuzzy_epsilon())
     }
-}
-
-#[inline(always)]
-pub fn pline_vert<T>(x: T, y: T, bulge: T) -> PlineVertex<T>
-where
-    T: Real,
-{
-    PlineVertex::new(x, y, bulge)
 }

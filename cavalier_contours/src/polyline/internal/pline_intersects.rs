@@ -1,14 +1,15 @@
-use std::collections::HashSet;
-
-use static_aabb2d_index::StaticAABB2DIndex;
-
 use crate::{
-    core_math::{dist_squared, seg_fast_approx_bounding_box},
-    intersects::PlineSegIntr,
-    pline_seg::{seg_split_at_point, seg_tangent_vector},
-    pline_seg_intersect::pline_seg_intr,
-    Polyline, Real, Vector2,
+    core::{
+        math::{dist_squared, Vector2},
+        traits::Real,
+    },
+    polyline::{
+        pline_seg_intr, seg_fast_approx_bounding_box, seg_split_at_point, seg_tangent_vector,
+        PlineSegIntr, Polyline,
+    },
 };
+use static_aabb2d_index::StaticAABB2DIndex;
+use std::collections::HashSet;
 
 /// Represents a polyline intersect at a single point.
 #[derive(Debug, Clone, Copy)]
@@ -639,7 +640,7 @@ where
 #[cfg(test)]
 mod local_self_intersect_tests {
     use super::*;
-    use crate::core_math::bulge_from_angle;
+    use crate::core::math::bulge_from_angle;
 
     fn local_self_intersects<T>(
         polyline: &Polyline<T>,
@@ -740,7 +741,7 @@ mod local_self_intersect_tests {
 #[cfg(test)]
 mod global_self_intersect_tests {
     use super::*;
-    use crate::core_math::bulge_from_angle;
+    use crate::core::math::bulge_from_angle;
 
     fn global_self_intersects<T>(
         polyline: &Polyline<T>,

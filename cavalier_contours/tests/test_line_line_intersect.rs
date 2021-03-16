@@ -1,6 +1,6 @@
-use cavalier_contours::{
-    intersects::{line_line_intr, LineLineIntr::*},
-    FuzzyEq, Vector2,
+use cavalier_contours::core::{
+    math::{line_line_intr, LineLineIntr::*, Vector2},
+    traits::FuzzyEq,
 };
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_4, FRAC_PI_6, FRAC_PI_8};
 

@@ -1,7 +1,6 @@
-use crate::{
-    base_math::{min_max, quadratic_solutions},
-    Real, Vector2,
-};
+use super::base_math::{min_max, quadratic_solutions};
+use super::Vector2;
+use crate::core::traits::Real;
 
 /// Holds the result of finding the intersect between a line segment and a circle.
 #[derive(Debug, Copy, Clone)]

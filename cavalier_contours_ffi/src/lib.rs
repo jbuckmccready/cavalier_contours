@@ -1,7 +1,10 @@
 //! This module contains the C foreign function interface for cavalier_contours.
 #![allow(non_camel_case_types)]
 mod error_handling;
-use cavalier_contours::{PlineVertex, Polyline, Vector2};
+use cavalier_contours::{
+    core::math::Vector2,
+    polyline::{PlineVertex, Polyline},
+};
 use core::slice;
 use error_handling::{set_last_error, LAST_ERROR};
 use std::{convert::TryFrom, ffi::CStr, os::raw::c_char, panic};

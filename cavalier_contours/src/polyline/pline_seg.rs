@@ -1,10 +1,13 @@
-use crate::{
-    base_math::{
+use super::PlineVertex;
+use crate::core::{
+    math::{
         angle, angle_is_within_sweep, bulge_from_angle, delta_angle, dist_squared,
         line_seg_closest_point, midpoint, min_max, point_on_circle, point_within_arc_sweep,
+        Vector2,
     },
-    PlineVertex, Real, Vector2, AABB,
+    traits::Real,
 };
+use static_aabb2d_index::AABB;
 
 /// Get the arc radius and center of an arc polyline segment defined by `v1` to `v2`.
 /// Behavior undefined (may panic or return without error) if v1.bulge is zero.
@@ -12,12 +15,13 @@ use crate::{
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::polyline::*;
+/// # use cavalier_contours::core::traits::*;
+/// # use cavalier_contours::core::math::*;
 /// // arc half circle arc segment going from (0, 0) to (1, 0) counter clockwise
 /// let v1 = PlineVertex::new(0.0, 0.0, 1.0);
 /// let v2 = PlineVertex::new(1.0, 0.0, 0.0);
-/// let (arc_radius, arc_center) =seg_arc_radius_and_center(v1, v2);
+/// let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
 /// assert!(arc_radius.fuzzy_eq(0.5));
 /// assert!(arc_center.fuzzy_eq(Vector2::new(0.5, 0.0)));
 ///```
@@ -67,8 +71,8 @@ where
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::core::math::*;
+/// # use cavalier_contours::polyline::*;
 /// // arc half circle arc segment going from (0, 0) to (1, 0) counter clockwise
 /// let v1 = PlineVertex::new(0.0, 0.0, 1.0);
 /// let v2 = PlineVertex::new(1.0, 0.0, 0.0);
@@ -148,8 +152,8 @@ where
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::polyline::*;
+/// # use cavalier_contours::core::math::*;
 /// // counter clockwise half circle arc going from (2, 2) to (2, 4)
 /// let v1 = PlineVertex::new(2.0, 2.0, 1.0);
 /// let v2 = PlineVertex::new(4.0, 2.0, 0.0);
@@ -192,8 +196,8 @@ where
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::core::math::*;
+/// # use cavalier_contours::polyline::*;
 /// // counter clockwise half circle arc going from (2, 2) to (2, 4)
 /// let v1 = PlineVertex::new(2.0, 2.0, 1.0);
 /// let v2 = PlineVertex::new(4.0, 2.0, 0.0);
@@ -336,8 +340,8 @@ where
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::polyline::*;
+/// # use cavalier_contours::core::traits::*;
 /// // counter clockwise half circle arc going from (2, 2) to (2, 4)
 /// // arc radius = 1 so length should be PI
 /// let v1 = PlineVertex::new(2.0, 2.0, 1.0);
@@ -348,8 +352,9 @@ where
 /// Also works with line segments.
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::core::traits::*;
+/// # use cavalier_contours::core::math::*;
+/// # use cavalier_contours::polyline::*;
 /// // line segment going from (2, 2) to (4, 4)
 /// let v1 = PlineVertex::new(2.0, 2.0, 0.0);
 /// let v2 = PlineVertex::new(4.0, 4.0, 0.0);
@@ -378,8 +383,8 @@ where
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::polyline::*;
+/// # use cavalier_contours::core::math::*;
 /// // counter clockwise half circle arc going from (2, 2) to (2, 4)
 /// let v1 = PlineVertex::new(2.0, 2.0, 1.0);
 /// let v2 = PlineVertex::new(4.0, 2.0, 0.0);
@@ -389,8 +394,8 @@ where
 /// Also works with line segments.
 ///
 /// ```
-/// # use cavalier_contours::*;
-/// # use cavalier_contours::core_math::*;
+/// # use cavalier_contours::polyline::*;
+/// # use cavalier_contours::core::math::*;
 /// // line segment going from (2, 2) to (4, 4)
 /// let v1 = PlineVertex::new(2.0, 2.0, 0.0);
 /// let v2 = PlineVertex::new(4.0, 4.0, 0.0);

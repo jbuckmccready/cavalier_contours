@@ -1,10 +1,8 @@
-use std::f64::consts::FRAC_PI_2;
-
 use cavalier_contours::{
-    core_math::bulge_from_angle,
-    intersects::{pline_seg_intr, PlineSegIntr::*},
-    PlineVertex, Vector2,
+    core::math::{bulge_from_angle, Vector2},
+    polyline::{pline_seg_intr, PlineSegIntr::*, PlineVertex},
 };
+use std::f64::consts::FRAC_PI_2;
 
 macro_rules! assert_case_eq {
     ($left:expr, $right:expr) => {

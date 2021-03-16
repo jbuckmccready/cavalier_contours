@@ -1,4 +1,5 @@
-use crate::{Real, Vector2};
+use super::Vector2;
+use crate::core::traits::Real;
 
 /// Holds the result of finding the intersect between a line segment and a circle.
 #[derive(Debug, Copy, Clone)]

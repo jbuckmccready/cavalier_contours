@@ -1,18 +1,22 @@
+use super::{
+    internal::pline_offset::parallel_offset,
+    pline_seg::{
+        arc_seg_bounding_box, seg_arc_radius_and_center, seg_closest_point,
+        seg_fast_approx_bounding_box, seg_length,
+    },
+    PlineVertex,
+};
+use crate::core::{
+    math::{
+        angle, angle_from_bulge, delta_angle, dist_squared, is_left, is_left_or_equal,
+        point_on_circle, Vector2,
+    },
+    traits::Real,
+};
+use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder, AABB};
 use std::{
     ops::{Index, IndexMut},
     slice::Windows,
-};
-
-use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder, AABB};
-
-use crate::{
-    base_math::angle_from_bulge,
-    core_math::{
-        angle, arc_seg_bounding_box, delta_angle, dist_squared, is_left, is_left_or_equal,
-        point_on_circle, seg_arc_radius_and_center, seg_closest_point,
-        seg_fast_approx_bounding_box, seg_length,
-    },
-    polyline_offset, PlineVertex, Real, Vector2,
 };
 
 #[derive(Debug, Clone)]
@@ -135,7 +139,7 @@ where
         }
     }
 
-    /// Add a vertex to the polyline by giving a [PlineVertex](crate::PlineVertex).
+    /// Add a vertex to the polyline by giving a [PlineVertex](crate::polyline::PlineVertex).
     pub fn add_vertex(&mut self, vertex: PlineVertex<T>) {
         self.vertex_data.push(vertex);
     }
@@ -228,7 +232,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use cavalier_contours::*;
+    /// # use cavalier_contours::polyline::*;
     /// let mut polyline = Polyline::new();
     /// polyline.add(2.0, 2.0, 0.5);
     /// polyline.add(4.0, 4.0, 1.0);
@@ -250,7 +254,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use cavalier_contours::*;
+    /// # use cavalier_contours::polyline::*;
     /// let mut polyline = Polyline::new();
     /// polyline.add(2.0, 2.0, 0.5);
     /// polyline.add(4.0, 4.0, 1.0);
@@ -275,7 +279,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use cavalier_contours::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::traits::*;
     /// let mut polyline = Polyline::new();
     /// assert_eq!(polyline.extents(), None);
     /// polyline.add(1.0, 1.0, 1.0);
@@ -428,11 +433,13 @@ where
     /// the only restriction is that the spatial index bounding boxes must be at least big enough to contain the segments.
     ///
     /// `options` is a struct that holds parameters for tweaking the behavior of the algorithm, if `None is given then
-    /// `PlineOffsetOptions::default()` will be used. See [crate::PlineOffsetOptions] for specific parameters.
+    /// `PlineOffsetOptions::default()` will be used. See [crate::polyline::PlineOffsetOptions] for
+    /// specific parameters.
     ///
     /// # Examples
     /// ```
-    /// # use cavalier_contours::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::pline_closed;
     /// // using the options struct to inform the algorithm that there may be self intersects
     /// // in the polyline to be offset
     /// let options = PlineOffsetOptions { handle_self_intersects: true, .. Default::default() };
@@ -450,7 +457,7 @@ where
         spatial_index: Option<&StaticAABB2DIndex<T>>,
         options: Option<PlineOffsetOptions<T>>,
     ) -> Vec<Polyline<T>> {
-        polyline_offset::parallel_offset(self, offset, spatial_index, options)
+        parallel_offset(self, offset, spatial_index, options)
     }
 
     /// Compute the closed signed area of the polyline.
@@ -462,7 +469,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use cavalier_contours::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::traits::*;
     /// let mut polyline: Polyline = Polyline::new();
     /// assert!(polyline.area().fuzzy_eq(0.0));
     /// polyline.add(1.0, 1.0, 1.0);
@@ -523,7 +531,9 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use cavalier_contours::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::traits::*;
+    /// # use cavalier_contours::core::math::*;
     /// let mut polyline: Polyline = Polyline::new();
     /// assert!(matches!(polyline.closest_point(Vector2::zero()), None));
     /// polyline.add(1.0, 1.0, 1.0);
@@ -573,7 +583,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use cavalier_contours::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::traits::*;
     /// let mut polyline: Polyline = Polyline::new();
     /// // open polyline half circle
     /// polyline.add(0.0, 0.0, 1.0);
@@ -715,7 +726,8 @@ where
     /// ### Polyline without self intersects
     ///
     /// ```
-    /// # use cavalier_contours::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::math::*;
     /// let mut polyline: Polyline = Polyline::new_closed();
     /// polyline.add(0.0, 0.0, 1.0);
     /// polyline.add(2.0, 0.0, 1.0);
@@ -728,7 +740,8 @@ where
     /// ### Multiple windings with self intersecting polyline
     ///
     /// ```
-    /// # use cavalier_contours::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::math::*;
     /// let mut polyline: Polyline = Polyline::new_closed();
     /// polyline.add(0.0, 0.0, 1.0);
     /// polyline.add(2.0, 0.0, 1.0);

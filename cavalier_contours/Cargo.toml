@@ -14,4 +14,4 @@ allow_unsafe = [] # feature has no explicit dependencies
 
 [dependencies]
 num-traits = "0.2"
-static_aabb2d_index = "0.4"
+static_aabb2d_index = "0.5"

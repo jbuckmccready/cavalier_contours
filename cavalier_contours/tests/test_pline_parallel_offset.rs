@@ -1,4 +1,5 @@
-use cavalier_contours::{FuzzyEq, Polyline, AABB};
+use cavalier_contours::{core::traits::FuzzyEq, polyline::Polyline};
+use static_aabb2d_index::AABB;
 
 /// Fuzzy compare AABB values
 fn aabb_fuzzy_eq_eps(a: &AABB<f64>, b: &AABB<f64>, eps: f64) -> bool {
@@ -84,7 +85,8 @@ fn property_sets_match(
     if result_set.len() != expected_set.len() {
         sets_match = false;
     } else {
-        // using simple N^2 comparisons to compare property sets (sets are always relatively small, e.g. N < 10)
+        // using simple N^2 comparisons to compare property sets (sets are always relatively small,
+        // e.g. N < 10)
         for properties_expected in expected_set {
             let match_count = result_set
                 .iter()
@@ -238,8 +240,8 @@ mod test_specific {
                                      0.44926177903859, 31.495431966272, 1.4)]
         }
         case2 {
-            // first vertex position is on top of intersect with second segment (leading to some edge cases
-            // around the join between the last vertex and first vertex)
+            // first vertex position is on top of intersect with second segment (leading to some
+            // edge cases around the join between the last vertex and first vertex)
             (pline_closed![(27.804688, 1.0, 0.0),
                            (27.804688, 0.75, 0.0),
                            (32.195313, 0.75, 0.0),
