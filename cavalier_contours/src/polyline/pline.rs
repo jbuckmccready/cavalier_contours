@@ -4,7 +4,7 @@ use super::{
         arc_seg_bounding_box, seg_arc_radius_and_center, seg_closest_point,
         seg_fast_approx_bounding_box, seg_length,
     },
-    PlineVertex,
+    seg_bounding_box, PlineVertex,
 };
 use crate::core::{
     math::{
@@ -19,6 +19,9 @@ use std::{
     slice::Windows,
 };
 
+/// Polyline represented by a sequence of [PlineVertex](crate::polyline::PlineVertex) and a bool
+/// indicating whether the polyline is open (last vertex is end of polyline) or closed (last vertex
+/// forms segment with first vertex).
 #[derive(Debug, Clone)]
 pub struct Polyline<T = f64> {
     vertex_data: Vec<PlineVertex<T>>,
@@ -204,11 +207,10 @@ where
 
     /// Invert/reverse the direction of the polyline in place.
     ///
-    /// This method works by simply reversing the order of the vertexes,
-    /// and then shifting (by 1 position) and inverting the sign of all the bulge values.
-    /// E.g. after reversing the vertex the bulge at index 0 becomes negative bulge at index 1.
-    /// The end result for a closed polyline is the direction will be changed
-    /// from clockwise to counter clockwise or vice versa.
+    /// This method works by simply reversing the order of the vertexes, shifting by 1 position all
+    /// the vertexes, and inverting the sign of all the bulge values. E.g. after reversing the
+    /// vertex the bulge at index 0 becomes negative bulge at index 1. The end result for a closed
+    /// polyline is the direction will be changed from clockwise to counter clockwise or vice versa.
     pub fn invert_direction(&mut self) {
         let ln = self.len();
         if ln < 2 {
@@ -340,13 +342,15 @@ where
         Some(result)
     }
 
-    /// Creates a fast approximate spatial index of all the polyline's segments.
+    /// Creates a fast approximate spatial index of all the polyline segments.
     ///
-    /// Starting vertex index position is used for key to the segment bounding box
-    /// in the `StaticAABB2DIndex`.
+    /// The starting vertex index position is used as the key to the segment bounding box in the
+    /// `StaticAABB2DIndex`. The bounding boxes are guaranteed to be no smaller than the actual
+    /// bounding box of the segment but may be larger, this is done for performance. If you want the
+    /// actual bounding box index use [Polyline::create_spatial_index] instead.
     ///
-    /// Returns `None` if polyline vertex count is less than 2 or an error occurs in constructing the
-    /// spatial index.
+    /// Returns `None` if polyline vertex count is less than 2 or an error occurs in constructing
+    /// the spatial index.
     pub fn create_approx_spatial_index(&self) -> Option<StaticAABB2DIndex<T>> {
         let ln = self.len();
         if ln < 2 {
@@ -370,9 +374,42 @@ where
         builder.build().ok()
     }
 
-    /// Visit all the polyline segments (represented as polyline vertex pairs, starting at indexes (0, 1)) with a function/closure.
+    /// Creates a spatial index of all the polyline segments.
     ///
-    /// This is equivalent to [Polyline::iter_segments] but uses a visiting function rather than an iterator.
+    /// The starting vertex index position is used as the key to the segment bounding box in the
+    /// `StaticAABB2DIndex`. The bounding boxes are the actual bounding box of the segment, for
+    /// performance reasons you may want to use [Polyline::create_approx_spatial_index].
+    ///
+    /// Returns `None` if polyline vertex count is less than 2 or an error occurs in constructing
+    /// the spatial index.
+    pub fn create_spatial_index(&self) -> Option<StaticAABB2DIndex<T>> {
+        let ln = self.len();
+        if ln < 2 {
+            return None;
+        }
+
+        let seg_count = if self.is_closed { ln } else { ln - 1 };
+
+        let mut builder = StaticAABB2DIndexBuilder::new(seg_count);
+
+        for (v1, v2) in self.iter_segments() {
+            let approx_aabb = seg_bounding_box(v1, v2);
+            builder.add(
+                approx_aabb.min_x,
+                approx_aabb.min_y,
+                approx_aabb.max_x,
+                approx_aabb.max_y,
+            );
+        }
+
+        builder.build().ok()
+    }
+
+    /// Visit all the polyline segments (represented as polyline vertex pairs, starting at indexes
+    /// (0, 1)) with a function/closure.
+    ///
+    /// This is equivalent to [Polyline::iter_segments] but uses a visiting function rather than an
+    /// iterator.
     pub fn visit_segments<F>(&self, visitor: &mut F)
     where
         F: FnMut(PlineVertex<T>, PlineVertex<T>) -> bool,
@@ -406,35 +443,43 @@ where
         self.vertex_data.iter_mut()
     }
 
-    /// Iterate through all the polyline segments (represented as polyline vertex pairs, starting at indexes (0, 1)).
+    /// Iterate through all the polyline segments (represented as polyline vertex pairs, starting at
+    /// indexes (0, 1)).
     ///
-    /// This is equivalent to [Polyline::visit_segments] but returns an iterator rather than accepting a function.
-    pub fn iter_segments(&'_ self) -> impl Iterator<Item = (PlineVertex<T>, PlineVertex<T>)> + '_ {
+    /// This is equivalent to [Polyline::visit_segments] but returns an iterator rather than
+    /// accepting a visiting function.
+    pub fn iter_segments(
+        &self,
+    ) -> impl Iterator<Item = (PlineVertex<T>, PlineVertex<T>)> + Clone + '_ {
         PlineSegIterator::new(&self)
     }
 
     /// Iterate through all the polyline segment vertex positional indexes.
     ///
-    /// Segments are represented by polyline vertex pairs, for each vertex there is
-    /// an associated positional index in the polyline, this method iterates through
-    /// those positional indexes as segment pairs starting at (0, 1).
+    /// Segments are represented by polyline vertex pairs, for each vertex there is an associated
+    /// positional index in the polyline, this method iterates through those positional indexes as
+    /// segment pairs starting at (0, 1) and ending at (n-2, n-1) if open polyline or (n-1, 0) if
+    /// closed polyline where n is the number of vertexes.
     pub fn iter_segment_indexes(&self) -> impl Iterator<Item = (usize, usize)> {
         PlineSegIndexIterator::new(self.vertex_data.len(), self.is_closed)
     }
 
     /// Compute the parallel offset polylines of the polyline.
     ///
-    /// `offset` determines what offset polylines generated, if it is positive then
-    /// the direction of the offset is to the left of the polyline segment tangent vectors
-    /// otherwise it is to the right.
+    /// `offset` determines what offset polylines generated, if it is positive then the direction of
+    /// the offset is to the left of the polyline segment tangent vectors otherwise it is to the
+    /// right.
     ///
-    /// `spatial_index` is a spatial index of all the polyline's segment bounding boxes. If `None` is given then it will
-    /// be computed internally. [Polyline::create_approx_spatial_index] may be used to create the spatial index,
-    /// the only restriction is that the spatial index bounding boxes must be at least big enough to contain the segments.
+    /// `spatial_index` is a spatial index of all the polyline segment bounding boxes (or boxes no
+    /// smaller, e.g. using [Polyline::create_approx_spatial_index] is valid). If `None` is given
+    /// then it will be computed internally. [Polyline::create_approx_spatial_index] or
+    /// [Polyline::create_spatial_index] may be used to create the spatial index, the only
+    /// restriction is that the spatial index bounding boxes must be at least big enough to contain
+    /// the segments.
     ///
-    /// `options` is a struct that holds parameters for tweaking the behavior of the algorithm, if `None is given then
-    /// `PlineOffsetOptions::default()` will be used. See [crate::polyline::PlineOffsetOptions] for
-    /// specific parameters.
+    /// `options` is a struct that holds parameters for tweaking the behavior of the algorithm, if
+    /// `None is given then `PlineOffsetOptions::default()` will be used. See
+    /// [PlineOffsetOptions](crate::polyline::PlineOffsetOptions) for specific parameters.
     ///
     /// # Examples
     /// ```
@@ -490,14 +535,14 @@ where
         }
 
         // Implementation notes:
-        // Using the shoelace formula (https://en.wikipedia.org/wiki/Shoelace_formula) modified to support
-        // arcs defined by a bulge value. The shoelace formula returns a negative value for clockwise
-        // oriented polygons and positive value for counter clockwise oriented polygons. The area of each
-        // circular segment defined by arcs is then added if it is a counter clockwise arc or subtracted
-        // if it is a clockwise arc. The area of the circular segments are computed by finding the area of
-        // the arc sector minus the area of the triangle defined by the chord and center of circle.
+        // Using the shoelace formula (https://en.wikipedia.org/wiki/Shoelace_formula) modified to
+        // support arcs defined by a bulge value. The shoelace formula returns a negative value for
+        // clockwise oriented polygons and positive value for counter clockwise oriented polygons.
+        // The area of each circular segment defined by arcs is then added if it is a counter
+        // clockwise arc or subtracted if it is a clockwise arc. The area of the circular segments
+        // are computed by finding the area of the arc sector minus the area of the triangle
+        // defined by the chord and center of circle.
         // See https://en.wikipedia.org/wiki/Circular_segment
-
         let mut double_total_area = T::zero();
 
         for (v1, v2) in self.iter_segments() {
@@ -770,11 +815,12 @@ where
         winding
     }
 
-    /// Returns a new polyline with all arc segments converted to line segments with some `error_distance` or None
-    /// if T fails to cast to or from usize.
+    /// Returns a new polyline with all arc segments converted to line segments with some
+    /// `error_distance` or None if T fails to cast to or from usize.
     ///
-    /// `error_distance` is the maximum distance from any line segment to the arc it is approximating.
-    /// Line segments are circumscribed by the arc (all line end points lie on the arc path).
+    /// `error_distance` is the maximum distance from any line segment to the arc it is
+    /// approximating. Line segments are circumscribed by the arc (all line end points lie on the
+    /// arc path).
     pub fn arcs_to_approx_lines(&self, error_distance: T) -> Option<Self> {
         let mut result = Polyline::new();
         result.set_is_closed(self.is_closed);
@@ -888,6 +934,8 @@ impl<T> IndexMut<usize> for Polyline<T> {
     }
 }
 
+/// An iterator that traverses all segment vertex pairs.
+#[derive(Debug, Clone)]
 struct PlineSegIterator<'a, T>
 where
     T: Real,
@@ -946,6 +994,7 @@ where
     }
 }
 
+/// An iterator that traverses all segment vertex pair index positions.
 struct PlineSegIndexIterator {
     pos: usize,
     remaining: usize,
