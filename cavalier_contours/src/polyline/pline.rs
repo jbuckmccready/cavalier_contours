@@ -1,5 +1,5 @@
 use super::{
-    internal::pline_offset::parallel_offset,
+    internal::{pline_boolean::polyline_boolean, pline_offset::parallel_offset},
     pline_seg::{
         arc_seg_bounding_box, seg_arc_radius_and_center, seg_closest_point,
         seg_fast_approx_bounding_box, seg_length,
@@ -15,6 +15,7 @@ use crate::core::{
 };
 use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder, AABB};
 use std::{
+    borrow::Cow,
     ops::{Index, IndexMut},
     slice::Windows,
 };
@@ -54,6 +55,17 @@ where
         Polyline {
             vertex_data: Vec::new(),
             is_closed: true,
+        }
+    }
+
+    /// Create a new [Polyline] with vertexes given by an iterator.
+    pub fn from_iter<I>(iter: I, is_closed: bool) -> Self
+    where
+        I: IntoIterator<Item = PlineVertex<T>>,
+    {
+        Polyline {
+            vertex_data: iter.into_iter().collect(),
+            is_closed,
         }
     }
 
@@ -147,9 +159,17 @@ where
         self.vertex_data.push(vertex);
     }
 
-    /// Copy all vertexes from other to the end of this polyline.
-    pub fn extend_vertexes(&mut self, other: &Polyline<T>) {
+    /// Copy all vertexes from `other` to the end of this polyline.
+    pub fn extend(&mut self, other: &Polyline<T>) {
         self.vertex_data.extend(other.vertex_data.iter());
+    }
+
+    /// Add all vertexes to the end of this polyline.
+    pub fn extend_vertexes<I>(&mut self, vertexes: I)
+    where
+        I: IntoIterator<Item = PlineVertex<T>>,
+    {
+        self.vertex_data.extend(vertexes);
     }
 
     /// Remove vertex at index.
@@ -464,45 +484,96 @@ where
         PlineSegIndexIterator::new(self.vertex_data.len(), self.is_closed)
     }
 
-    /// Compute the parallel offset polylines of the polyline.
+    /// Compute the parallel offset polylines of the polyline using default options.
     ///
-    /// `offset` determines what offset polylines generated, if it is positive then the direction of
-    /// the offset is to the left of the polyline segment tangent vectors otherwise it is to the
-    /// right.
+    /// `offset` determines what offset polylines are generated, if it is positive then the
+    /// direction of the offset is to the left of the polyline segment tangent vectors otherwise it
+    /// is to the right.
     ///
-    /// `spatial_index` is a spatial index of all the polyline segment bounding boxes (or boxes no
-    /// smaller, e.g. using [Polyline::create_approx_spatial_index] is valid). If `None` is given
-    /// then it will be computed internally. [Polyline::create_approx_spatial_index] or
-    /// [Polyline::create_spatial_index] may be used to create the spatial index, the only
-    /// restriction is that the spatial index bounding boxes must be at least big enough to contain
-    /// the segments.
+    /// Algorithm will use [PlineOffsetOptions::default] for algorithm options.
     ///
-    /// `options` is a struct that holds parameters for tweaking the behavior of the algorithm, if
-    /// `None is given then `PlineOffsetOptions::default()` will be used. See
+    /// # Examples
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::pline_closed;
+    /// let pline = pline_closed![(0.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
+    /// let offset_plines = pline.parallel_offset(0.2);
+    /// assert_eq!(offset_plines.len(), 1);
+    /// let offset_pline = &offset_plines[0];
+    /// assert!(offset_pline[0].fuzzy_eq(PlineVertex::new(0.2, 0.0, 1.0)));
+    /// assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
+    /// ```
+    pub fn parallel_offset(&self, offset: T) -> Vec<Polyline<T>> {
+        self.parallel_offset_opt(offset, &Default::default())
+    }
+
+    /// Compute the parallel offset polylines of the polyline with options given.
+    ///
+    /// `offset` determines what offset polylines are generated, if it is positive then the
+    /// direction of the offset is to the left of the polyline segment tangent vectors otherwise it
+    /// is to the right.
+    ///
+    /// `options` is a struct that holds optional parameters. See
     /// [PlineOffsetOptions](crate::polyline::PlineOffsetOptions) for specific parameters.
     ///
     /// # Examples
     /// ```
     /// # use cavalier_contours::polyline::*;
     /// # use cavalier_contours::pline_closed;
-    /// // using the options struct to inform the algorithm that there may be self intersects
-    /// // in the polyline to be offset
-    /// let options = PlineOffsetOptions { handle_self_intersects: true, .. Default::default() };
     /// let pline = pline_closed![(0.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
-    /// // passing in None for the spatial_index
-    /// let offset_plines = pline.parallel_offset(0.2, None, Some(options));
+    /// let spatial_index = pline.create_approx_spatial_index().unwrap();
+    /// let options = PlineOffsetOptions {
+    ///     // setting option to handle possible self intersects in the polyline
+    ///     handle_self_intersects: true,
+    ///     // passing in existing spatial index of the polyline segments
+    ///     spatial_index: Some(&spatial_index),
+    ///     ..Default::default()
+    /// };
+    /// let offset_plines = pline.parallel_offset_opt(0.2, &options);
     /// assert_eq!(offset_plines.len(), 1);
     /// let offset_pline = &offset_plines[0];
     /// assert!(offset_pline[0].fuzzy_eq(PlineVertex::new(0.2, 0.0, 1.0)));
     /// assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
     /// ```
-    pub fn parallel_offset(
+    pub fn parallel_offset_opt(
         &self,
         offset: T,
-        spatial_index: Option<&StaticAABB2DIndex<T>>,
-        options: Option<PlineOffsetOptions<T>>,
+        options: &PlineOffsetOptions<T>,
     ) -> Vec<Polyline<T>> {
-        parallel_offset(self, offset, spatial_index, options)
+        parallel_offset(self, offset, options)
+    }
+
+    /// Perform a boolean `operation` between this polyline and another using default options.
+    ///
+    pub fn boolean(&self, other: Cow<Polyline<T>>, operation: BooleanOp) -> BooleanResult<T> {
+        self.boolean_opt(other, operation, &Default::default())
+    }
+
+    /// Perform a boolean `operation` between this polyline and another with options provided.
+    pub fn boolean_opt(
+        &self,
+        other: Cow<Polyline<T>>,
+        operation: BooleanOp,
+        options: &PlineBooleanOptions<T>,
+    ) -> BooleanResult<T> {
+        polyline_boolean(Cow::Borrowed(self), other, operation, &options)
+    }
+
+    /// The same as [Polyline::boolean] but takes ownership of self to avoid copy in case result
+    /// contains self unmodified.
+    pub fn boolean2(self, pline2: Cow<Polyline<T>>, operation: BooleanOp) -> BooleanResult<T> {
+        self.boolean2_opt(pline2, operation, &Default::default())
+    }
+
+    /// The same as [Polyline::boolean_opt] but takes ownership of self to avoid copy in case result
+    /// contains self unmodified.
+    pub fn boolean2_opt(
+        self,
+        pline2: Cow<Polyline<T>>,
+        operation: BooleanOp,
+        options: &PlineBooleanOptions<T>,
+    ) -> BooleanResult<T> {
+        polyline_boolean(Cow::Owned(self), pline2, operation, options)
     }
 
     /// Compute the closed signed area of the polyline.
@@ -567,6 +638,22 @@ where
         }
 
         double_total_area / T::two()
+    }
+
+    /// Returns the orientation of the polyline.
+    ///
+    /// This method just uses the [Polyline::area] function to determine directionality of a closed
+    /// polyline which may not yield a useful result if the polyline has self intersects.
+    pub fn orientation(&self) -> PlineOrientation {
+        if !self.is_closed {
+            return PlineOrientation::Open;
+        }
+
+        if self.area() < T::zero() {
+            PlineOrientation::Clockwise
+        } else {
+            PlineOrientation::CounterClockwise
+        }
     }
 
     /// Find the closest segment point on a polyline to a `point` given.
@@ -720,7 +807,7 @@ where
             if is_ccw {
                 if !point_is_left {
                     // counter clockwise arc right of chord
-                    if dist_to_arc_center_less_than_radius() {
+                    if !dist_to_arc_center_less_than_radius() {
                         result -= 1;
                     }
                 }
@@ -743,7 +830,12 @@ where
                 && dist_to_arc_center_less_than_radius()
             {
                 result += 1;
-            } else if v2.x < point.x && point.x < v1.x && dist_to_arc_center_less_than_radius() {
+            } else if !is_ccw
+                && point_is_left
+                && v2.x < point.x
+                && point.x < v1.x
+                && dist_to_arc_center_less_than_radius()
+            {
                 result -= 1;
             }
         }
@@ -753,18 +845,25 @@ where
 
     /// Calculate the winding number for a `point` relative to the polyline.
     ///
-    /// The winding number calculates the number of turns/windings around a point
-    /// that the polyline path makes. For a closed polyline without self intersects
-    /// there are only three possibilities:
+    /// The winding number calculates the number of turns/windings around a point that the polyline
+    /// path makes. For a closed polyline without self intersects there are only three
+    /// possibilities:
     ///
-    /// * -1 (winds around point clockwise)
+    /// * -1 (polyline winds around point clockwise)
     /// * 0 (point is outside the polyline)
-    /// * 1 (winds around the point counter clockwise).
+    /// * 1 (polyline winds around the point counter clockwise).
+    ///
+    /// For a self intersecting closed polyline the winding number may be less than -1 (if the
+    /// polyline winds around the point more than once in the counter clockwise direction) or
+    /// greater than 1 (if the polyline winds around the point more than once in the clockwise
+    /// direction).
     ///
     /// This function always returns 0 if polyline [Polyline::is_closed] is false.
     ///
-    /// If the point lies directly on top of one of the polyline segments the result
-    /// is not defined.
+    /// If the point lies directly on top of one of the polyline segments the result is not defined
+    /// (it may return any integer). To handle the case of the point lying directly on the polyline
+    /// [Polyline::closest_point] may be used to check if the distance from the point to the
+    /// polyline is zero.
     ///
     /// # Examples
     ///
@@ -878,6 +977,17 @@ where
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+/// Represents the orientation of a polyline.
+pub enum PlineOrientation {
+    /// Polyline is open.
+    Open,
+    /// Polyline is closed and directionally clockwise.
+    Clockwise,
+    /// Polyline is closed and directionally counter clockwise.
+    CounterClockwise,
+}
+
 /// Result from calling [Polyline::closest_point].
 #[derive(Debug, Copy, Clone)]
 pub struct ClosestPointResult<T>
@@ -892,29 +1002,127 @@ where
     pub distance: T,
 }
 
-/// Struct to hold options parameters passed to [Polyline::parallel_offset].
+/// Struct to hold options parameters when performing polyline offset.
 #[derive(Debug, Clone)]
-pub struct PlineOffsetOptions<T = f64>
+pub struct PlineOffsetOptions<'a, T>
 where
     T: Real,
 {
-    pub pos_equal_eps: T,
-    pub slice_join_eps: T,
-    pub offset_dist_eps: T,
+    /// Spatial index of all the polyline segment bounding boxes (or boxes no smaller, e.g. using
+    /// [Polyline::create_approx_spatial_index] is valid). If `None` is given then it will be
+    /// computed internally. [Polyline::create_approx_spatial_index] or
+    /// [Polyline::create_spatial_index] may be used to create the spatial index, the only
+    /// restriction is that the spatial index bounding boxes must be at least big enough to contain
+    /// the segments.
+    pub spatial_index: Option<&'a StaticAABB2DIndex<T>>,
+    /// If true then self intersects will be properly handled by the offset algorithm, if false then
+    /// self intersecting polylines may not offset correctly. Handling self intersects of closed
+    /// polylines requires more memory and computation.
     pub handle_self_intersects: bool,
+    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    pub pos_equal_eps: T,
+    /// Fuzzy comparison epsilon used for determining if two positions are equal when stitching
+    /// polyline slices together.
+    pub slice_join_eps: T,
+    /// Fuzzy comparison epsilon used when testing distance of slices to original polyline for
+    /// validity.
+    pub offset_dist_eps: T,
+    /// Any offset polyline loop with length less than this value is culled (determined invalid).
+    /// This can arise due to other epsilon values combined with the input given not catching very
+    /// small invalid offsets.
+    pub min_length_loop_cull: T,
 }
 
-impl<T> Default for PlineOffsetOptions<T>
+impl<'a, T> PlineOffsetOptions<'a, T>
+where
+    T: Real,
+{
+    pub fn new() -> Self {
+        Self {
+            spatial_index: None,
+            handle_self_intersects: false,
+            pos_equal_eps: T::from(1e-5).unwrap(),
+            slice_join_eps: T::from(1e-4).unwrap(),
+            offset_dist_eps: T::from(1e-4).unwrap(),
+            min_length_loop_cull: T::from(1e-2).unwrap(),
+        }
+    }
+}
+
+impl<'a, T> Default for PlineOffsetOptions<'a, T>
 where
     T: Real,
 {
     fn default() -> Self {
-        PlineOffsetOptions {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+/// Boolean operation to apply to polylines.
+pub enum BooleanOp {
+    /// Return the union of the polylines.
+    OR,
+    /// Return the intersection of the polylines.
+    AND,
+    /// Return the exclusion of a polyline from another.
+    NOT,
+    /// Exclusive OR between polylines.
+    XOR,
+}
+
+/// Result of performing a boolean operation between two polylines.
+pub struct BooleanResult<T> {
+    /// Positive remaining space polylines.
+    pub pos_plines: Vec<Polyline<T>>,
+    /// Negative subtracted space polylines.
+    pub neg_plines: Vec<Polyline<T>>,
+}
+
+impl<T> BooleanResult<T> {
+    pub fn new() -> Self {
+        Self {
+            pos_plines: Vec::new(),
+            neg_plines: Vec::new(),
+        }
+    }
+}
+
+impl<T> Default for BooleanResult<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug)]
+pub struct PlineBooleanOptions<'a, T>
+where
+    T: Real,
+{
+    pub pline1_spatial_index: Option<&'a StaticAABB2DIndex<T>>,
+    pub pos_equal_eps: T,
+    pub slice_join_eps: T,
+}
+
+impl<'a, T> PlineBooleanOptions<'a, T>
+where
+    T: Real,
+{
+    pub fn new() -> Self {
+        Self {
+            pline1_spatial_index: None,
             pos_equal_eps: T::from(1e-5).unwrap(),
             slice_join_eps: T::from(1e-4).unwrap(),
-            offset_dist_eps: T::from(1e-4).unwrap(),
-            handle_self_intersects: false,
         }
+    }
+}
+
+impl<'a, T> Default for PlineBooleanOptions<'a, T>
+where
+    T: Real,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 

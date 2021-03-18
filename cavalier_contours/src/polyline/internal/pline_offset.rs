@@ -875,9 +875,8 @@ where
         is_valid_pline = is_valid_pline && slice.len() > 1;
 
         if is_valid_pline && slice[0].pos().fuzzy_eq(slice.last().unwrap().pos()) {
-            // discard very short slice loops (invalid loops may arise due to valid offset distance
-            // threshold)
-            is_valid_pline = slice.path_length() > T::from(1e-2).unwrap();
+            // discard very short slice loops (invalid loops may arise due to offset_dist_eps)
+            is_valid_pline = slice.path_length() > T::from(options.min_length_loop_cull).unwrap();
         }
 
         if is_valid_pline {
@@ -1409,7 +1408,7 @@ where
             loop_count += 1;
 
             let current_slice = &slices[current_index];
-            current_pline.extend_vertexes(&current_slice.polyline);
+            current_pline.extend(&current_slice.polyline);
             let current_loop_start_index = current_slice.intr_start_index;
             let current_end_point = current_slice.polyline.last().unwrap().pos();
 
@@ -1480,8 +1479,7 @@ where
 pub fn parallel_offset<T>(
     polyline: &Polyline<T>,
     offset: T,
-    spatial_index: Option<&StaticAABB2DIndex<T>>,
-    options: Option<PlineOffsetOptions<T>>,
+    options: &PlineOffsetOptions<T>,
 ) -> Vec<Polyline<T>>
 where
     T: Real,
@@ -1490,31 +1488,29 @@ where
         return Vec::new();
     }
 
-    let opt = options.unwrap_or_default();
-
-    let mut _constructed_index = None;
-    let index = if let Some(x) = spatial_index {
+    let constructed_index;
+    let index = if let Some(x) = options.spatial_index {
         x
     } else {
-        _constructed_index = Some(polyline.create_approx_spatial_index().unwrap());
-        _constructed_index.as_ref().unwrap()
+        constructed_index = polyline.create_approx_spatial_index().unwrap();
+        &constructed_index
     };
 
-    let raw_offset = create_raw_offset_polyline(polyline, offset, opt.pos_equal_eps);
-    if polyline.is_closed() && !opt.handle_self_intersects {
-        let slices = slices_from_raw_offset(polyline, &raw_offset, index, offset, &opt);
-        stitch_slices_together(&slices, true, raw_offset.len() - 1, &opt)
+    let raw_offset = create_raw_offset_polyline(polyline, offset, options.pos_equal_eps);
+    if polyline.is_closed() && !options.handle_self_intersects {
+        let slices = slices_from_raw_offset(polyline, &raw_offset, index, offset, options);
+        stitch_slices_together(&slices, true, raw_offset.len() - 1, options)
     } else {
-        let dual_raw_offset = create_raw_offset_polyline(polyline, -offset, opt.pos_equal_eps);
+        let dual_raw_offset = create_raw_offset_polyline(polyline, -offset, options.pos_equal_eps);
         let slices = slices_from_dual_raw_offsets(
             polyline,
             &raw_offset,
             &dual_raw_offset,
             index,
             offset,
-            &opt,
+            options,
         );
 
-        stitch_slices_together(&slices, polyline.is_closed(), raw_offset.len(), &opt)
+        stitch_slices_together(&slices, polyline.is_closed(), raw_offset.len(), options)
     }
 }

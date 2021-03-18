@@ -1,169 +1,52 @@
-use cavalier_contours::{core::traits::FuzzyEq, polyline::Polyline};
-use static_aabb2d_index::AABB;
+mod test_utils;
 
-/// Fuzzy compare AABB values
-fn aabb_fuzzy_eq_eps(a: &AABB<f64>, b: &AABB<f64>, eps: f64) -> bool {
-    a.min_x.fuzzy_eq_eps(b.min_x, eps)
-        && a.min_y.fuzzy_eq_eps(b.min_y, eps)
-        && a.max_x.fuzzy_eq_eps(b.max_x, eps)
-        && a.max_y.fuzzy_eq_eps(b.max_y, eps)
-}
-
-/// Holds a set of properties of a polyline for comparison in tests
-#[derive(Debug, Copy, Clone)]
-struct PolylineProperties {
-    vertex_count: usize,
-    area: f64,
-    path_length: f64,
-    extents: AABB<f64>,
-}
-
-impl PolylineProperties {
-    fn new(
-        vertex_count: usize,
-        area: f64,
-        path_length: f64,
-        min_x: f64,
-        min_y: f64,
-        max_x: f64,
-        max_y: f64,
-    ) -> Self {
-        Self {
-            vertex_count,
-            area,
-            path_length,
-            extents: AABB::new(min_x, min_y, max_x, max_y),
-        }
-    }
-
-    fn from_pline(pline: &Polyline<f64>, invert_area: bool) -> Self {
-        let area = {
-            let a = pline.area();
-            if invert_area {
-                -a
-            } else {
-                a
-            }
-        };
-
-        Self {
-            vertex_count: pline.len(),
-            area,
-            path_length: pline.path_length(),
-            extents: pline.extents().unwrap(),
-        }
-    }
-
-    fn fuzzy_eq_eps(&self, other: &Self, eps: f64) -> bool {
-        self.vertex_count == other.vertex_count
-            && self.area.fuzzy_eq_eps(other.area, eps)
-            && self.path_length.fuzzy_eq_eps(other.path_length, eps)
-            && aabb_fuzzy_eq_eps(&self.extents, &other.extents, eps)
-    }
-}
-
-fn create_property_set(polylines: &[Polyline<f64>], invert_area: bool) -> Vec<PolylineProperties> {
-    polylines
-        .iter()
-        .map(|pl| PolylineProperties::from_pline(pl, invert_area))
-        .collect()
-}
+use cavalier_contours::polyline::Polyline;
+use test_utils::{
+    create_property_set, property_sets_match, ModifiedPlineSet, ModifiedPlineSetVisitor,
+    ModifiedPlineState, PlineProperties,
+};
 
 fn offset_into_properties_set(
     polyline: &Polyline<f64>,
     offset: f64,
-    invert_area: bool,
-) -> Vec<PolylineProperties> {
-    create_property_set(&polyline.parallel_offset(offset, None, None), invert_area)
+    inverted: bool,
+) -> Vec<PlineProperties> {
+    let offset = if inverted { -offset } else { offset };
+    create_property_set(&polyline.parallel_offset(offset), inverted)
 }
 
-fn property_sets_match(
-    result_set: &[PolylineProperties],
-    expected_set: &[PolylineProperties],
-) -> bool {
-    let mut sets_match = true;
-    if result_set.len() != expected_set.len() {
-        sets_match = false;
-    } else {
-        // using simple N^2 comparisons to compare property sets (sets are always relatively small,
-        // e.g. N < 10)
-        for properties_expected in expected_set {
-            let match_count = result_set
-                .iter()
-                .filter(|properties_result| {
-                    properties_expected.fuzzy_eq_eps(properties_result, 1e-5)
-                })
-                .count();
-
-            if match_count != 1 {
-                sets_match = false;
-                break;
-            }
-        }
-    }
-
-    if !sets_match {
-        eprintln!("result:\n{:?}", result_set);
-        eprintln!("expected:\n{:?}", expected_set);
-    }
-
-    sets_match
+struct PlineOffsetTestVisitor<'a> {
+    offset: f64,
+    expected_properties_set: &'a [PlineProperties],
 }
 
-/// Takes a polyline and moves the 0 index forward in the vertex buffer
-/// (only applicable to closed polylines)
-fn cycle_start_index_forward(input: &Polyline<f64>, n: usize) -> Polyline<f64> {
-    let mut result = Polyline::with_capacity(input.len());
-    result.set_is_closed(true);
-
-    for &v in input.iter().cycle().skip(n).take(input.len()) {
-        result.add_vertex(v);
+impl<'a> ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'a> {
+    fn visit(&mut self, modified_pline: Polyline<f64>, pline_state: ModifiedPlineState) {
+        let offset_results = offset_into_properties_set(
+            &modified_pline,
+            self.offset,
+            pline_state.inverted_direction,
+        );
+        assert!(
+            property_sets_match(&offset_results, self.expected_properties_set),
+            "property sets do not match, modified state: {:?}",
+            pline_state
+        );
     }
-
-    result
 }
 
 fn run_pline_offset_tests(
     input: &Polyline<f64>,
     offset: f64,
-    expected_properties_set: &[PolylineProperties],
+    expected_properties_set: &[PlineProperties],
 ) {
-    let offset_results = offset_into_properties_set(input, offset, false);
-    assert!(
-        property_sets_match(&offset_results, expected_properties_set),
-        "property sets do not match!"
-    );
+    let mut visitor = PlineOffsetTestVisitor {
+        offset,
+        expected_properties_set,
+    };
 
-    let mut inverted = input.clone();
-    inverted.invert_direction();
-    let inverted_results = offset_into_properties_set(&inverted, -offset, true);
-    assert!(
-        property_sets_match(&inverted_results, expected_properties_set),
-        "property sets do not match after inverting direction!"
-    );
-
-    if input.is_closed() {
-        for i in 0..input.len() - 1 {
-            let cycled = cycle_start_index_forward(input, i);
-            let cycled_offset_results = offset_into_properties_set(&cycled, offset, false);
-            assert!(
-                property_sets_match(&cycled_offset_results, expected_properties_set),
-                "property sets do not match after cycling start index forward {} times",
-                i
-            );
-        }
-
-        for i in 0..inverted.len() - 1 {
-            let inverted_cycled = cycle_start_index_forward(&inverted, i);
-            let inverted_cycled_offset_results =
-                offset_into_properties_set(&&inverted_cycled, -offset, true);
-            assert!(
-                property_sets_match(&inverted_cycled_offset_results, expected_properties_set),
-                "property sets do not match after inverting + cycling start index forward {} times",
-                i
-            );
-        }
-    }
+    let test_set = ModifiedPlineSet::new(input, true, true);
+    test_set.accept(&mut visitor);
 }
 
 macro_rules! declare_offset_tests {
@@ -187,47 +70,47 @@ mod test_simple {
     declare_offset_tests!(
         closed_rectangle_inward {
             (pline_closed![ (0.0, 0.0, 0.0), (20.0, 0.0, 0.0), (20.0, 10.0, 0.0), (0.0, 10.0, 0.0) ], 2.0) =>
-            [PolylineProperties::new(4, 96.0, 44.0, 2.0, 2.0, 18.0, 8.0)]
+            [PlineProperties::new(4, 96.0, 44.0, 2.0, 2.0, 18.0, 8.0)]
         }
         closed_rectangle_outward {
             (pline_closed![ (0.0, 0.0, 0.0), (20.0, 0.0, 0.0), (20.0, 10.0, 0.0), (0.0, 10.0, 0.0) ], -2.0) =>
-            [PolylineProperties::new(8, 332.56637061436, 72.566370614359, -2.0, -2.0, 22.0, 12.0)]
+            [PlineProperties::new(8, 332.56637061436, 72.566370614359, -2.0, -2.0, 22.0, 12.0)]
         }
         open_rectangle_inward {
             (pline_open![ (0.0, 0.0, 0.0), (20.0, 0.0, 0.0), (20.0, 10.0, 0.0), (0.0, 10.0, 0.0), (0.0, 0.0, 0.0) ], 2.0) =>
-            [PolylineProperties::new(5, 0.0, 44.0, 2.0, 2.0, 18.0, 8.0)]
+            [PlineProperties::new(5, 0.0, 44.0, 2.0, 2.0, 18.0, 8.0)]
         }
         open_rectangle_outward {
             (pline_open![ (0.0, 0.0, 0.0), (20.0, 0.0, 0.0), (20.0, 10.0, 0.0), (0.0, 10.0, 0.0), (0.0, 0.0, 0.0) ], -2.0) =>
-            [PolylineProperties::new(8, 0.0, 69.424777960769, -2.0, -2.0, 22.0, 12.0)]
+            [PlineProperties::new(8, 0.0, 69.424777960769, -2.0, -2.0, 22.0, 12.0)]
         }
         closed_rectangle_into_overlapping_line {
             (pline_closed![ (0.0, 0.0, 0.0), (20.0, 0.0, 0.0), (20.0, 10.0, 0.0), (0.0, 10.0, 0.0) ], 5.0) =>
-            [PolylineProperties::new(2, 0.0, 20.0, 5.0, 5.0, 15.0, 5.0)]
+            [PlineProperties::new(2, 0.0, 20.0, 5.0, 5.0, 15.0, 5.0)]
         }
         closed_diamond_offset_inward {
             (pline_closed![ (-10.0, 0.0, 0.0), (0.0, 10.0, 0.0), (10.0, 0.0, 0.0), (0.0, -10.0, 0.0) ], -5.0) =>
-            [PolylineProperties::new(4, -17.157287525381, 16.568542494924, -2.9289321881345, -2.9289321881345, 2.9289321881345, 2.9289321881345)]
+            [PlineProperties::new(4, -17.157287525381, 16.568542494924, -2.9289321881345, -2.9289321881345, 2.9289321881345, 2.9289321881345)]
         }
         closed_diamond_offset_outward {
             (pline_closed![ (-10.0, 0.0, 0.0), (0.0, 10.0, 0.0), (10.0, 0.0, 0.0), (0.0, -10.0, 0.0) ], 5.0) =>
-            [PolylineProperties::new(8, -561.38252881436, 87.984469030822, -15.0, -15.0, 15.0, 15.0)]
+            [PlineProperties::new(8, -561.38252881436, 87.984469030822, -15.0, -15.0, 15.0, 15.0)]
         }
         open_diamond_offset_inward {
             (pline_open![ (-10.0, 0.0, 0.0), (0.0, 10.0, 0.0), (10.0, 0.0, 0.0), (0.0, -10.0, 0.0), (-10.0, 0.0, 0.0) ], -5.0) =>
-            [PolylineProperties::new(5, 0.0, 16.568542494924, -2.9289321881345, -2.9289321881345, 2.9289321881345, 2.9289321881345)]
+            [PlineProperties::new(5, 0.0, 16.568542494924, -2.9289321881345, -2.9289321881345, 2.9289321881345, 2.9289321881345)]
         }
         open_diamond_offset_outward {
             (pline_open![ (-10.0, 0.0, 0.0), (0.0, 10.0, 0.0), (10.0, 0.0, 0.0), (0.0, -10.0, 0.0), (-10.0, 0.0, 0.0) ], 5.0) =>
-            [PolylineProperties::new(8, 0.0, 80.130487396847, -13.535533905933, -15.0, 15.0, 15.0)]
+            [PlineProperties::new(8, 0.0, 80.130487396847, -13.535533905933, -15.0, 15.0, 15.0)]
         }
         closed_circle_offset_inward {
             (pline_closed![ (-5.0, 0.0, 1.0), (5.0, 0.0, 1.0) ], 3.0) =>
-            [PolylineProperties::new(2, 12.566370614359, 12.566370614359, -2.0, -2.0, 2.0, 2.0)]
+            [PlineProperties::new(2, 12.566370614359, 12.566370614359, -2.0, -2.0, 2.0, 2.0)]
         }
         closed_circle_offset_outward {
             (pline_closed![ (-5.0, 0.0, 1.0), (5.0, 0.0, 1.0) ], -3.0) =>
-            [PolylineProperties::new(2, 201.06192982975, 50.265482457437, -8.0, -8.0, 8.0, 8.0)]
+            [PlineProperties::new(2, 201.06192982975, 50.265482457437, -8.0, -8.0, 8.0, 8.0)]
         }
     );
 }
@@ -248,9 +131,9 @@ mod test_specific {
                            (30.79289310940682, 1.5, 0.0),
                            (29.20710689059337, 1.5, -0.31783754777018053),
                            (28.49999981323106, 1.00000000000007, 0.0)], 0.1) =>
-            [PolylineProperties::new(4, 0.094833810726263, 1.8213211761499, 31.533345690439,
+            [PlineProperties::new(4, 0.094833810726263, 1.8213211761499, 31.533345690439,
                                      0.90572346564886, 32.26949555256, 1.2817628453883),
-             PolylineProperties::new(6, 1.7197931450343, 7.5140262005179, 28.047835685678,
+             PlineProperties::new(6, 1.7197931450343, 7.5140262005179, 28.047835685678,
                                      0.44926177903859, 31.495431966272, 1.4)]
         }
         case2 {
@@ -264,7 +147,7 @@ mod test_specific {
                            (30.792893109407, 1.5, 0.0),
                            (29.207106890593, 1.5, -0.31783754777018),
                            (28.499999813231, 1.0000000000001, 0.0)], 0.25) =>
-            [PolylineProperties::new(4, 0.36247092523069, 3.593999211522, 29.16143806012, 1.0,
+            [PlineProperties::new(4, 0.36247092523069, 3.593999211522, 29.16143806012, 1.0,
                                      30.838561906052, 1.25)]
         }
         case3 {
@@ -279,7 +162,7 @@ mod test_specific {
                          (30.123475382979798, 17.00000, -0.093311550024413187),
                          (30.500000000000000, 15.00000, 0.00000),
                          (30.500000000000000, -15.00000, -0.093311550024413409)], -2.0) =>
-            [PolylineProperties::new(9, 0.0, 99.224754131592, 28.12347538298, -19.0, 44.0, 19.0)]
+            [PlineProperties::new(9, 0.0, 99.224754131592, 28.12347538298, -19.0, 44.0, 19.0)]
         }
     );
 }
@@ -294,7 +177,7 @@ mod test_past_failures {
             (pline_open![(8.25, 0.0, 0.0),
                          (8.25, 0.0625, -0.414214),
                          (8.5, 0.3125, 0.0)], 0.25) =>
-            [PolylineProperties::new(3, 0.0, 0.84789847066602, 7.9999999999999, 0.0, 8.5000001870958, 0.56250000000015)]
+            [PlineProperties::new(3, 0.0, 0.84789847066602, 7.9999999999999, 0.0, 8.5000001870958, 0.56250000000015)]
         }
     );
 }

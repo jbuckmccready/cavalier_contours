@@ -630,7 +630,7 @@ where
             let last_slice = &mut result.last_mut().unwrap().polyline;
             // copy first slice vertexes to end of last slice
             last_slice.remove_last();
-            last_slice.extend_vertexes(&first_slice.polyline);
+            last_slice.extend(&first_slice.polyline);
         }
     }
 
