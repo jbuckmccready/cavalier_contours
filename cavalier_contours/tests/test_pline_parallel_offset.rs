@@ -103,8 +103,8 @@ fn property_sets_match(
     }
 
     if !sets_match {
-        dbg!(result_set);
-        dbg!(expected_set);
+        eprintln!("result:\n{:?}", result_set);
+        eprintln!("expected:\n{:?}", expected_set);
     }
 
     sets_match
@@ -152,6 +152,17 @@ fn run_pline_offset_tests(
                 i
             );
         }
+
+        for i in 0..inverted.len() - 1 {
+            let inverted_cycled = cycle_start_index_forward(&inverted, i);
+            let inverted_cycled_offset_results =
+                offset_into_properties_set(&&inverted_cycled, -offset, true);
+            assert!(
+                property_sets_match(&inverted_cycled_offset_results, expected_properties_set),
+                "property sets do not match after inverting + cycling start index forward {} times",
+                i
+            );
+        }
     }
 }
 
@@ -167,6 +178,8 @@ macro_rules! declare_offset_tests {
         )+
     };
 }
+
+/// Simple/basic test cases for parallel offset (e.g. circles and rectangles).
 mod test_simple {
     use super::*;
     use cavalier_contours::{pline_closed, pline_open};
@@ -219,6 +232,7 @@ mod test_simple {
     );
 }
 
+/// Specific test cases for parallel offset that trigger edge case scenarios or specific code paths.
 mod test_specific {
     use super::*;
     use cavalier_contours::{pline_closed, pline_open};
@@ -266,6 +280,21 @@ mod test_specific {
                          (30.500000000000000, 15.00000, 0.00000),
                          (30.500000000000000, -15.00000, -0.093311550024413409)], -2.0) =>
             [PolylineProperties::new(9, 0.0, 99.224754131592, 28.12347538298, -19.0, 44.0, 19.0)]
+        }
+    );
+}
+
+/// Test cases that have failed or had issues in the past but are otherwise seemingly unremarkable.
+mod test_past_failures {
+    use super::*;
+    use cavalier_contours::pline_open;
+
+    declare_offset_tests!(
+        small_open_pline {
+            (pline_open![(8.25, 0.0, 0.0),
+                         (8.25, 0.0625, -0.414214),
+                         (8.5, 0.3125, 0.0)], 0.25) =>
+            [PolylineProperties::new(3, 0.0, 0.84789847066602, 7.9999999999999, 0.0, 8.5000001870958, 0.56250000000015)]
         }
     );
 }

@@ -653,9 +653,6 @@ where
     let self_intrs =
         all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, pos_equal_eps);
 
-    dbg!(raw_offset_polyline.len());
-    dbg!(raw_offset_polyline);
-    // dbg!(&self_intrs);
     let mut query_stack = Vec::new();
     if self_intrs.is_empty() {
         // no self intersects, test point on polyline is valid
@@ -1504,16 +1501,11 @@ where
     };
 
     let raw_offset = create_raw_offset_polyline(polyline, offset, opt.pos_equal_eps);
-    dbg!(raw_offset.len(), &raw_offset);
     if polyline.is_closed() && !opt.handle_self_intersects {
         let slices = slices_from_raw_offset(polyline, &raw_offset, index, offset, &opt);
         stitch_slices_together(&slices, true, raw_offset.len() - 1, &opt)
     } else {
-        let dual_raw_offset = dbg!(create_raw_offset_polyline(
-            polyline,
-            -offset,
-            opt.pos_equal_eps
-        ));
+        let dual_raw_offset = create_raw_offset_polyline(polyline, -offset, opt.pos_equal_eps);
         let slices = slices_from_dual_raw_offsets(
             polyline,
             &raw_offset,
@@ -1523,12 +1515,6 @@ where
             &opt,
         );
 
-        dbg!(&slices);
-        dbg!(stitch_slices_together(
-            &slices,
-            polyline.is_closed(),
-            raw_offset.len(),
-            &opt
-        ))
+        stitch_slices_together(&slices, polyline.is_closed(), raw_offset.len(), &opt)
     }
 }

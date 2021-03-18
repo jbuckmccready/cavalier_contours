@@ -411,7 +411,7 @@ where
 
 /// Returns the bulge for the given arc `sweep_angle`.
 ///
-/// By definition `bulge = arc_sweep_angle / 4`.
+/// By definition `bulge = tan(arc_sweep_angle / 4)`.
 /// Note if `angle` is negative then bulge returned will be negative (clockwise arc).
 #[inline]
 pub fn bulge_from_angle<T>(angle: T) -> T
