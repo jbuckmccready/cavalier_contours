@@ -15,7 +15,6 @@ use crate::core::{
 };
 use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder, AABB};
 use std::{
-    borrow::Cow,
     ops::{Index, IndexMut},
     slice::Windows,
 };
@@ -545,35 +544,18 @@ where
 
     /// Perform a boolean `operation` between this polyline and another using default options.
     ///
-    pub fn boolean(&self, other: Cow<Polyline<T>>, operation: BooleanOp) -> BooleanResult<T> {
+    pub fn boolean(&self, other: &Polyline<T>, operation: BooleanOp) -> BooleanResult<T> {
         self.boolean_opt(other, operation, &Default::default())
     }
 
     /// Perform a boolean `operation` between this polyline and another with options provided.
     pub fn boolean_opt(
         &self,
-        other: Cow<Polyline<T>>,
+        other: &Polyline<T>,
         operation: BooleanOp,
         options: &PlineBooleanOptions<T>,
     ) -> BooleanResult<T> {
-        polyline_boolean(Cow::Borrowed(self), other, operation, &options)
-    }
-
-    /// The same as [Polyline::boolean] but takes ownership of self to avoid copy in case result
-    /// contains self unmodified.
-    pub fn boolean2(self, pline2: Cow<Polyline<T>>, operation: BooleanOp) -> BooleanResult<T> {
-        self.boolean2_opt(pline2, operation, &Default::default())
-    }
-
-    /// The same as [Polyline::boolean_opt] but takes ownership of self to avoid copy in case result
-    /// contains self unmodified.
-    pub fn boolean2_opt(
-        self,
-        pline2: Cow<Polyline<T>>,
-        operation: BooleanOp,
-        options: &PlineBooleanOptions<T>,
-    ) -> BooleanResult<T> {
-        polyline_boolean(Cow::Owned(self), pline2, operation, options)
+        polyline_boolean(self, other, operation, &options)
     }
 
     /// Compute the closed signed area of the polyline.

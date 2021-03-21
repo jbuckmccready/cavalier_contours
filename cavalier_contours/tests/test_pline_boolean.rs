@@ -1,5 +1,4 @@
 mod test_utils;
-use std::borrow::Cow;
 
 use cavalier_contours::polyline::{BooleanOp, Polyline};
 use test_utils::{
@@ -17,7 +16,7 @@ fn run_same_boolean_test(
     use cavalier_contours::polyline::BooleanOp::*;
     // test same polyline
     for &op in [OR, AND].iter() {
-        let result = self1.boolean(Cow::Borrowed(&self2), op);
+        let result = self1.boolean(&self2, op);
         let mut passed = result.pos_plines.len() == 1 && result.neg_plines.is_empty();
         if passed {
             let result_properties =
@@ -33,7 +32,7 @@ fn run_same_boolean_test(
     }
 
     for &op in [NOT, XOR].iter() {
-        let result = self1.boolean(Cow::Borrowed(&self2), op);
+        let result = self1.boolean(&self2, op);
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
@@ -56,7 +55,7 @@ fn run_same_boolean_test(
     {
         let op = OR;
         let expected = &[disjoint1_properties, *input_properties];
-        let result = disjoint1.boolean(Cow::Borrowed(&self2), op);
+        let result = disjoint1.boolean(&self2, op);
         let result_properties = create_property_set(&result.pos_plines, false);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -70,7 +69,7 @@ fn run_same_boolean_test(
     // disjoint AND
     {
         let op = AND;
-        let result = disjoint1.boolean(Cow::Borrowed(&self2), op);
+        let result = disjoint1.boolean(&self2, op);
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
@@ -83,7 +82,7 @@ fn run_same_boolean_test(
     {
         let op = NOT;
         let expected = &[disjoint1_properties];
-        let result = disjoint1.boolean(Cow::Borrowed(&self2), op);
+        let result = disjoint1.boolean(&self2, op);
         let result_properties = create_property_set(&result.pos_plines, false);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -98,7 +97,7 @@ fn run_same_boolean_test(
     {
         let op = XOR;
         let expected = &[disjoint1_properties, *input_properties];
-        let result = disjoint1.boolean(Cow::Borrowed(&self2), op);
+        let result = disjoint1.boolean(&self2, op);
         let result_properties = create_property_set(&result.pos_plines, false);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -119,7 +118,7 @@ fn run_same_boolean_test(
     {
         let op = OR;
         let expected = &[*input_properties];
-        let result = self2.boolean(Cow::Borrowed(&self1_inward_offset), op);
+        let result = self2.boolean(&self1_inward_offset, op);
         let result_properties = create_property_set(&result.pos_plines, false);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -134,7 +133,7 @@ fn run_same_boolean_test(
     {
         let op = AND;
         let expected = offset_properties;
-        let result = self2.boolean(Cow::Borrowed(&self1_inward_offset), op);
+        let result = self2.boolean(&self1_inward_offset, op);
         let result_properties = create_property_set(&result.pos_plines, false);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -150,7 +149,7 @@ fn run_same_boolean_test(
         let op = NOT;
         let pos_expected = &[*input_properties];
         let neg_expected = offset_properties;
-        let result = self2.boolean(Cow::Borrowed(&self1_inward_offset), op);
+        let result = self2.boolean(&self1_inward_offset, op);
         let pos_pline_result_properties = create_property_set(&result.pos_plines, false);
         let neg_pline_result_properties = create_property_set(&result.neg_plines, false);
         let passed = property_sets_match_abs_a(&pos_pline_result_properties, pos_expected)
@@ -165,7 +164,7 @@ fn run_same_boolean_test(
     // enclosed self1_offset NOT self2
     {
         let op = NOT;
-        let result = self1_inward_offset.boolean(Cow::Borrowed(self2), op);
+        let result = self1_inward_offset.boolean(self2, op);
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
@@ -179,7 +178,7 @@ fn run_same_boolean_test(
         let op = XOR;
         let pos_expected = &[*input_properties];
         let neg_expected = offset_properties;
-        let result = self2.boolean(Cow::Borrowed(&self1_inward_offset), op);
+        let result = self2.boolean(&self1_inward_offset, op);
         let pos_pline_result_properties = create_property_set(&result.pos_plines, false);
         let neg_pline_result_properties = create_property_set(&result.neg_plines, false);
         let passed = property_sets_match_abs_a(&pos_pline_result_properties, pos_expected)
@@ -294,7 +293,7 @@ fn run_pline_boolean_tests(
     test_set1.accept_closure(&mut |modified_pline1, state1| {
         test_set2.accept_closure(&mut |modified_pline2, state2| {
             for &(op, pos_set_expected, neg_set_expected) in cases {
-                let result = modified_pline1.boolean(Cow::Borrowed(&modified_pline2), op);
+                let result = modified_pline1.boolean(&modified_pline2, op);
                 let pos_set_result = create_property_set(&result.pos_plines, false);
                 let neg_set_result = create_property_set(&result.neg_plines, false);
                 let passed = property_sets_match_abs_a(&pos_set_result, &pos_set_expected)

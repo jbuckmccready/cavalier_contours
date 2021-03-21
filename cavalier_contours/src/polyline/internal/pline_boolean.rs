@@ -5,7 +5,7 @@ use crate::{
         PlineVertex,
     },
 };
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
 use super::pline_intersects::{
     find_intersects, sort_and_join_overlapping_intersects, OverlappingSlice, PlineBasicIntersect,
@@ -605,8 +605,8 @@ where
 
 /// Perform boolean operation between two polylines using parameters given.
 pub fn polyline_boolean<T>(
-    pline1: Cow<Polyline<T>>,
-    pline2: Cow<Polyline<T>>,
+    pline1: &Polyline<T>,
+    pline2: &Polyline<T>,
     operation: BooleanOp,
     options: &PlineBooleanOptions<T>,
 ) -> BooleanResult<T>
@@ -625,12 +625,8 @@ where
         &constructed_index
     };
 
-    let boolean_info = process_for_boolean(
-        pline1.as_ref(),
-        pline2.as_ref(),
-        pline1_spatial_index,
-        options.pos_equal_eps,
-    );
+    let boolean_info =
+        process_for_boolean(pline1, pline2, pline1_spatial_index, options.pos_equal_eps);
 
     // helper functions to test if point is inside pline1 and pline2
     let mut point_in_pline1 = |point: Vector2<T>| pline1.winding_number(point) != 0;
@@ -650,17 +646,17 @@ where
         BooleanOp::OR => {
             if boolean_info.completely_overlapping(pos_equal_eps) {
                 // pline1 completely overlapping pline2 just return pline2
-                pos_plines.push(pline2.into_owned());
+                pos_plines.push(pline2.clone());
             } else if !boolean_info.any_intersects() {
                 // no intersects, returning only one pline if one is inside other or both if they
                 // are completely disjoint
                 if is_pline1_in_pline2() {
-                    pos_plines.push(pline2.into_owned());
+                    pos_plines.push(pline2.clone());
                 } else if is_pline2_in_pline1() {
-                    pos_plines.push(pline1.into_owned());
+                    pos_plines.push(pline1.clone());
                 } else {
-                    pos_plines.push(pline1.into_owned());
-                    pos_plines.push(pline2.into_owned());
+                    pos_plines.push(pline1.clone());
+                    pos_plines.push(pline2.clone());
                 }
             } else {
                 // keep all slices of pline1 that are not in pline2 and all slices of pline2 that
@@ -700,14 +696,14 @@ where
         BooleanOp::AND => {
             if boolean_info.completely_overlapping(pos_equal_eps) {
                 // pline1 completely overlapping pline2 just return pline2
-                pos_plines.push(pline2.into_owned());
+                pos_plines.push(pline2.clone());
             } else if !boolean_info.any_intersects() {
                 // no intersects, returning only one pline if one is inside other or none if they
                 // are completely disjoint
                 if is_pline1_in_pline2() {
-                    pos_plines.push(pline1.into_owned());
+                    pos_plines.push(pline1.clone());
                 } else if is_pline2_in_pline1() {
-                    pos_plines.push(pline2.into_owned());
+                    pos_plines.push(pline2.clone());
                 }
                 // else none
             } else {
@@ -741,11 +737,11 @@ where
                     // everything is subtracted (nothing left)
                 } else if is_pline2_in_pline1() {
                     // negative space island created inside pline1
-                    pos_plines.push(pline1.into_owned());
-                    neg_plines.push(pline2.into_owned());
+                    pos_plines.push(pline1.clone());
+                    neg_plines.push(pline2.clone());
                 } else {
                     // disjoint
-                    pos_plines.push(pline1.into_owned());
+                    pos_plines.push(pline1.clone());
                 }
             } else {
                 // keep all slices from pline1 that are not in pline2 and all slices on pline2 that
@@ -775,15 +771,15 @@ where
                 // completely overlapping, nothing is left
             } else if !boolean_info.any_intersects() {
                 if is_pline1_in_pline2() {
-                    pos_plines.push(pline2.into_owned());
-                    neg_plines.push(pline1.into_owned());
+                    pos_plines.push(pline2.clone());
+                    neg_plines.push(pline1.clone());
                 } else if is_pline2_in_pline1() {
-                    pos_plines.push(pline1.into_owned());
-                    neg_plines.push(pline2.into_owned());
+                    pos_plines.push(pline1.clone());
+                    neg_plines.push(pline2.clone());
                 } else {
                     // disjoint
-                    pos_plines.push(pline1.into_owned());
-                    pos_plines.push(pline2.into_owned());
+                    pos_plines.push(pline1.clone());
+                    pos_plines.push(pline2.clone());
                 }
             } else {
                 // collect pline1 NOT pline2 results
