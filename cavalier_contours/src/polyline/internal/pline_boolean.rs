@@ -143,8 +143,8 @@ pub fn slice_at_intersects<T, F>(
         for overlapping_slice in boolean_info.overlapping_slices.iter() {
             let sp = overlapping_slice.polyline[0].pos();
             let ep = overlapping_slice.polyline.last().unwrap().pos();
-            let sp_idx = overlapping_slice.start_indexes.1;
-            let ep_idx = overlapping_slice.end_indexes.1;
+            let sp_idx = overlapping_slice.start_indexes.0;
+            let ep_idx = overlapping_slice.end_indexes.0;
             // overlapping slices are always constructed following the direction of pline2 so if
             // pline1 has opposing direction then sp becomes slice end point and ep becomes slice
             // start point

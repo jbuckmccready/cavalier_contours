@@ -1,9 +1,9 @@
 use crate::{
     core::{
         math::{
-            angle, bulge_from_angle, circle_circle_intr, delta_angle, dist_squared,
-            line_circle_intr, line_line_intr, point_from_parametric, point_within_arc_sweep,
-            CircleCircleIntr, LineCircleIntr, LineLineIntr, Vector2,
+            angle, bulge_from_angle, circle_circle_intr, delta_angle, delta_angle_signed,
+            dist_squared, line_circle_intr, line_line_intr, point_from_parametric,
+            point_within_arc_sweep, CircleCircleIntr, LineCircleIntr, LineLineIntr, Vector2,
         },
         traits::Real,
     },
@@ -113,13 +113,7 @@ where
 {
     let a1 = angle(arc_center, start_point);
     let a2 = angle(arc_center, end_point);
-    let abs_sweep_angle = delta_angle(a1, a2).abs();
-    let abs_bulge = bulge_from_angle(abs_sweep_angle);
-    if is_ccw {
-        abs_bulge
-    } else {
-        -abs_bulge
-    }
+    bulge_from_angle(delta_angle_signed(a1, a2, !is_ccw))
 }
 
 fn connect_using_arc<T>(

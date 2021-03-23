@@ -1,9 +1,9 @@
 use super::PlineVertex;
 use crate::core::{
     math::{
-        angle, angle_is_within_sweep, bulge_from_angle, delta_angle, dist_squared,
-        line_seg_closest_point, midpoint, min_max, point_on_circle, point_within_arc_sweep,
-        Vector2,
+        angle, angle_is_within_sweep, bulge_from_angle, delta_angle, delta_angle_signed,
+        dist_squared, line_seg_closest_point, midpoint, min_max, point_on_circle,
+        point_within_arc_sweep, Vector2,
     },
     traits::Real,
 };
@@ -128,11 +128,11 @@ where
     let point_pos_angle = angle(arc_center, point_on_seg);
 
     let arc_start_angle = angle(arc_center, v1.pos());
-    let theta1 = delta_angle(arc_start_angle, point_pos_angle);
+    let theta1 = delta_angle_signed(arc_start_angle, point_pos_angle, v1.bulge_is_neg());
     let bulge1 = bulge_from_angle(theta1);
 
     let arc_end_angle = angle(arc_center, v2.pos());
-    let theta2 = delta_angle(point_pos_angle, arc_end_angle);
+    let theta2 = delta_angle_signed(point_pos_angle, arc_end_angle, v1.bulge_is_neg());
     let bulge2 = bulge_from_angle(theta2);
 
     let updated_start = PlineVertex::new(v1.x, v1.y, bulge1);
@@ -283,7 +283,7 @@ where
     let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
     let start_angle = angle(arc_center, v1.pos());
     let end_angle = angle(arc_center, v2.pos());
-    let sweep_angle = delta_angle(start_angle, end_angle);
+    let sweep_angle = delta_angle_signed(start_angle, end_angle, v1.bulge_is_neg());
 
     let crosses_angle = |angle| angle_is_within_sweep(angle, start_angle, sweep_angle);
 
@@ -412,11 +412,7 @@ where
     let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
     let angle1 = angle(arc_center, v1.pos());
     let angle2 = angle(arc_center, v2.pos());
-    let angle_offset = delta_angle(angle1, angle2).abs() / T::two();
-    let mid_angle = if v1.bulge_is_pos() {
-        angle1 + angle_offset
-    } else {
-        angle1 - angle_offset
-    };
+    let angle_offset = delta_angle_signed(angle1, angle2, v1.bulge_is_neg()) / T::two();
+    let mid_angle = angle1 + angle_offset;
     point_on_circle(arc_radius, arc_center, mid_angle)
 }

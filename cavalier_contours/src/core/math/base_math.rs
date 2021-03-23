@@ -80,6 +80,25 @@ where
     diff
 }
 
+/// Returns the smaller difference between two angles and applies the sign given.
+///
+/// This function is similar to [delta_angle] but always returns a negative result if `negative` is
+/// true or a positive result if `negative` is false. This is useful for ensuring a particular
+/// polarity for edge cases, e.g. if `angle1` is 0 and `angle2` is PI then the delta angle could be
+/// be considered positive or negative ([delta_angle] always returns positive).
+///
+pub fn delta_angle_signed<T>(angle1: T, angle2: T, negative: bool) -> T
+where
+    T: Real,
+{
+    let diff = delta_angle(angle1, angle2);
+    if negative {
+        -diff.abs()
+    } else {
+        diff.abs()
+    }
+}
+
 /// Tests if `test_angle` is between a `start_angle` and `end_angle`.
 ///
 /// Test assumes counter clockwise `start_angle` to `end_angle`, and is inclusive using `epsilon`.
