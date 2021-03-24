@@ -1,6 +1,6 @@
 use cavalier_contours::{
     assert_fuzzy_eq,
-    core::traits::FuzzyEq,
+    core::{math::bulge_from_angle, traits::FuzzyEq},
     polyline::{PlineVertex, Polyline},
 };
 use std::{borrow::Cow, f64::consts::PI};
@@ -167,6 +167,7 @@ fn invert_direction() {
 #[test]
 fn remove_repeat() {
     {
+        // empty polyline
         let polyline = Polyline::new_closed();
         let result = polyline.remove_repeat_pos(1e-5);
         assert!(matches!(result, Cow::Borrowed(_)));
@@ -175,6 +176,7 @@ fn remove_repeat() {
     }
 
     {
+        // single vertex
         let mut polyline = Polyline::new_closed();
         polyline.add(2.0, 2.0, 0.5);
         let result = polyline.remove_repeat_pos(1e-5);
@@ -185,6 +187,7 @@ fn remove_repeat() {
     }
 
     {
+        // two repeats, closed polyline
         let mut polyline = Polyline::new_closed();
         polyline.add(2.0, 2.0, 0.5);
         polyline.add(2.0, 2.0, 1.0);
@@ -199,6 +202,7 @@ fn remove_repeat() {
     }
 
     {
+        // two repeats, open polyline
         let mut polyline = Polyline::new();
         polyline.add(2.0, 2.0, 0.5);
         polyline.add(2.0, 2.0, 1.0);
@@ -213,6 +217,7 @@ fn remove_repeat() {
     }
 
     {
+        // no repeats, closed polyline
         let mut polyline = Polyline::new_closed();
         polyline.add(2.0, 2.0, 0.5);
         polyline.add(3.0, 3.0, 1.0);
@@ -225,6 +230,7 @@ fn remove_repeat() {
     }
 
     {
+        // no repeats, open polyline
         let mut polyline = Polyline::new();
         polyline.add(2.0, 2.0, 0.5);
         polyline.add(3.0, 3.0, 1.0);
@@ -236,6 +242,347 @@ fn remove_repeat() {
         assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
         assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
         assert_fuzzy_eq!(result[2], PlineVertex::new(4.0, 3.0, 1.0));
+    }
+
+    {
+        // last repeats position on first for closed polyline
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(3.0, 3.0, 1.0);
+        polyline.add(2.0, 2.0, 1.0);
+        let result = polyline.remove_repeat_pos(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
+    }
+
+    {
+        // last repeats position on first for open polyline
+        let mut polyline = Polyline::new();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(3.0, 3.0, 1.0);
+        polyline.add(2.0, 2.0, 1.0);
+        let result = polyline.remove_repeat_pos(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 3);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
+        assert_fuzzy_eq!(result[2], PlineVertex::new(2.0, 2.0, 1.0));
+    }
+}
+
+#[test]
+fn remove_redundant_removes_repeat_pos() {
+    {
+        // empty polyline
+        let polyline = Polyline::new_closed();
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert!(result.is_empty());
+        assert!(result.is_closed());
+    }
+
+    {
+        // single vertex
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.5);
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 1);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
+    }
+
+    {
+        // two repeats, closed polyline
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(2.0, 2.0, 1.0);
+        polyline.add(3.0, 3.0, 1.0);
+        polyline.add(3.0, 3.0, 0.5);
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 0.5));
+    }
+
+    {
+        // two repeats, open polyline
+        let mut polyline = Polyline::new();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(2.0, 2.0, 1.0);
+        polyline.add(3.0, 3.0, 1.0);
+        polyline.add(3.0, 3.0, 0.5);
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 0.5));
+    }
+
+    {
+        // no repeats, closed polyline
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(3.0, 3.0, 1.0);
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
+    }
+
+    {
+        // no repeats, open polyline
+        let mut polyline = Polyline::new();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(3.0, 3.0, 1.0);
+        polyline.add(4.0, 3.0, 1.0);
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 3);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
+        assert_fuzzy_eq!(result[2], PlineVertex::new(4.0, 3.0, 1.0));
+    }
+
+    {
+        // last repeats position on first for closed polyline
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(3.0, 3.0, 1.0);
+        polyline.add(2.0, 2.0, 1.0);
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
+    }
+
+    {
+        // last repeats position on first for open polyline
+        let mut polyline = Polyline::new();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(3.0, 3.0, 1.0);
+        polyline.add(2.0, 2.0, 1.0);
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 3);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
+        assert_fuzzy_eq!(result[2], PlineVertex::new(2.0, 2.0, 1.0));
+    }
+}
+
+#[test]
+fn remove_redundant() {
+    {
+        // redundant point on line and repeat position
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.0);
+        polyline.add(3.0, 3.0, 0.0);
+        polyline.add(3.0, 3.0, 0.0);
+        polyline.add(4.0, 4.0, 0.0);
+        polyline.add(2.0, 4.0, 0.0);
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 3);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(4.0, 4.0, 0.0));
+        assert_fuzzy_eq!(result[2], PlineVertex::new(2.0, 4.0, 0.0));
+    }
+
+    {
+        // self intersecting points along line (collinear but opposing direction, points should not
+        // be removed)
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.0);
+        polyline.add(3.0, 3.0, 0.0);
+        polyline.add(2.5, 2.5, 0.0);
+        polyline.add(4.0, 4.0, 0.0);
+        polyline.add(2.0, 4.0, 0.0);
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 5);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 0.0));
+        assert_fuzzy_eq!(result[2], PlineVertex::new(2.5, 2.5, 0.0));
+        assert_fuzzy_eq!(result[3], PlineVertex::new(4.0, 4.0, 0.0));
+        assert_fuzzy_eq!(result[4], PlineVertex::new(2.0, 4.0, 0.0));
+    }
+
+    {
+        // arcs along greater arc
+        let radius = 5.0;
+        let max_angle = std::f64::consts::FRAC_PI_2;
+        let count = 4;
+        let sub_angle = (1.0 / count as f64) * max_angle;
+        let bulge = bulge_from_angle(sub_angle);
+
+        let mut polyline = Polyline::new();
+        (0..=count)
+            .map(|i| (i as f64) * sub_angle)
+            .for_each(|angle| polyline.add(radius * angle.cos(), radius * angle.sin(), bulge));
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(
+            result[0],
+            PlineVertex::new(radius, 0.0, bulge_from_angle(max_angle))
+        );
+        assert_fuzzy_eq!(result[1], PlineVertex::new(0.0, radius, bulge));
+    }
+
+    {
+        // arcs along circle
+        let radius = 5.0;
+        let max_angle = std::f64::consts::TAU;
+        let count = 10;
+        let sub_angle = (1.0 / count as f64) * max_angle;
+        let bulge = bulge_from_angle(sub_angle);
+
+        let mut polyline = Polyline::new_closed();
+        (0..count)
+            .map(|i| (i as f64) * sub_angle)
+            .for_each(|angle| polyline.add(radius * angle.cos(), radius * angle.sin(), bulge));
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(radius, 0.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(-radius, 0.0, 1.0));
+    }
+
+    {
+        // arcs along circle open polyline
+        let radius = 5.0;
+        let max_angle = std::f64::consts::TAU;
+        let count = 10;
+        let sub_angle = (1.0 / count as f64) * max_angle;
+        let bulge = bulge_from_angle(sub_angle);
+
+        let mut polyline = Polyline::new();
+        (0..=count)
+            .map(|i| (i as f64) * sub_angle)
+            .for_each(|angle| polyline.add(radius * angle.cos(), radius * angle.sin(), bulge));
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 3);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(radius, 0.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(-radius, 0.0, 1.0));
+        assert_fuzzy_eq!(result[2], PlineVertex::new(radius, 0.0, bulge));
+    }
+
+    {
+        // already minimum circle
+        let radius = 5.0;
+
+        let mut polyline = Polyline::new_closed();
+        polyline.add(0.0, -radius, 1.0);
+        polyline.add(0.0, radius, 1.0);
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(0.0, -radius, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(0.0, radius, 1.0));
+    }
+
+    {
+        // closed half circle with arc that causes first vertex to be redundant
+        let radius = 5.0;
+
+        let bulge = bulge_from_angle(-std::f64::consts::FRAC_PI_2);
+
+        let mut polyline = Polyline::new_closed();
+        polyline.add(0.0, radius, bulge);
+        polyline.add(radius, 0.0, 0.0);
+        polyline.add(-radius, 0.0, bulge);
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(-radius, 0.0, -1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(radius, 0.0, 0.0));
+    }
+
+    {
+        // open polyline with bulge values that would cause first vertex to be redundant if
+        // polyline were closed
+        let radius = 5.0;
+
+        let bulge = bulge_from_angle(-std::f64::consts::FRAC_PI_2);
+
+        let mut polyline = Polyline::new();
+        polyline.add(0.0, radius, bulge);
+        polyline.add(radius, 0.0, 0.0);
+        polyline.add(-radius, 0.0, bulge);
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 3);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(result[0], polyline[0]);
+        assert_fuzzy_eq!(result[1], polyline[1]);
+        assert_fuzzy_eq!(result[2], polyline[2]);
+    }
+
+    {
+        // closed path with redundant first vertex point along line
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.0);
+        polyline.add(3.0, 3.0, 0.0);
+        polyline.add(3.0, -2.0, 0.0);
+        polyline.add(-2.0, -2.0, 0.0);
+        polyline.add(-1.0, -1.0, 0.0);
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 3);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(-2.0, -2.0, 0.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 0.0));
+        assert_fuzzy_eq!(result[2], PlineVertex::new(3.0, -2.0, 0.0));
+    }
+
+    {
+        // open polyline with values that would cause first vertex to be redundant due to being
+        // collinear if polyline were closed
+        let mut polyline = Polyline::new();
+        polyline.add(2.0, 2.0, 0.0);
+        polyline.add(3.0, 3.0, 0.0);
+        polyline.add(3.0, -2.0, 0.0);
+        polyline.add(-2.0, -2.0, 0.0);
+        polyline.add(-1.0, -1.0, 0.0);
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 5);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(result[0], polyline[0]);
+        assert_fuzzy_eq!(result[1], polyline[1]);
+        assert_fuzzy_eq!(result[2], polyline[2]);
+        assert_fuzzy_eq!(result[3], polyline[3]);
+        assert_fuzzy_eq!(result[4], polyline[4]);
     }
 }
 

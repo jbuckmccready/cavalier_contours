@@ -37,6 +37,8 @@ impl PlineProperties {
     }
 
     pub fn from_pline(pline: &Polyline<f64>, invert_area: bool) -> Self {
+        // remove redundant vertexes for consistent vertex counts
+        let pline = pline.remove_redundant(1e-5);
         let area = {
             let a = pline.area();
             if invert_area {

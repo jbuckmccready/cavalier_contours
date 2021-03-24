@@ -8,8 +8,8 @@ use super::{
 };
 use crate::core::{
     math::{
-        angle, angle_from_bulge, delta_angle, dist_squared, is_left, is_left_or_equal,
-        point_on_circle, Vector2,
+        angle, angle_from_bulge, bulge_from_angle, delta_angle, dist_squared, is_left,
+        is_left_or_equal, point_on_circle, Vector2,
     },
     traits::Real,
 };
@@ -295,7 +295,8 @@ where
 
     /// Remove all repeat position vertexes from the polyline.
     ///
-    /// A Cow is returned to avoid allocation and copy in the case that no vertexes are removed.
+    /// A `Cow<Polyline>` is returned to avoid allocation and copy in the case that no vertexes are
+    /// removed.
     ///
     /// # Examples
     ///
@@ -325,17 +326,13 @@ where
             let is_repeat = v.pos().fuzzy_eq_eps(prev_pos, pos_equal_eps);
 
             if is_repeat {
-                if let Some(ref mut r) = result {
-                    // repeat position and result is already initialized, just update bulge
-                    r.last_mut().unwrap().bulge = v.bulge;
-                } else {
-                    // repeat position and result is not initialized, initialize it
-                    let mut pline =
-                        Polyline::from_iter(self.iter().take(i).copied(), self.is_closed);
-                    // update bulge
-                    pline.last_mut().unwrap().bulge = v.bulge;
-                    result = Some(pline);
-                }
+                result
+                    .get_or_insert_with(|| {
+                        Polyline::from_iter(self.iter().take(i).copied(), self.is_closed)
+                    })
+                    .last_mut()
+                    .unwrap()
+                    .bulge = v.bulge;
             } else {
                 if let Some(ref mut r) = result {
                     // not repeat position and result is initialized
@@ -347,20 +344,258 @@ where
             prev_pos = v.pos();
         }
 
-        if let Some(mut r) = result {
-            // if closed and last overlaps first then remove last
-            if self.is_closed
-                && r.last()
-                    .unwrap()
-                    .pos()
-                    .fuzzy_eq_eps(r[0].pos(), pos_equal_eps)
-            {
-                r.remove_last();
-            }
-            Cow::Owned(r)
-        } else {
-            Cow::Borrowed(self)
+        // check if closed and last repeats position on first
+        if self.is_closed()
+            && self
+                .last()
+                .unwrap()
+                .pos()
+                .fuzzy_eq_eps(self[0].pos(), pos_equal_eps)
+        {
+            result
+                .get_or_insert_with(|| Polyline::from_iter(self.iter().copied(), self.is_closed))
+                .remove_last();
         }
+
+        result.map_or_else(|| Cow::Borrowed(self), |r| Cow::Owned(r))
+    }
+
+    /// Remove all redundant vertexes from the polyline.
+    ///
+    /// Redundant vertexes can arise with multiple vertexes on top of each other, along a straight
+    /// line, or along an arc with sweep angle less than or equal to PI.
+    ///
+    /// A `Cow<Polyline>` is returned to avoid allocation and copy in the case that no vertexes are
+    /// removed.
+    ///
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use std::borrow::Cow;
+    /// // removing repeat vertexes along a line
+    /// let mut polyline = Polyline::new_closed();
+    /// polyline.add(2.0, 2.0, 0.0);
+    /// polyline.add(3.0, 3.0, 0.0);
+    /// polyline.add(3.0, 3.0, 0.0);
+    /// polyline.add(4.0, 4.0, 0.0);
+    /// polyline.add(2.0, 4.0, 0.0);
+    /// let result = polyline.remove_redundant(1e-5);
+    /// assert!(matches!(result, Cow::Owned(_)));
+    /// assert_eq!(result.len(), 3);
+    /// assert!(result.is_closed());
+    /// assert!(result[0].fuzzy_eq(PlineVertex::new(2.0, 2.0, 0.0)));
+    /// assert!(result[1].fuzzy_eq(PlineVertex::new(4.0, 4.0, 0.0)));
+    /// assert!(result[2].fuzzy_eq(PlineVertex::new(2.0, 4.0, 0.0)));
+    /// ```
+    pub fn remove_redundant(&self, pos_equal_eps: T) -> Cow<Polyline<T>> {
+        if self.len() < 2 {
+            return Cow::Borrowed(self);
+        }
+
+        if self.len() == 2 {
+            if self[0].pos().fuzzy_eq_eps(self[1].pos(), pos_equal_eps) {
+                let mut result = Polyline::new();
+                result.add_vertex(self[0]);
+                result.set_is_closed(self.is_closed);
+                return Cow::Owned(result);
+            }
+            return Cow::Borrowed(self);
+        }
+
+        // helper to test if v1->v2->v3 are collinear and all going in the same direction
+        let is_collinear_same_dir = |v1: &PlineVertex<T>,
+                                     v2: &PlineVertex<T>,
+                                     v3: &PlineVertex<T>| {
+            if v2.pos().fuzzy_eq_eps(v3.pos(), pos_equal_eps) {
+                return true;
+            }
+
+            let collinear = (v1.x * (v2.y - v3.y) + v2.x * (v3.y - v1.y) + v3.x * (v1.y - v2.y))
+                .fuzzy_eq_zero();
+
+            if !collinear {
+                return false;
+            }
+
+            let same_direction = (v3.pos() - v2.pos()).dot(v2.pos() - v1.pos()) > T::zero();
+
+            same_direction
+        };
+
+        let mut result: Option<Polyline<T>> = None;
+        let mut v1 = self[0];
+        let mut v2 = self[1];
+        let mut v1_v2_arc: Option<(T, Vector2<T>)> = None;
+        let mut v1_bulge_is_zero = v1.bulge_is_zero();
+        let mut v2_bulge_is_zero = v2.bulge_is_zero();
+        let mut v1_bulge_is_pos = v1.bulge_is_pos();
+        let mut v2_bulge_is_pos = v2.bulge_is_pos();
+
+        // loop through processing/considering to discard the middle vertex v2
+        for (i, &v3) in self.iter().cycle().enumerate().skip(2).take(self.len() - 1) {
+            use RemoveRedundantCase::*;
+            let state: RemoveRedundantCase<T> = if v1.pos().fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
+                // repeat position, just update bulge
+                UpdateV1BulgeForRepeatPos
+            } else if v1_bulge_is_zero && v2_bulge_is_zero {
+                // two line segments in a row, check if collinear
+                let is_final_vertex_for_open = !self.is_closed() && i == self.len();
+                if !is_final_vertex_for_open && is_collinear_same_dir(&v1, &v2, &v3) {
+                    DiscardVertex
+                } else {
+                    IncludeVertex
+                }
+            } else if !v1_bulge_is_zero
+                && !v2_bulge_is_zero
+                && (v1_bulge_is_pos == v2_bulge_is_pos)
+                && !v2.pos().fuzzy_eq_eps(v3.pos(), pos_equal_eps)
+            {
+                // two arc segments in a row with same orientation, check if v2 can be removed by
+                // updating v1 bulge
+                let &mut (arc_radius1, arc_center1) =
+                    v1_v2_arc.get_or_insert_with(|| seg_arc_radius_and_center(v1, v2));
+
+                let (arc_radius2, arc_center2) = seg_arc_radius_and_center(v2, v3);
+
+                if arc_radius1.fuzzy_eq(arc_radius2) && arc_center1.fuzzy_eq(arc_center2) {
+                    let angle1 = angle(arc_center1, v1.pos());
+                    let angle2 = angle(arc_center1, v2.pos());
+                    let angle3 = angle(arc_center1, v3.pos());
+                    let total_sweep =
+                        delta_angle(angle1, angle2).abs() + delta_angle(angle2, angle3).abs();
+                    if total_sweep <= T::pi() {
+                        let bulge = if v1_bulge_is_pos {
+                            bulge_from_angle(total_sweep)
+                        } else {
+                            -bulge_from_angle(total_sweep)
+                        };
+                        UpdateV1BulgeForArc(bulge)
+                    } else {
+                        IncludeVertex
+                    }
+                } else {
+                    IncludeVertex
+                }
+            } else {
+                IncludeVertex
+            };
+
+            let copy_self = |discard_last| {
+                let count = if discard_last { i - 1 } else { i };
+                if self[0].pos().fuzzy_eq_eps(self[1].pos(), pos_equal_eps) {
+                    Polyline::from_iter(
+                        self.iter().skip(1).take(count - 1).copied(),
+                        self.is_closed,
+                    )
+                } else {
+                    Polyline::from_iter(self.iter().take(count).copied(), self.is_closed)
+                }
+            };
+
+            match state {
+                IncludeVertex => {
+                    if let Some(ref mut r) = result {
+                        r.add_vertex(v2);
+                    }
+                    v1 = v2;
+                    v2 = v3;
+                    v1_v2_arc = None;
+                    v1_bulge_is_zero = v2_bulge_is_zero;
+                    v2_bulge_is_zero = v3.bulge_is_zero();
+                    v1_bulge_is_pos = v2_bulge_is_pos;
+                    v2_bulge_is_pos = v3.bulge_is_pos();
+                }
+                DiscardVertex => {
+                    if result.is_none() {
+                        result = Some(copy_self(true));
+                    }
+
+                    v2 = v3;
+                }
+                UpdateV1BulgeForRepeatPos => {
+                    let p = result.get_or_insert_with(|| copy_self(false));
+                    p.last_mut().unwrap().bulge = v2.bulge;
+                    v1.bulge = v2.bulge;
+                    v2 = v3;
+                    v1_v2_arc = None;
+                    v1_bulge_is_zero = v2_bulge_is_zero;
+                    v2_bulge_is_zero = v3.bulge_is_zero();
+                    v1_bulge_is_pos = v2_bulge_is_pos;
+                    v2_bulge_is_pos = v3.bulge_is_pos();
+                }
+                UpdateV1BulgeForArc(bulge) => {
+                    let p = result.get_or_insert_with(|| copy_self(true));
+                    p.last_mut().unwrap().bulge = bulge;
+                    v1.bulge = bulge;
+                    v2 = v3;
+                    v1_bulge_is_zero = v2_bulge_is_zero;
+                    v2_bulge_is_zero = v3.bulge_is_zero();
+                    v1_bulge_is_pos = v2_bulge_is_pos;
+                    v2_bulge_is_pos = v3.bulge_is_pos();
+                }
+            }
+        }
+
+        if self.is_closed() {
+            // handle wrap around middle vertex at start
+            if self
+                .last()
+                .unwrap()
+                .pos()
+                .fuzzy_eq_eps(self[0].pos(), pos_equal_eps)
+            {
+                // last repeats position on first
+                result
+                    .get_or_insert_with(|| {
+                        Polyline::from_iter(self.iter().copied(), self.is_closed)
+                    })
+                    .remove_last();
+            } else {
+                // v1 => self.last()
+                // v2 => self[0]
+                let v3 = self[1];
+                if v1_bulge_is_zero && v2_bulge_is_zero && is_collinear_same_dir(&v1, &v2, &v3) {
+                    // first vertex is in middle of line
+                    let p = result.get_or_insert_with(|| {
+                        Polyline::from_iter(self.iter().copied(), self.is_closed)
+                    });
+                    p[0] = p.remove_last();
+                } else if !v1_bulge_is_zero
+                    && !v2_bulge_is_zero
+                    && (v1_bulge_is_pos == v2_bulge_is_pos)
+                    && !v2.pos().fuzzy_eq_eps(v3.pos(), pos_equal_eps)
+                {
+                    // check if arc can be simplified by removing first vertex
+                    let &mut (arc_radius1, arc_center1) =
+                        v1_v2_arc.get_or_insert_with(|| seg_arc_radius_and_center(v1, v2));
+
+                    let (arc_radius2, arc_center2) = seg_arc_radius_and_center(v2, v3);
+
+                    if arc_radius1.fuzzy_eq(arc_radius2) && arc_center1.fuzzy_eq(arc_center2) {
+                        let angle1 = angle(arc_center1, v1.pos());
+                        let angle2 = angle(arc_center1, v2.pos());
+                        let angle3 = angle(arc_center1, v3.pos());
+                        let total_sweep =
+                            delta_angle(angle1, angle2).abs() + delta_angle(angle2, angle3).abs();
+                        if total_sweep <= T::pi() {
+                            let bulge = if v1_bulge_is_pos {
+                                bulge_from_angle(total_sweep)
+                            } else {
+                                -bulge_from_angle(total_sweep)
+                            };
+                            let p = result.get_or_insert_with(|| {
+                                Polyline::from_iter(self.iter().copied(), self.is_closed)
+                            });
+                            p[0] = p.remove_last();
+                            p[0].bulge = bulge;
+                        }
+                    }
+                }
+            }
+        }
+        result.map_or_else(|| Cow::Borrowed(self), |r| Cow::Owned(r))
     }
 
     /// Compute the XY extents of the polyline.
@@ -1028,6 +1263,21 @@ where
 
         Some(result)
     }
+}
+
+/// Internal type used by [Polyline::remove_redundant].
+enum RemoveRedundantCase<T>
+where
+    T: Real,
+{
+    /// Include the vertex in the result.
+    IncludeVertex,
+    /// Discard the current vertex.
+    DiscardVertex,
+    /// Discard the current vertex and update the previous vertex bulge.
+    UpdateV1BulgeForRepeatPos,
+    /// Discard the current vertex and update the previous vertex bulge with the value computed.
+    UpdateV1BulgeForArc(T),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
