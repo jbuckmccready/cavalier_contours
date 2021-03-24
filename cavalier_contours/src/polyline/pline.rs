@@ -15,6 +15,7 @@ use crate::core::{
 };
 use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder, AABB};
 use std::{
+    borrow::Cow,
     ops::{Index, IndexMut},
     slice::Windows,
 };
@@ -289,6 +290,76 @@ where
         for v in self.iter_mut() {
             v.x = v.x + x_offset;
             v.y = v.y + y_offset;
+        }
+    }
+
+    /// Remove all repeat position vertexes from the polyline.
+    ///
+    /// A Cow is returned to avoid allocation and copy in the case that no vertexes are removed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use std::borrow::Cow;
+    /// let mut polyline = Polyline::new_closed();
+    /// polyline.add(2.0, 2.0, 0.5);
+    /// polyline.add(2.0, 2.0, 1.0);
+    /// polyline.add(3.0, 3.0, 1.0);
+    /// polyline.add(3.0, 3.0, 0.5);
+    /// let result = polyline.remove_repeat_pos(1e-5);
+    /// // result will be owned since vertexes were removed
+    /// assert!(matches!(result, Cow::Owned(_)));
+    /// assert_eq!(result.len(), 2);
+    /// assert!(result[0].fuzzy_eq(PlineVertex::new(2.0, 2.0, 1.0)));
+    /// assert!(result[1].fuzzy_eq(PlineVertex::new(3.0, 3.0, 0.5)));
+    /// ```
+    pub fn remove_repeat_pos(&self, pos_equal_eps: T) -> Cow<Polyline<T>> {
+        if self.len() < 2 {
+            return Cow::Borrowed(self);
+        }
+
+        let mut result: Option<Polyline<T>> = None;
+        let mut prev_pos = self[0].pos();
+        for (i, &v) in self.iter().enumerate().skip(1) {
+            let is_repeat = v.pos().fuzzy_eq_eps(prev_pos, pos_equal_eps);
+
+            if is_repeat {
+                if let Some(ref mut r) = result {
+                    // repeat position and result is already initialized, just update bulge
+                    r.last_mut().unwrap().bulge = v.bulge;
+                } else {
+                    // repeat position and result is not initialized, initialize it
+                    let mut pline =
+                        Polyline::from_iter(self.iter().take(i).copied(), self.is_closed);
+                    // update bulge
+                    pline.last_mut().unwrap().bulge = v.bulge;
+                    result = Some(pline);
+                }
+            } else {
+                if let Some(ref mut r) = result {
+                    // not repeat position and result is initialized
+                    r.add_vertex(v);
+                }
+                // else not repeat position and result is not initialized, do nothing
+            }
+
+            prev_pos = v.pos();
+        }
+
+        if let Some(mut r) = result {
+            // if closed and last overlaps first then remove last
+            if self.is_closed
+                && r.last()
+                    .unwrap()
+                    .pos()
+                    .fuzzy_eq_eps(r[0].pos(), pos_equal_eps)
+            {
+                r.remove_last();
+            }
+            Cow::Owned(r)
+        } else {
+            Cow::Borrowed(self)
         }
     }
 

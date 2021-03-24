@@ -3,7 +3,7 @@ use cavalier_contours::{
     core::traits::FuzzyEq,
     polyline::{PlineVertex, Polyline},
 };
-use std::f64::consts::PI;
+use std::{borrow::Cow, f64::consts::PI};
 
 #[test]
 fn iter_segments() {
@@ -162,6 +162,81 @@ fn invert_direction() {
     assert_fuzzy_eq!(polyline[1], PlineVertex::new(2.0, 2.0, -0.2));
     assert_fuzzy_eq!(polyline[2], PlineVertex::new(2.0, 0.0, -0.1));
     assert_fuzzy_eq!(polyline[3], PlineVertex::new(0.0, 0.0, -0.4));
+}
+
+#[test]
+fn remove_repeat() {
+    {
+        let polyline = Polyline::new_closed();
+        let result = polyline.remove_repeat_pos(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert!(result.is_empty());
+        assert!(result.is_closed());
+    }
+
+    {
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.5);
+        let result = polyline.remove_repeat_pos(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 1);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
+    }
+
+    {
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(2.0, 2.0, 1.0);
+        polyline.add(3.0, 3.0, 1.0);
+        polyline.add(3.0, 3.0, 0.5);
+        let result = polyline.remove_repeat_pos(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 0.5));
+    }
+
+    {
+        let mut polyline = Polyline::new();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(2.0, 2.0, 1.0);
+        polyline.add(3.0, 3.0, 1.0);
+        polyline.add(3.0, 3.0, 0.5);
+        let result = polyline.remove_repeat_pos(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 0.5));
+    }
+
+    {
+        let mut polyline = Polyline::new_closed();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(3.0, 3.0, 1.0);
+        let result = polyline.remove_repeat_pos(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
+    }
+
+    {
+        let mut polyline = Polyline::new();
+        polyline.add(2.0, 2.0, 0.5);
+        polyline.add(3.0, 3.0, 1.0);
+        polyline.add(4.0, 3.0, 1.0);
+        let result = polyline.remove_repeat_pos(1e-5);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.len(), 3);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
+        assert_fuzzy_eq!(result[2], PlineVertex::new(4.0, 3.0, 1.0));
+    }
 }
 
 #[test]
