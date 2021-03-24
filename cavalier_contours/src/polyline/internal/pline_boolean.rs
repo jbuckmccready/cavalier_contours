@@ -371,34 +371,67 @@ pub trait StitchSelector {
 
 #[derive(Debug, Clone)]
 pub struct OrAndStitchSelector {
-    start_of_overlapping_slices: usize,
+    start_of_pline2_slices: usize,
+    start_of_pline1_overlapping_slices: usize,
+    start_of_pline2_overlapping_slices: usize,
 }
 
 impl OrAndStitchSelector {
-    pub fn new(start_of_overlapping_slices: usize) -> Self {
+    pub fn new(
+        start_of_pline2_slices: usize,
+        start_of_pline1_overlapping_slices: usize,
+        start_of_pline2_overlapping_slices: usize,
+    ) -> Self {
         Self {
-            start_of_overlapping_slices,
+            start_of_pline2_slices,
+            start_of_pline1_overlapping_slices,
+            start_of_pline2_overlapping_slices,
         }
+    }
+
+    pub fn from_pruned_slices<T>(pruned_slices: &PrunedSlices<T>) -> Self {
+        Self::new(
+            pruned_slices.start_of_pline2_slices,
+            pruned_slices.start_of_pline1_overlapping_slices,
+            pruned_slices.start_of_pline2_overlapping_slices,
+        )
     }
 }
 
 impl StitchSelector for OrAndStitchSelector {
     fn select(&self, current_slice_idx: usize, available_idx: &[usize]) -> Option<usize> {
-        available_idx
-            .iter()
-            .copied()
-            // attempt to select non-overlapping slice
-            .find(|&i| i < self.start_of_overlapping_slices)
-            .or_else(|| {
-                // no non-overlapping slices available
-                if current_slice_idx >= self.start_of_overlapping_slices {
-                    // stitching overlapping slice to overlapping slice is never allowed (discard)
-                    None
-                } else {
-                    // use first available
-                    Some(available_idx[0])
-                }
-            })
+        let is_pline1_idx = current_slice_idx < self.start_of_pline2_slices
+            || (current_slice_idx >= self.start_of_pline1_overlapping_slices
+                && current_slice_idx < self.start_of_pline2_overlapping_slices);
+
+        let first_available = || Some(available_idx[0]);
+
+        let available = || available_idx.iter().copied();
+
+        if is_pline1_idx {
+            // attempt to stitch to non-overlapping pline2 slice
+            available()
+                .find(|&i| {
+                    i >= self.start_of_pline2_slices && i < self.start_of_pline1_overlapping_slices
+                })
+                // attempt to stitch to non-overlapping pline1 slice
+                .or_else(|| available().find(|&i| i < self.start_of_pline2_slices))
+                // just use first available
+                .or_else(first_available)
+        } else {
+            // attempt to stitch to non-overlapping pline1 slice
+            available()
+                .find(|&i| i < self.start_of_pline2_slices)
+                // attempt to stitch to non-overlapping pline2 slice
+                .or_else(|| {
+                    available().find(|&i| {
+                        i >= self.start_of_pline2_slices
+                            && i < self.start_of_pline1_overlapping_slices
+                    })
+                })
+                // just use first available
+                .or_else(first_available)
+        }
     }
 }
 
@@ -671,8 +704,7 @@ where
                     pos_equal_eps,
                 );
 
-                let stitch_selector =
-                    OrAndStitchSelector::new(pruned_slices.start_of_pline1_overlapping_slices);
+                let stitch_selector = OrAndStitchSelector::from_pruned_slices(&pruned_slices);
 
                 let remaining = stitch_slices_into_closed_polylines(
                     &pruned_slices.slices_remaining,
@@ -719,8 +751,7 @@ where
                     pos_equal_eps,
                 );
 
-                let stitch_selector =
-                    OrAndStitchSelector::new(pruned_slices.start_of_pline1_overlapping_slices);
+                let stitch_selector = OrAndStitchSelector::from_pruned_slices(&pruned_slices);
                 let remaining = stitch_slices_into_closed_polylines(
                     &pruned_slices.slices_remaining,
                     &stitch_selector,
