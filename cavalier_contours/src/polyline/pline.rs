@@ -333,14 +333,13 @@ where
                     .last_mut()
                     .unwrap()
                     .bulge = v.bulge;
-            } else {
-                if let Some(ref mut r) = result {
-                    // not repeat position and result is initialized
-                    r.add_vertex(v);
-                }
-                // else not repeat position and result is not initialized, do nothing
+            } else if let Some(ref mut r) = result {
+                // not repeat position and result is initialized
+                r.add_vertex(v);
             }
+            // else not repeat position and result is not initialized, do nothing
 
+            // update previous position for next iteration
             prev_pos = v.pos();
         }
 
@@ -357,7 +356,7 @@ where
                 .remove_last();
         }
 
-        result.map_or_else(|| Cow::Borrowed(self), |r| Cow::Owned(r))
+        result.map_or_else(|| Cow::Borrowed(self), Cow::Owned)
     }
 
     /// Remove all redundant vertexes from the polyline.
@@ -408,20 +407,15 @@ where
         let is_collinear_same_dir = |v1: &PlineVertex<T>,
                                      v2: &PlineVertex<T>,
                                      v3: &PlineVertex<T>| {
+            // check if v2 on top of v3 (considered collinear for the purposes of discarding v2)
             if v2.pos().fuzzy_eq_eps(v3.pos(), pos_equal_eps) {
                 return true;
             }
 
-            let collinear = (v1.x * (v2.y - v3.y) + v2.x * (v3.y - v1.y) + v3.x * (v1.y - v2.y))
-                .fuzzy_eq_zero();
-
-            if !collinear {
-                return false;
-            }
-
-            let same_direction = (v3.pos() - v2.pos()).dot(v2.pos() - v1.pos()) > T::zero();
-
-            same_direction
+            // check if collinear points
+            (v1.x * (v2.y - v3.y) + v2.x * (v3.y - v1.y) + v3.x * (v1.y - v2.y)).fuzzy_eq_zero() &&
+            // and check if same direction
+            (v3.pos() - v2.pos()).dot(v2.pos() - v1.pos()) > T::zero()
         };
 
         let mut result: Option<Polyline<T>> = None;
@@ -595,7 +589,7 @@ where
                 }
             }
         }
-        result.map_or_else(|| Cow::Borrowed(self), |r| Cow::Owned(r))
+        result.map_or_else(|| Cow::Borrowed(self), Cow::Owned)
     }
 
     /// Compute the XY extents of the polyline.
