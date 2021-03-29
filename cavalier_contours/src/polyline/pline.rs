@@ -666,11 +666,11 @@ where
     /// The starting vertex index position is used as the key to the segment bounding box in the
     /// `StaticAABB2DIndex`. The bounding boxes are guaranteed to be no smaller than the actual
     /// bounding box of the segment but may be larger, this is done for performance. If you want the
-    /// actual bounding box index use [Polyline::create_spatial_index] instead.
+    /// actual bounding box index use [Polyline::create_aabb_index] instead.
     ///
     /// Returns `None` if polyline vertex count is less than 2 or an error occurs in constructing
     /// the spatial index.
-    pub fn create_approx_spatial_index(&self) -> Option<StaticAABB2DIndex<T>> {
+    pub fn create_approx_aabb_index(&self) -> Option<StaticAABB2DIndex<T>> {
         let ln = self.len();
         if ln < 2 {
             return None;
@@ -697,11 +697,11 @@ where
     ///
     /// The starting vertex index position is used as the key to the segment bounding box in the
     /// `StaticAABB2DIndex`. The bounding boxes are the actual bounding box of the segment, for
-    /// performance reasons you may want to use [Polyline::create_approx_spatial_index].
+    /// performance reasons you may want to use [Polyline::create_approx_aabb_index].
     ///
     /// Returns `None` if polyline vertex count is less than 2 or an error occurs in constructing
     /// the spatial index.
-    pub fn create_spatial_index(&self) -> Option<StaticAABB2DIndex<T>> {
+    pub fn create_aabb_index(&self) -> Option<StaticAABB2DIndex<T>> {
         let ln = self.len();
         if ln < 2 {
             return None;
@@ -820,12 +820,12 @@ where
     /// # use cavalier_contours::polyline::*;
     /// # use cavalier_contours::pline_closed;
     /// let pline = pline_closed![(0.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
-    /// let spatial_index = pline.create_approx_spatial_index().unwrap();
+    /// let aabb_index = pline.create_approx_aabb_index().unwrap();
     /// let options = PlineOffsetOptions {
     ///     // setting option to handle possible self intersects in the polyline
     ///     handle_self_intersects: true,
     ///     // passing in existing spatial index of the polyline segments
-    ///     spatial_index: Some(&spatial_index),
+    ///     aabb_index: Some(&aabb_index),
     ///     ..Default::default()
     /// };
     /// let offset_plines = pline.parallel_offset_opt(0.2, &options);
@@ -1306,12 +1306,12 @@ where
     T: Real,
 {
     /// Spatial index of all the polyline segment bounding boxes (or boxes no smaller, e.g. using
-    /// [Polyline::create_approx_spatial_index] is valid). If `None` is given then it will be
-    /// computed internally. [Polyline::create_approx_spatial_index] or
-    /// [Polyline::create_spatial_index] may be used to create the spatial index, the only
+    /// [Polyline::create_approx_aabb_index] is valid). If `None` is given then it will be
+    /// computed internally. [Polyline::create_approx_aabb_index] or
+    /// [Polyline::create_aabb_index] may be used to create the spatial index, the only
     /// restriction is that the spatial index bounding boxes must be at least big enough to contain
     /// the segments.
-    pub spatial_index: Option<&'a StaticAABB2DIndex<T>>,
+    pub aabb_index: Option<&'a StaticAABB2DIndex<T>>,
     /// If true then self intersects will be properly handled by the offset algorithm, if false then
     /// self intersecting polylines may not offset correctly. Handling self intersects of closed
     /// polylines requires more memory and computation.
@@ -1336,7 +1336,7 @@ where
 {
     pub fn new() -> Self {
         Self {
-            spatial_index: None,
+            aabb_index: None,
             handle_self_intersects: false,
             pos_equal_eps: T::from(1e-5).unwrap(),
             slice_join_eps: T::from(1e-4).unwrap(),
@@ -1359,13 +1359,13 @@ where
 /// Boolean operation to apply to polylines.
 pub enum BooleanOp {
     /// Return the union of the polylines.
-    OR,
+    Or,
     /// Return the intersection of the polylines.
-    AND,
+    And,
     /// Return the exclusion of a polyline from another.
-    NOT,
+    Not,
     /// Exclusive OR between polylines.
-    XOR,
+    Xor,
 }
 
 /// Result of performing a boolean operation between two polylines.
@@ -1396,7 +1396,7 @@ pub struct PlineBooleanOptions<'a, T>
 where
     T: Real,
 {
-    pub pline1_spatial_index: Option<&'a StaticAABB2DIndex<T>>,
+    pub pline1_aabb_index: Option<&'a StaticAABB2DIndex<T>>,
     pub pos_equal_eps: T,
     pub slice_join_eps: T,
 }
@@ -1407,7 +1407,7 @@ where
 {
     pub fn new() -> Self {
         Self {
-            pline1_spatial_index: None,
+            pline1_aabb_index: None,
             pos_equal_eps: T::from(1e-5).unwrap(),
             slice_join_eps: T::from(1e-4).unwrap(),
         }

@@ -47,13 +47,13 @@ where
 pub fn process_for_boolean<T>(
     pline1: &Polyline<T>,
     pline2: &Polyline<T>,
-    pline1_spatial_index: &StaticAABB2DIndex<T>,
+    pline1_aabb_index: &StaticAABB2DIndex<T>,
     pos_equal_eps: T,
 ) -> ProcessForBooleanResult<T>
 where
     T: Real,
 {
-    let mut intrs = find_intersects(pline1, pline2, pline1_spatial_index);
+    let mut intrs = find_intersects(pline1, pline2, pline1_aabb_index);
     let overlapping_slices = sort_and_join_overlapping_intersects(
         &mut intrs.overlapping_intersects,
         pline1,
@@ -531,7 +531,7 @@ where
     }
 
     // load all the slice start points into spatial index
-    let spatial_index = {
+    let aabb_index = {
         let mut builder = StaticAABB2DIndexBuilder::new(slices.len());
 
         for slice in slices.iter() {
@@ -595,7 +595,7 @@ where
             };
 
             let ep = current_pline.last().unwrap().pos();
-            spatial_index.visit_query_with_stack(
+            aabb_index.visit_query_with_stack(
                 ep.x - slice_join_eps,
                 ep.y - slice_join_eps,
                 ep.x + slice_join_eps,
@@ -651,15 +651,15 @@ where
     }
 
     let constructed_index;
-    let pline1_spatial_index = if let Some(x) = options.pline1_spatial_index {
+    let pline1_aabb_index = if let Some(x) = options.pline1_aabb_index {
         x
     } else {
-        constructed_index = pline1.create_approx_spatial_index().unwrap();
+        constructed_index = pline1.create_approx_aabb_index().unwrap();
         &constructed_index
     };
 
     let boolean_info =
-        process_for_boolean(pline1, pline2, pline1_spatial_index, options.pos_equal_eps);
+        process_for_boolean(pline1, pline2, pline1_aabb_index, options.pos_equal_eps);
 
     // helper functions to test if point is inside pline1 and pline2
     let mut point_in_pline1 = |point: Vector2<T>| pline1.winding_number(point) != 0;
@@ -676,7 +676,7 @@ where
     let slice_join_eps = options.slice_join_eps;
 
     match operation {
-        BooleanOp::OR => {
+        BooleanOp::Or => {
             if boolean_info.completely_overlapping(pos_equal_eps) {
                 // pline1 completely overlapping pline2 just return pline2
                 pos_plines.push(pline2.clone());
@@ -725,7 +725,7 @@ where
                 }
             }
         }
-        BooleanOp::AND => {
+        BooleanOp::And => {
             if boolean_info.completely_overlapping(pos_equal_eps) {
                 // pline1 completely overlapping pline2 just return pline2
                 pos_plines.push(pline2.clone());
@@ -760,7 +760,7 @@ where
                 pos_plines.extend(remaining)
             }
         }
-        BooleanOp::NOT => {
+        BooleanOp::Not => {
             if boolean_info.completely_overlapping(pos_equal_eps) {
                 // completely overlapping, nothing is left
             } else if !boolean_info.any_intersects() {
@@ -797,7 +797,7 @@ where
                 pos_plines.extend(remaining);
             }
         }
-        BooleanOp::XOR => {
+        BooleanOp::Xor => {
             if boolean_info.completely_overlapping(pos_equal_eps) {
                 // completely overlapping, nothing is left
             } else if !boolean_info.any_intersects() {

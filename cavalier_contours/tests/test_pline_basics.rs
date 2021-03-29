@@ -3,7 +3,10 @@ use cavalier_contours::{
     core::{math::bulge_from_angle, traits::FuzzyEq},
     polyline::{PlineVertex, Polyline},
 };
-use std::{borrow::Cow, f64::consts::PI};
+use std::{
+    borrow::Cow,
+    f64::consts::{PI, TAU},
+};
 
 #[test]
 fn iter_segments() {
@@ -424,6 +427,21 @@ fn remove_redundant() {
     }
 
     {
+        // simple counter clockwise circle with extra vertex along one arc
+        let bulge = (std::f64::consts::FRAC_PI_2 / 4.0).tan();
+        let mut polyline = Polyline::new_closed();
+        polyline.add(0.0, 0.0, -bulge);
+        polyline.add(1.0, 1.0, -bulge);
+        polyline.add(2.0, 0.0, -1.0);
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(0.0, 0.0, -1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(2.0, 0.0, -1.0));
+    }
+
+    {
         // arcs along greater arc
         let radius = 5.0;
         let max_angle = std::f64::consts::FRAC_PI_2;
@@ -607,14 +625,14 @@ fn area() {
     }
 
     {
-        let mut square = Polyline::new_closed();
-        square.add(0.0, 0.0, 0.0);
-        square.add(2.0, 0.0, 0.0);
-        square.add(2.0, 2.0, 0.0);
-        square.add(0.0, 2.0, 0.0);
-        assert_fuzzy_eq!(square.area(), 4.0);
-        square.invert_direction();
-        assert_fuzzy_eq!(square.area(), -4.0);
+        let mut rectangle = Polyline::new_closed();
+        rectangle.add(0.0, 0.0, 0.0);
+        rectangle.add(3.0, 0.0, 0.0);
+        rectangle.add(3.0, 2.0, 0.0);
+        rectangle.add(0.0, 2.0, 0.0);
+        assert_fuzzy_eq!(rectangle.area(), 6.0);
+        rectangle.invert_direction();
+        assert_fuzzy_eq!(rectangle.area(), -6.0);
     }
 
     {
@@ -648,5 +666,70 @@ fn area() {
         let mut one_vertex_closed_polyline = Polyline::<f64>::new_closed();
         one_vertex_closed_polyline.add(1.0, 1.0, 0.0);
         assert_fuzzy_eq!(one_vertex_closed_polyline.area(), 0.0);
+    }
+}
+
+#[test]
+fn path_length() {
+    {
+        let empty_open_polyline = Polyline::<f64>::new();
+        assert_fuzzy_eq!(empty_open_polyline.path_length(), 0.0);
+    }
+
+    {
+        let empty_closed_polyline = Polyline::<f64>::new();
+        assert_fuzzy_eq!(empty_closed_polyline.path_length(), 0.0);
+    }
+
+    {
+        let mut one_vertex_open_polyline = Polyline::<f64>::new();
+        one_vertex_open_polyline.add(1.0, 1.0, 0.0);
+        assert_fuzzy_eq!(one_vertex_open_polyline.path_length(), 0.0);
+    }
+
+    {
+        let mut one_vertex_closed_polyline = Polyline::<f64>::new_closed();
+        one_vertex_closed_polyline.add(1.0, 1.0, 0.0);
+        assert_fuzzy_eq!(one_vertex_closed_polyline.path_length(), 0.0);
+    }
+
+    {
+        let mut circle = Polyline::new_closed();
+        circle.add(0.0, 0.0, 1.0);
+        circle.add(2.0, 0.0, 1.0);
+        assert_fuzzy_eq!(circle.path_length(), TAU);
+        circle.invert_direction();
+        assert_fuzzy_eq!(circle.path_length(), TAU);
+    }
+
+    {
+        let mut half_circle = Polyline::new_closed();
+        half_circle.add(0.0, 0.0, -1.0);
+        half_circle.add(2.0, 0.0, 0.0);
+        assert_fuzzy_eq!(half_circle.path_length(), PI + 2.0);
+        half_circle.invert_direction();
+        assert_fuzzy_eq!(half_circle.path_length(), PI + 2.0);
+    }
+
+    {
+        let mut rectangle = Polyline::new_closed();
+        rectangle.add(0.0, 0.0, 0.0);
+        rectangle.add(3.0, 0.0, 0.0);
+        rectangle.add(3.0, 2.0, 0.0);
+        rectangle.add(0.0, 2.0, 0.0);
+        assert_fuzzy_eq!(rectangle.path_length(), 10.0);
+        rectangle.invert_direction();
+        assert_fuzzy_eq!(rectangle.path_length(), 10.0);
+    }
+
+    {
+        let mut open_polyline = Polyline::new();
+        open_polyline.add(0.0, 0.0, 0.0);
+        open_polyline.add(3.0, 0.0, 0.0);
+        open_polyline.add(3.0, 2.0, 0.0);
+        open_polyline.add(0.0, 2.0, 0.0);
+        assert_fuzzy_eq!(open_polyline.path_length(), 8.0);
+        open_polyline.invert_direction();
+        assert_fuzzy_eq!(open_polyline.path_length(), 8.0);
     }
 }

@@ -559,7 +559,7 @@ where
                 result.remove_last();
             }
 
-            if result[0].pos().fuzzy_eq_eps(result[1].pos(), pos_equal_eps) {
+            if result.len() > 1 && result[0].pos().fuzzy_eq_eps(result[1].pos(), pos_equal_eps) {
                 result.remove(0);
             }
         }
@@ -580,7 +580,7 @@ where
 fn point_valid_for_offset<T>(
     polyline: &Polyline<T>,
     offset: T,
-    spatial_index: &StaticAABB2DIndex<T>,
+    aabb_index: &StaticAABB2DIndex<T>,
     point: Vector2<T>,
     query_stack: &mut Vec<usize>,
     offset_tol: T,
@@ -599,7 +599,7 @@ where
         point_valid
     };
 
-    spatial_index.visit_query_with_stack(
+    aabb_index.visit_query_with_stack(
         point.x - abs_offset,
         point.y - abs_offset,
         point.x + abs_offset,
@@ -643,7 +643,7 @@ where
     let pos_equal_eps = options.pos_equal_eps;
     let offset_dist_eps = options.offset_dist_eps;
 
-    let raw_offset_index = raw_offset_polyline.create_approx_spatial_index().unwrap();
+    let raw_offset_index = raw_offset_polyline.create_approx_aabb_index().unwrap();
     let self_intrs =
         all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, pos_equal_eps);
 
@@ -886,7 +886,7 @@ fn visit_circle_intersects<T, F>(
     pline: &Polyline<T>,
     circle_center: Vector2<T>,
     circle_radius: T,
-    spatial_index: &StaticAABB2DIndex<T>,
+    aabb_index: &StaticAABB2DIndex<T>,
     visitor: &mut F,
     options: &PlineOffsetOptions<T>,
 ) where
@@ -911,7 +911,7 @@ fn visit_circle_intersects<T, F>(
             && point_within_arc_sweep(arc_center, arc_start, arc_end, bulge < T::zero(), intr)
     };
 
-    let query_results = spatial_index.query(
+    let query_results = aabb_index.query(
         circle_center.x - circle_radius,
         circle_center.y - circle_radius,
         circle_center.x + circle_radius,
@@ -980,7 +980,7 @@ where
     let pos_equal_eps = options.pos_equal_eps;
     let offset_dist_eps = options.offset_dist_eps;
 
-    let raw_offset_index = raw_offset_polyline.create_approx_spatial_index().unwrap();
+    let raw_offset_index = raw_offset_polyline.create_approx_aabb_index().unwrap();
 
     let self_intrs =
         all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, pos_equal_eps);
@@ -1364,7 +1364,7 @@ where
         return result;
     }
 
-    let spatial_index = {
+    let aabb_index = {
         let mut builder = StaticAABB2DIndexBuilder::new(slices.len());
         for slice in slices {
             let start_point = slice.polyline[0].pos();
@@ -1407,18 +1407,18 @@ where
             let current_end_point = current_slice.polyline.last().unwrap().pos();
 
             query_results.clear();
-            let mut spatial_index_visitor = |i: usize| -> bool {
+            let mut aabb_index_visitor = |i: usize| -> bool {
                 if !visited_indexes[i] {
                     query_results.push(i);
                 }
                 true
             };
-            spatial_index.visit_query_with_stack(
+            aabb_index.visit_query_with_stack(
                 current_end_point.x - join_eps,
                 current_end_point.y - join_eps,
                 current_end_point.x + join_eps,
                 current_end_point.y + join_eps,
-                &mut spatial_index_visitor,
+                &mut aabb_index_visitor,
                 &mut query_stack,
             );
 
@@ -1483,15 +1483,17 @@ where
     }
 
     let constructed_index;
-    let index = if let Some(x) = options.spatial_index {
+    let index = if let Some(x) = options.aabb_index {
         x
     } else {
-        constructed_index = polyline.create_approx_spatial_index().unwrap();
+        constructed_index = polyline.create_approx_aabb_index().unwrap();
         &constructed_index
     };
 
     let raw_offset = create_raw_offset_polyline(polyline, offset, options.pos_equal_eps);
-    if polyline.is_closed() && !options.handle_self_intersects {
+    if raw_offset.is_empty() {
+        Vec::new()
+    } else if polyline.is_closed() && !options.handle_self_intersects {
         let slices = slices_from_raw_offset(polyline, &raw_offset, index, offset, options);
         stitch_slices_together(&slices, true, raw_offset.len() - 1, options)
     } else {

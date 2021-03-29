@@ -68,6 +68,22 @@ mod test_simple {
     use cavalier_contours::{pline_closed, pline_open};
 
     declare_offset_tests!(
+        circle_collapsed_into_point {
+            (pline_closed![ (0.0, 0.0, 1.0), (2.0, 0.0, 1.0)], 1.0) =>
+            []
+        }
+        square_collapsed_into_point {
+            (pline_closed![ (-1.0, -1.0, 0.0), (1.0, -1.0, 0.0), (1.0, 1.0, 0.0), (-1.0, 1.0, 0.0)], 1.0) =>
+            []
+        }
+        circle_collapsed {
+            (pline_closed![ (0.0, 0.0, 1.0), (2.0, 0.0, 1.0)], 2.0) =>
+            []
+        }
+        square_collapsed {
+            (pline_closed![ (-1.0, -1.0, 0.0), (1.0, -1.0, 0.0), (1.0, 1.0, 0.0), (-1.0, 1.0, 0.0)], 2.0) =>
+            []
+        }
         closed_rectangle_inward {
             (pline_closed![ (0.0, 0.0, 0.0), (20.0, 0.0, 0.0), (20.0, 10.0, 0.0), (0.0, 10.0, 0.0) ], 2.0) =>
             [PlineProperties::new(4, 96.0, 44.0, 2.0, 2.0, 18.0, 8.0)]

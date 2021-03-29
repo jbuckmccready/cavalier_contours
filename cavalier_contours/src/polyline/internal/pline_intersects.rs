@@ -201,7 +201,7 @@ where
 /// two polyline segments that do not share a vertex.
 pub fn visit_global_self_intersects<T, F>(
     polyline: &Polyline<T>,
-    spatial_index: &StaticAABB2DIndex<T>,
+    aabb_index: &StaticAABB2DIndex<T>,
     visitor: &mut F,
 ) where
     T: Real,
@@ -221,8 +221,8 @@ pub fn visit_global_self_intersects<T, F>(
     // iterate all segment bounding boxes in the spatial index querying itself to test for self
     // intersects
     let mut break_loop = false;
-    for (box_index, aabb) in spatial_index.item_boxes().iter().enumerate() {
-        let i = spatial_index.map_all_boxes_index(box_index);
+    for (box_index, aabb) in aabb_index.item_boxes().iter().enumerate() {
+        let i = aabb_index.map_all_boxes_index(box_index);
         let j = polyline.next_wrapping_index(i);
         let v1 = polyline[i];
         let v2 = polyline[j];
@@ -279,7 +279,7 @@ pub fn visit_global_self_intersects<T, F>(
             continue_visiting
         };
 
-        spatial_index.visit_query_with_stack(
+        aabb_index.visit_query_with_stack(
             aabb.min_x - fuzz,
             aabb.min_y - fuzz,
             aabb.max_x + fuzz,
@@ -298,7 +298,7 @@ pub fn visit_global_self_intersects<T, F>(
 /// at each end point of overlap segment.
 pub fn all_self_intersects_as_basic<T>(
     polyline: &Polyline<T>,
-    spatial_index: &StaticAABB2DIndex<T>,
+    aabb_index: &StaticAABB2DIndex<T>,
     pos_equal_eps: T,
 ) -> Vec<PlineBasicIntersect<T>>
 where
@@ -327,7 +327,7 @@ where
     };
 
     visit_local_self_intersects(polyline, &mut visitor, pos_equal_eps);
-    visit_global_self_intersects(polyline, spatial_index, &mut visitor);
+    visit_global_self_intersects(polyline, aabb_index, &mut visitor);
 
     intrs
 }
@@ -348,7 +348,7 @@ where
 pub fn find_intersects<T>(
     pline1: &Polyline<T>,
     pline2: &Polyline<T>,
-    pline1_spatial_index: &StaticAABB2DIndex<T>,
+    pline1_aabb_index: &StaticAABB2DIndex<T>,
 ) -> PlineIntersectsCollection<T>
 where
     T: Real,
@@ -428,7 +428,7 @@ where
         let fuzz = T::fuzzy_epsilon();
 
         let mut query_stack = Vec::with_capacity(8);
-        pline1_spatial_index.visit_query_with_stack(
+        pline1_aabb_index.visit_query_with_stack(
             bb.min_x - fuzz,
             bb.min_y - fuzz,
             bb.max_x + fuzz,
@@ -761,7 +761,7 @@ mod global_self_intersect_tests {
 
     fn global_self_intersects<T>(
         polyline: &Polyline<T>,
-        spatial_index: &StaticAABB2DIndex<T>,
+        aabb_index: &StaticAABB2DIndex<T>,
     ) -> PlineIntersectsCollection<T>
     where
         T: Real,
@@ -780,7 +780,7 @@ mod global_self_intersect_tests {
             true
         };
 
-        visit_global_self_intersects(polyline, spatial_index, &mut visitor);
+        visit_global_self_intersects(polyline, aabb_index, &mut visitor);
 
         PlineIntersectsCollection::new(intrs, overlapping_intrs)
     }
@@ -790,14 +790,14 @@ mod global_self_intersect_tests {
         let mut pline = Polyline::new_closed();
         pline.add(0.0, 0.0, 1.0);
         pline.add(2.0, 0.0, 1.0);
-        let intrs = global_self_intersects(&pline, &pline.create_approx_spatial_index().unwrap());
+        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index().unwrap());
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
 
         let pline_as_lines = pline.arcs_to_approx_lines(1e-2).unwrap();
         let intrs = global_self_intersects(
             &pline_as_lines,
-            &pline_as_lines.create_approx_spatial_index().unwrap(),
+            &pline_as_lines.create_approx_aabb_index().unwrap(),
         );
 
         assert_eq!(intrs.basic_intersects.len(), 0);
@@ -809,7 +809,7 @@ mod global_self_intersect_tests {
         let mut pline = Polyline::new_closed();
         pline.add(0.0, 0.0, 1.0);
         pline.add(2.0, 0.0, -1.0);
-        let intrs = global_self_intersects(&pline, &pline.create_approx_spatial_index().unwrap());
+        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index().unwrap());
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
     }
@@ -820,7 +820,7 @@ mod global_self_intersect_tests {
         pline.add(0.0, 0.0, 1.0);
         pline.add(2.0, 0.0, 1.0);
         pline.add(0.0, 0.0, 0.0);
-        let intrs = global_self_intersects(&pline, &pline.create_approx_spatial_index().unwrap());
+        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index().unwrap());
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
     }
@@ -833,7 +833,7 @@ mod global_self_intersect_tests {
         pline.add(2.0, 0.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
         pline.add(1.0, 1.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
         pline.add(0.0, 0.0, 0.0);
-        let intrs = global_self_intersects(&pline, &pline.create_approx_spatial_index().unwrap());
+        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index().unwrap());
         assert_eq!(intrs.basic_intersects.len(), 1);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
         assert_eq!(intrs.basic_intersects[0].start_index1, 0);
@@ -860,7 +860,7 @@ mod find_intersects_tests {
         let intrs = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         assert_eq!(intrs.basic_intersects.len(), 1);
@@ -883,7 +883,7 @@ mod find_intersects_tests {
         let intrs = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         assert_eq!(intrs.basic_intersects.len(), 1);
@@ -907,7 +907,7 @@ mod find_intersects_tests {
         let intrs = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         assert_eq!(intrs.basic_intersects.len(), 1);
@@ -931,7 +931,7 @@ mod find_intersects_tests {
         let intrs = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         assert_eq!(intrs.basic_intersects.len(), 1);
@@ -954,7 +954,7 @@ mod find_intersects_tests {
         let mut intrs = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         assert_eq!(intrs.basic_intersects.len(), 0);
@@ -991,7 +991,7 @@ mod find_intersects_tests {
         let mut intrs = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         assert_eq!(intrs.basic_intersects.len(), 0);
@@ -1028,7 +1028,7 @@ mod find_intersects_tests {
         let mut intrs = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         assert_eq!(intrs.basic_intersects.len(), 0);
@@ -1070,7 +1070,7 @@ mod sort_and_join_overlapping_intersects_tests {
         let mut intersects = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         let slices = sort_and_join_overlapping_intersects(
@@ -1104,7 +1104,7 @@ mod sort_and_join_overlapping_intersects_tests {
         let mut intersects = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         let slices = sort_and_join_overlapping_intersects(
@@ -1138,7 +1138,7 @@ mod sort_and_join_overlapping_intersects_tests {
         let mut intersects = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         let slices = sort_and_join_overlapping_intersects(
@@ -1172,7 +1172,7 @@ mod sort_and_join_overlapping_intersects_tests {
         let mut intersects = find_intersects(
             &pline1,
             &pline2,
-            &pline1.create_approx_spatial_index().unwrap(),
+            &pline1.create_approx_aabb_index().unwrap(),
         );
 
         let slices = sort_and_join_overlapping_intersects(

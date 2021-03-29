@@ -1,13 +1,12 @@
 //! This module contains the C foreign function interface for cavalier_contours.
 #![allow(non_camel_case_types)]
-mod error_handling;
 use cavalier_contours::{
     core::math::Vector2,
-    polyline::{PlineVertex, Polyline},
+    polyline::{BooleanOp, PlineBooleanOptions, PlineOffsetOptions, PlineVertex, Polyline},
+    static_aabb2d_index::StaticAABB2DIndex,
 };
 use core::slice;
-use error_handling::{set_last_error, LAST_ERROR};
-use std::{convert::TryFrom, ffi::CStr, os::raw::c_char, panic};
+use std::{convert::TryFrom, panic};
 
 /// Helper macro to catch unwind and return -1 if panic was caught otherwise returns whatever the
 /// expression returned.
@@ -15,37 +14,27 @@ macro_rules! ffi_catch_unwind {
     ($body: expr) => {
         match panic::catch_unwind(move || $body) {
             Ok(r) => r,
-            Err(_) => {
-                set_last_error("Internal algorithm/library error occurred.", "");
-                -1
-            }
+            Err(_) => -1,
         }
     };
 }
+
+/// Opaque type that wraps a [StaticAABB2DIndex].
+#[derive(Debug, Clone)]
+pub struct cavc_aabbindex(StaticAABB2DIndex<f64>);
+
 /// Represents a polyline vertex holding x, y, and bulge.
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_vertex {
-    pub data: [f64; 3],
+    pub x: f64,
+    pub y: f64,
+    pub bulge: f64,
 }
 
 impl cavc_vertex {
     pub fn new(x: f64, y: f64, bulge: f64) -> Self {
-        cavc_vertex {
-            data: [x, y, bulge],
-        }
-    }
-
-    pub fn x(&self) -> f64 {
-        self.data[0]
-    }
-
-    pub fn y(&self) -> f64 {
-        self.data[1]
-    }
-
-    pub fn bulge(&self) -> f64 {
-        self.data[2]
+        cavc_vertex { x, y, bulge }
     }
 
     fn from_internal(v: PlineVertex<f64>) -> Self {
@@ -53,60 +42,157 @@ impl cavc_vertex {
     }
 }
 
-/// Represents a basic 2D point holding x and y.
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct cavc_point {
-    pub data: [f64; 2],
-}
-
-/// Polyline object type.
+/// Opaque type that wraps a [Polyline].
 #[derive(Debug, Clone)]
 pub struct cavc_pline(Polyline<f64>);
 
-/// Gets the last error message set as a null terminated c string.
-///
-/// The c string returned is in thread local storage and is only valid until another function that
-/// can error is called!
-pub extern "C" fn cavc_last_error_msg() -> *const c_char {
-    // Safety: constructing CStr from static empty null terminated string, no null check required.
-    let mut result = unsafe { CStr::from_bytes_with_nul_unchecked(b"0").as_ptr() };
-    LAST_ERROR.with(|last_error| {
-        if let Some(error_data) = last_error.borrow().as_ref() {
-            // Safety: Constructing CStr from thread local null terminated string, no null check
-            // required.
-            unsafe {
-                result =
-                    CStr::from_bytes_with_nul_unchecked(&error_data.error_msg.as_bytes_with_nul())
-                        .as_ptr();
-            }
-        }
-    });
-
-    result
+/// FFI representation of [PlineOffsetOptions].
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct cavc_pline_parallel_offset_o {
+    pub aabb_index: *const cavc_aabbindex,
+    pub pos_equal_eps: f64,
+    pub slice_join_eps: f64,
+    pub offset_dist_eps: f64,
+    pub min_length_loop_cull: f64,
+    pub handle_self_intersects: u8,
 }
 
-/// Gets the last error report data set as a null terminated c string.
-///
-/// The c string returned is in thread local storage and is only valid until another function that
-/// can error is called!
-pub extern "C" fn cavc_last_error_report() -> *const c_char {
-    // Safety: constructing CStr from static empty null terminated string, no null check required.
-    let mut result = unsafe { CStr::from_bytes_with_nul_unchecked(b"0").as_ptr() };
-    LAST_ERROR.with(|last_error| {
-        if let Some(error_data) = last_error.borrow().as_ref() {
-            // Safety: constructing CStr from static empty null terminated string, no null check
-            // required.
-            unsafe {
-                result = CStr::from_bytes_with_nul_unchecked(
-                    &error_data.error_report_data.as_bytes_with_nul(),
-                )
-                .as_ptr();
-            }
+impl cavc_pline_parallel_offset_o {
+    /// Convert FFI parallel offset options type to internal type.
+    ///
+    /// # Safety
+    ///
+    /// `aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
+    pub unsafe fn to_internal(&self) -> PlineOffsetOptions<f64> {
+        PlineOffsetOptions {
+            aabb_index: self.aabb_index.as_ref().map(|w| &w.0),
+            pos_equal_eps: self.pos_equal_eps,
+            slice_join_eps: self.slice_join_eps,
+            offset_dist_eps: self.offset_dist_eps,
+            min_length_loop_cull: self.min_length_loop_cull,
+            handle_self_intersects: self.handle_self_intersects != 0,
         }
-    });
+    }
+}
 
-    result
+impl Default for cavc_pline_parallel_offset_o {
+    fn default() -> Self {
+        let d = PlineOffsetOptions::default();
+        Self {
+            aabb_index: std::ptr::null(),
+            pos_equal_eps: d.pos_equal_eps,
+            slice_join_eps: d.slice_join_eps,
+            offset_dist_eps: d.offset_dist_eps,
+            min_length_loop_cull: d.min_length_loop_cull,
+            handle_self_intersects: if d.handle_self_intersects { 1 } else { 0 },
+        }
+    }
+}
+
+/// Write default option values to a [cavc_pline_parallel_offset_o].
+///
+/// ## Specific Error Codes
+/// * 1 = `options` is null.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[no_mangle]
+pub unsafe extern "C" fn cavc_pline_parallel_offset_o_init(
+    options: *mut cavc_pline_parallel_offset_o,
+) -> i32 {
+    ffi_catch_unwind!({
+        if options.is_null() {
+            return 1;
+        }
+
+        options.write(Default::default());
+        0
+    })
+}
+
+/// FFI representation of [PlineBooleanOptions].
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct cavc_pline_boolean_o {
+    pub pline1_aabb_index: *const cavc_aabbindex,
+    pub pos_equal_eps: f64,
+    pub slice_join_eps: f64,
+}
+
+impl cavc_pline_boolean_o {
+    /// Convert FFI boolean options type to internal type.
+    ///
+    /// # Safety
+    ///
+    /// `pline1_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
+    pub unsafe fn to_internal(&self) -> PlineBooleanOptions<f64> {
+        PlineBooleanOptions {
+            pline1_aabb_index: self.pline1_aabb_index.as_ref().map(|w| &w.0),
+            pos_equal_eps: self.pos_equal_eps,
+            slice_join_eps: self.slice_join_eps,
+        }
+    }
+}
+
+impl Default for cavc_pline_boolean_o {
+    fn default() -> Self {
+        let d = PlineBooleanOptions::default();
+        Self {
+            pline1_aabb_index: std::ptr::null(),
+            pos_equal_eps: d.pos_equal_eps,
+            slice_join_eps: d.slice_join_eps,
+        }
+    }
+}
+
+/// Write default option values to a [cavc_pline_boolean_o].
+///
+/// ## Specific Error Codes
+/// * 1 = `options` is null.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[no_mangle]
+pub unsafe extern "C" fn cavc_pline_boolean_o_init(options: *mut cavc_pline_boolean_o) -> i32 {
+    ffi_catch_unwind!({
+        if options.is_null() {
+            return 1;
+        }
+
+        options.write(Default::default());
+        0
+    })
+}
+
+fn boolean_op_from_u32(i: u32) -> Option<BooleanOp> {
+    if i == 0 {
+        Some(BooleanOp::Or)
+    } else if i == 1 {
+        Some(BooleanOp::And)
+    } else if i == 2 {
+        Some(BooleanOp::Not)
+    } else if i == 3 {
+        Some(BooleanOp::Xor)
+    } else {
+        None
+    }
+}
+
+/// Opaque type that represents a list of [cavc_pline].
+pub struct cavc_plinelist(Vec<*mut cavc_pline>);
+
+impl cavc_plinelist {
+    pub fn from_internal(plines: Vec<Polyline<f64>>) -> *mut cavc_plinelist {
+        let r = plines
+            .into_iter()
+            .map(|pl| Box::into_raw(Box::new(cavc_pline(pl))))
+            .collect();
+
+        Box::into_raw(Box::new(cavc_plinelist(r)))
+    }
 }
 
 /// Create a new polyline object.
@@ -121,14 +207,14 @@ pub extern "C" fn cavc_last_error_report() -> *const c_char {
 ///
 /// `vertexes` may be null if `n_vertexes` is 0 or must point to a valid contiguous buffer of
 /// [cavc_vertex] with length of at least `n_vertexes`.
-/// `pline` must point to a pointer that can be safely assigned a reference to a cavc_pline.
+/// `pline` must point to a valid place in memory to be written.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_create(
     vertexes: *const cavc_vertex,
     n_vertexes: u32,
     is_closed: u8,
-    pline: *mut *mut cavc_pline,
+    pline: *mut *const cavc_pline,
 ) -> i32 {
     ffi_catch_unwind!({
         let mut result = Polyline::new();
@@ -138,17 +224,18 @@ pub unsafe extern "C" fn cavc_pline_create(
 
         if !vertexes.is_null() && n_vertexes != 0 {
             let data = slice::from_raw_parts(vertexes, n_vertexes as usize);
+            result.reserve(data.len());
             for v in data {
-                result.add_from_array(v.data);
+                result.add(v.x, v.y, v.bulge);
             }
         }
 
-        *pline = Box::into_raw(Box::new(cavc_pline(result)));
+        pline.write(Box::into_raw(Box::new(cavc_pline(result))));
         0
     })
 }
 
-/// Free an existing polyline object.
+/// Free an existing [cavc_pline] object.
 ///
 /// Nothing happens if `pline` is null.
 ///
@@ -163,6 +250,34 @@ pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
     }
 }
 
+/// Clones the polyline.
+///
+/// `pline` is the polyline to be cloned.
+/// `cloned` is used as an out parameter to hold the new polyline from cloning.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `cloned` must point to a valid place in memory to be written.
+#[no_mangle]
+pub unsafe extern "C" fn cavc_pline_clone(
+    pline: *const cavc_pline,
+    cloned: *mut *const cavc_pline,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+
+        cloned.write(Box::into_raw(Box::new(cavc_pline((*pline).0.clone()))));
+        0
+    })
+}
+
 /// Get whether the polyline is closed or not.
 ///
 /// `is_closed` is used as an out parameter to hold the whether `pline` is closed (non-zero) or not
@@ -175,6 +290,7 @@ pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
+/// `is_closed` must point to a valid place in memory to be written.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_is_closed(
@@ -185,7 +301,7 @@ pub unsafe extern "C" fn cavc_pline_get_is_closed(
         if pline.is_null() {
             return 1;
         }
-        *is_closed = if (*pline).0.is_closed() { 1 } else { 0 };
+        is_closed.write(if (*pline).0.is_closed() { 1 } else { 0 });
         0
     })
 }
@@ -224,6 +340,7 @@ pub unsafe extern "C" fn cavc_pline_set_is_closed(pline: *mut cavc_pline, is_clo
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
+/// `count` must point to a valid place in memory to be written.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_vertex_count(
@@ -237,7 +354,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_count(
 
         // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
         // prevent memory corruption/access errors but just panic as internal error if it does occur
-        *count = u32::try_from((*pline).0.len()).unwrap();
+        count.write(u32::try_from((*pline).0.len()).unwrap());
         0
     })
 }
@@ -307,7 +424,7 @@ pub unsafe extern "C" fn cavc_pline_set_vertex_data(
         let buffer = slice::from_raw_parts(vertex_data, n_vertexes as usize);
         (*pline).0.reserve(buffer.len());
         for v in buffer {
-            (*pline).0.add(v.x(), v.y(), v.bulge());
+            (*pline).0.add(v.x, v.y, v.bulge);
         }
         0
     })
@@ -370,7 +487,7 @@ pub unsafe extern "C" fn cavc_pline_add(pline: *mut cavc_pline, x: f64, y: f64, 
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-/// `vertex` must point to valid place in memory for which a [cavc_vertex] can be written.
+/// `vertex` must point to a valid place in memory to be written.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_vertex(
@@ -388,7 +505,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex(
         }
 
         let v = (*pline).0[position as usize];
-        *vertex = cavc_vertex::from_internal(v);
+        vertex.write(cavc_vertex::from_internal(v));
         0
     })
 }
@@ -422,7 +539,7 @@ pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32
     })
 }
 
-/// Compute the path length of a polyline.
+/// Wraps [Polyline::path_length].
 ///
 /// `path_length` is used as the out parameter to hold the computed path length.
 ///
@@ -433,6 +550,7 @@ pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
+/// `path_length` must point to a valid place in memory to be written.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_eval_path_length(
@@ -443,15 +561,13 @@ pub unsafe extern "C" fn cavc_pline_eval_path_length(
         if pline.is_null() {
             return 1;
         }
-        *path_length = (*pline).0.path_length();
+        path_length.write((*pline).0.path_length());
         0
     })
 }
 
-/// Compute the signed area of a polyline.
+/// Wraps [Polyline::area].
 ///
-/// If `pline` is an open polyline then the computed area is always 0.
-/// If `pline` direction is counter clockwise then result is positive otherwise it is negative.
 /// `area` is used as the out parameter to hold the computed area.
 ///
 /// ## Specific Error Codes
@@ -461,6 +577,7 @@ pub unsafe extern "C" fn cavc_pline_eval_path_length(
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
+/// `area` must point to a valid place in memory to be written.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_eval_area(pline: *const cavc_pline, area: *mut f64) -> i32 {
@@ -468,17 +585,12 @@ pub unsafe extern "C" fn cavc_pline_eval_area(pline: *const cavc_pline, area: *m
         if pline.is_null() {
             return 1;
         }
-        *area = (*pline).0.area();
+        area.write((*pline).0.area());
         0
     })
 }
 
-/// Compute the winding number for a closed polyline relative to a point.
-///
-/// If `pline` is an open polyline then 0 is always returned.
-/// The winding number has a magnitude equal to the net number of times the `pline` winds around
-/// the `point` given and its sign is positive if the windings are net counter clockwise or negative if
-/// they are net clockwise.
+/// Wraps [Polyline::winding_number].
 ///
 /// `winding_number` is used as the out parameter to hold the computed winding number.
 ///
@@ -489,21 +601,473 @@ pub unsafe extern "C" fn cavc_pline_eval_area(pline: *const cavc_pline, area: *m
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-/// `winding_number` must point to a valid place in memory for which an i32 can be written.
+/// `winding_number` must point to a valid place in memory to be written.
 #[no_mangle]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_eval_wn(
     pline: *const cavc_pline,
-    point: cavc_point,
+    x: f64,
+    y: f64,
     winding_number: *mut i32,
 ) -> i32 {
     ffi_catch_unwind!({
         if pline.is_null() {
             return 1;
         }
-        *winding_number = (*pline)
-            .0
-            .winding_number(Vector2::new(point.data[0], point.data[1]));
+        winding_number.write((*pline).0.winding_number(Vector2::new(x, y)));
         0
+    })
+}
+
+/// Wraps [Polyline::invert_direction].
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_invert_direction(pline: *mut cavc_pline) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+        (*pline).0.invert_direction();
+        0
+    })
+}
+
+/// Wraps [Polyline::scale].
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_scale(pline: *mut cavc_pline, scale_factor: f64) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+        (*pline).0.scale(scale_factor);
+        0
+    })
+}
+
+/// Wraps [Polyline::translate].
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_translate(
+    pline: *mut cavc_pline,
+    x_offset: f64,
+    y_offset: f64,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+        (*pline).0.translate(x_offset, y_offset);
+        0
+    })
+}
+
+/// Wraps [Polyline::remove_repeat_pos] but modifies in place rather than returning a result.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_remove_repeat_pos(
+    pline: *mut cavc_pline,
+    pos_equal_eps: f64,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+        match (*pline).0.remove_repeat_pos(pos_equal_eps) {
+            std::borrow::Cow::Borrowed(_) => {
+                // do nothing (no repeat positions, leave unchanged)
+                0
+            }
+            std::borrow::Cow::Owned(x) => {
+                // update self with result
+                (*pline).0 = x;
+                0
+            }
+        }
+    })
+}
+
+/// Wraps [Polyline::remove_redundant] but modifies in place rather than returning a result.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_remove_redundant(
+    pline: *mut cavc_pline,
+    pos_equal_eps: f64,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+        match (*pline).0.remove_redundant(pos_equal_eps) {
+            std::borrow::Cow::Borrowed(_) => {
+                // do nothing (no repeat positions, leave unchanged)
+                0
+            }
+            std::borrow::Cow::Owned(x) => {
+                // update self with result
+                (*pline).0 = x;
+                0
+            }
+        }
+    })
+}
+
+/// Wraps [Polyline::extents].
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+/// * 2 = `pline` is empty.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `min_x`, `min_y`, `max_x`, and `max_y` must all point to a valid places in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_eval_extents(
+    pline: *const cavc_pline,
+    min_x: *mut f64,
+    min_y: *mut f64,
+    max_x: *mut f64,
+    max_y: *mut f64,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+        match (*pline).0.extents() {
+            Some(aabb) => {
+                min_x.write(aabb.min_x);
+                min_y.write(aabb.min_y);
+                max_x.write(aabb.max_x);
+                max_y.write(aabb.max_y);
+                0
+            }
+            None => 2,
+        }
+    })
+}
+
+/// Wraps [Polyline::parallel_offset_opt].
+///
+/// `options` is allowed to be null (default options will be used).
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `result` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_parallel_offset(
+    pline: *const cavc_pline,
+    offset: f64,
+    options: *const cavc_pline_parallel_offset_o,
+    result: *mut *const cavc_plinelist,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+
+        let results = if options.is_null() {
+            (*pline).0.parallel_offset(offset)
+        } else {
+            (*pline)
+                .0
+                .parallel_offset_opt(offset, &(*options).to_internal())
+        };
+
+        result.write(cavc_plinelist::from_internal(results));
+        0
+    })
+}
+/// Wraps [Polyline::boolean_opt].
+///
+/// `options` is allowed to be null (default options will be used).
+///
+/// Boolean operations are:
+/// * 0 = [BooleanOp::Or]
+/// * 1 = [BooleanOp::And]
+/// * 2 = [BooleanOp::Not]
+/// * 3 = [BooleanOp::Xor]
+///
+/// ## Specific Error Codes
+/// * 1 = `pline1` and/or `pline2` is null.
+/// * 2 = `operation` is unrecognized (must be one of the values listed).
+///
+/// # Safety
+///
+/// `pline1` and `pline2` must each be null or a valid cavc_pline object that was created with
+/// [cavc_pline_create] and has not been freed.
+/// `pos_plines` and `neg_plines` must both point to different valid places in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_boolean(
+    pline1: *const cavc_pline,
+    pline2: *const cavc_pline,
+    operation: u32,
+    options: *const cavc_pline_boolean_o,
+    pos_plines: *mut *const cavc_plinelist,
+    neg_plines: *mut *const cavc_plinelist,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline1.is_null() || pline2.is_null() {
+            return 1;
+        }
+
+        let op = {
+            match boolean_op_from_u32(operation) {
+                Some(op) => op,
+                None => {
+                    return 2;
+                }
+            }
+        };
+        let results = if options.is_null() {
+            (*pline1).0.boolean(&(*pline2).0, op)
+        } else {
+            (*pline1)
+                .0
+                .boolean_opt(&(*pline2).0, op, &(*options).to_internal())
+        };
+
+        pos_plines.write(cavc_plinelist::from_internal(results.pos_plines));
+        neg_plines.write(cavc_plinelist::from_internal(results.neg_plines));
+        0
+    })
+}
+
+/// Wraps [Polyline::create_approx_aabb_index].
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+/// * 2 = `pline` vertex count is less than 2.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `aabbindex` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_create_approx_aabbindex(
+    pline: *const cavc_pline,
+    aabbindex: *mut *const cavc_aabbindex,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+
+        match (*pline).0.create_approx_aabb_index() {
+            Some(result) => {
+                aabbindex.write(Box::into_raw(Box::new(cavc_aabbindex(result))));
+                0
+            }
+            None => 2,
+        }
+    })
+}
+
+/// Wraps [Polyline::create_aabb_index].
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+/// * 2 = `pline` vertex count is less than 2.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `aabbindex` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_create_aabbindex(
+    pline: *const cavc_pline,
+    aabbindex: *mut *const cavc_aabbindex,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+
+        match (*pline).0.create_aabb_index() {
+            Some(result) => {
+                aabbindex.write(Box::into_raw(Box::new(cavc_aabbindex(result))));
+                0
+            }
+            None => 2,
+        }
+    })
+}
+
+/// Free an existing [cavc_aabbindex] object.
+///
+/// Nothing happens if `aabbindex` is null.
+///
+/// # Safety
+///
+/// `aabbindex` must be null or a valid [cavc_aabbindex] object.
+#[no_mangle]
+pub unsafe extern "C" fn cavc_aabbindex_f(aabbindex: *mut cavc_aabbindex) {
+    if !aabbindex.is_null() {
+        drop(Box::from_raw(aabbindex))
+    }
+}
+
+/// Wraps the [StaticAABB2DIndex] extent methods (gets total extents of the aabb index).
+///
+/// See: [StaticAABB2DIndex::min_x], [StaticAABB2DIndex::min_y], [StaticAABB2DIndex::max_x], [StaticAABB2DIndex::max_y].
+///
+/// ## Specific Error Codes
+/// * 1 = `aabbindex` is null.
+///
+/// # Safety
+///
+/// `aabbindex` must be null or a valid [cavc_aabbindex] object.
+/// `min_x`, `min_y`, `max_x`, and `max_y` must all point to a valid places in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_aabbindex_get_extents(
+    aabbindex: *const cavc_aabbindex,
+    min_x: *mut f64,
+    min_y: *mut f64,
+    max_x: *mut f64,
+    max_y: *mut f64,
+) -> i32 {
+    ffi_catch_unwind!({
+        if aabbindex.is_null() {
+            return 1;
+        }
+
+        min_x.write((*aabbindex).0.min_x());
+        min_y.write((*aabbindex).0.min_y());
+        max_x.write((*aabbindex).0.max_x());
+        max_y.write((*aabbindex).0.max_y());
+        0
+    })
+}
+
+/// Free an existing [cavc_plinelist] object and all [cavc_pline] inside of it.
+///
+/// Nothing happens if `plinelist` is null.
+///
+/// # Safety
+///
+/// `plinelist` must be null or a valid [cavc_plinelist] object.
+#[no_mangle]
+pub unsafe extern "C" fn cavc_plinelist_f(plinelist: *mut cavc_plinelist) {
+    if !plinelist.is_null() {
+        drop(Box::from_raw(plinelist))
+    }
+}
+
+/// Get the number of polylines inside a [cavc_plinelist].
+///
+/// `count` used as out parameter to hold the polyline count.
+///
+/// ## Specific Error Codes
+/// * 1 = `plinelist` is null.
+///
+/// # Safety
+///
+/// `plinelist` must be null or a valid [cavc_plinelist] object.
+/// `count` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_plinelist_get_count(
+    plinelist: *const cavc_plinelist,
+    count: *mut u32,
+) -> i32 {
+    ffi_catch_unwind!({
+        if plinelist.is_null() {
+            return 1;
+        }
+
+        // using try_from to catch odd case of polyline count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        count.write(u32::try_from((*plinelist).0.len()).unwrap());
+        0
+    })
+}
+
+/// Get a polyline at the given index position in the [cavc_plinelist].
+///
+/// `pline` used as out parameter to hold the polyline pointer.
+///
+/// ## Specific Error Codes
+/// * 1 = `plinelist` is null.
+/// * 2 = `position` is greater than polyline counter in the list.
+///
+/// # Safety
+///
+/// `plinelist` must be null or a valid [cavc_plinelist] object.
+/// `pline` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_plinelist_get_pline(
+    plinelist: *const cavc_plinelist,
+    position: u32,
+    pline: *mut *const cavc_pline,
+) -> i32 {
+    ffi_catch_unwind!({
+        if plinelist.is_null() {
+            return 1;
+        }
+
+        let pos = position as usize;
+
+        match (*plinelist).0.get(pos) {
+            Some(pl) => {
+                pline.write(*pl);
+                0
+            }
+            None => 2,
+        }
     })
 }
