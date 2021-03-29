@@ -613,7 +613,7 @@ fn pline_eval_boolean() {
 
             let mut neg_plines_count = u32::MAX;
             assert_eq!(
-                cavc_plinelist_get_count(pos_plines, &mut neg_plines_count),
+                cavc_plinelist_get_count(neg_plines, &mut neg_plines_count),
                 0
             );
             assert_eq!(neg_plines_count, 1);

@@ -483,8 +483,7 @@ where
             }
         };
 
-    let mut result = Polyline::with_capacity(polyline.len());
-    result.set_is_closed(polyline.is_closed());
+    let mut result = Polyline::with_capacity(polyline.len(), polyline.is_closed());
 
     // add the very first vertex
     result.add_vertex(raw_offset_segs.first().unwrap().v1);

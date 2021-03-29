@@ -69,11 +69,11 @@ where
         }
     }
 
-    /// Construct a new empty [Polyline] with `is_closed` set to false and some reserved capacity.
-    pub fn with_capacity(capacity: usize) -> Self {
+    /// Construct a new empty [Polyline] with the given reserved capacity.
+    pub fn with_capacity(capacity: usize, is_closed: bool) -> Self {
         Polyline {
             vertex_data: Vec::with_capacity(capacity),
-            is_closed: false,
+            is_closed,
         }
     }
 
@@ -844,11 +844,60 @@ where
 
     /// Perform a boolean `operation` between this polyline and another using default options.
     ///
+    /// # Examples
+    /// ```
+    /// # use cavalier_contours::core::traits::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::pline_closed;
+    /// let rectangle = pline_closed![
+    ///     (-1.0, -2.0, 0.0),
+    ///     (3.0, -2.0, 0.0),
+    ///     (3.0, 2.0, 0.0),
+    ///     (-1.0, 2.0, 0.0),
+    /// ];
+    /// let circle = pline_closed![(0.0, 0.0, 1.0), (2.0, 0.0, 1.0)];
+    /// let results = rectangle.boolean(&circle, BooleanOp::Not);
+    /// // since the circle is inside the rectangle we get back 1 positive polyline and 1 negative
+    /// // polyline where the positive polyline is the rectangle and the negative polyline is the
+    /// // circle
+    /// assert_eq!(results.pos_plines.len(), 1);
+    /// assert_eq!(results.neg_plines.len(), 1);
+    /// assert!(results.pos_plines[0].area().fuzzy_eq(rectangle.area()));
+    /// assert!(results.neg_plines[0].area().fuzzy_eq(circle.area()));
+    /// ```
     pub fn boolean(&self, other: &Polyline<T>, operation: BooleanOp) -> BooleanResult<T> {
         self.boolean_opt(other, operation, &Default::default())
     }
 
     /// Perform a boolean `operation` between this polyline and another with options provided.
+    ///
+    /// # Examples
+    /// ```
+    /// # use cavalier_contours::core::traits::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::pline_closed;
+    /// let rectangle = pline_closed![
+    ///     (-1.0, -2.0, 0.0),
+    ///     (3.0, -2.0, 0.0),
+    ///     (3.0, 2.0, 0.0),
+    ///     (-1.0, 2.0, 0.0),
+    /// ];
+    /// let circle = pline_closed![(0.0, 0.0, 1.0), (2.0, 0.0, 1.0)];
+    /// let aabb_index = rectangle.create_approx_aabb_index().unwrap();
+    /// let options = PlineBooleanOptions {
+    ///     // passing in existing spatial index of the polyline segments for the first polyline
+    ///     pline1_aabb_index: Some(&aabb_index),
+    ///     ..Default::default()
+    /// };
+    /// let results = rectangle.boolean_opt(&circle, BooleanOp::Not, &options);
+    /// // since the circle is inside the rectangle we get back 1 positive polyline and 1 negative
+    /// // polyline where the positive polyline is the rectangle and the negative polyline is the
+    /// // circle
+    /// assert_eq!(results.pos_plines.len(), 1);
+    /// assert_eq!(results.neg_plines.len(), 1);
+    /// assert!(results.pos_plines[0].area().fuzzy_eq(rectangle.area()));
+    /// assert!(results.neg_plines[0].area().fuzzy_eq(circle.area()));
+    /// ```
     pub fn boolean_opt(
         &self,
         other: &Polyline<T>,
