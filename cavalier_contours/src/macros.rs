@@ -44,6 +44,17 @@ macro_rules! replace_expr {
 }
 
 /// Construct a open polyline with the vertexes given as a list of (x, y, bulge) tuples.
+///
+/// # Examples
+///
+/// ```
+/// # use cavalier_contours::pline_open;
+/// # use cavalier_contours::polyline::*;
+/// let polyline = pline_open![(0.0, 1.0, 1.0), (2.0, 0.0, 0.0)];
+/// assert!(!polyline.is_closed());
+/// assert_eq!(polyline[0], PlineVertex::new(0.0, 1.0, 1.0));
+/// assert_eq!(polyline[1], PlineVertex::new(2.0, 0.0, 0.0));
+/// ```
 #[macro_export]
 macro_rules! pline_open {
     ($( $x:expr ),* $(,)?) => {
@@ -60,6 +71,17 @@ macro_rules! pline_open {
 }
 
 /// Construct a closed polyline with the vertexes given as a list of (x, y, bulge) tuples.
+///
+/// # Examples
+///
+/// ```
+/// # use cavalier_contours::pline_closed;
+/// # use cavalier_contours::polyline::*;
+/// let polyline = pline_closed![(0.0, 1.0, 1.0), (2.0, 0.0, 0.0)];
+/// assert!(polyline.is_closed());
+/// assert_eq!(polyline[0], PlineVertex::new(0.0, 1.0, 1.0));
+/// assert_eq!(polyline[1], PlineVertex::new(2.0, 0.0, 0.0));
+/// ```
 #[macro_export]
 macro_rules! pline_closed {
     ($( $x:expr ),* $(,)?) => {
