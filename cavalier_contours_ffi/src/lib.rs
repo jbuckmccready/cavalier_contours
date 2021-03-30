@@ -250,6 +250,30 @@ pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
     }
 }
 
+/// Reserve space for an `additional` number of vertexes in the [cavc_pline].
+///
+/// This function is used to avoid allocations when adding vertexes to the [cavc_pline].
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_reserve(pline: *mut cavc_pline, additional: u32) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+
+        (*pline).0.reserve(additional as usize);
+        0
+    })
+}
+
 /// Clones the polyline.
 ///
 /// `pline` is the polyline to be cloned.
@@ -264,6 +288,7 @@ pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
 /// has not been freed.
 /// `cloned` must point to a valid place in memory to be written.
 #[no_mangle]
+#[must_use]
 pub unsafe extern "C" fn cavc_pline_clone(
     pline: *const cavc_pline,
     cloned: *mut *const cavc_pline,
@@ -506,6 +531,40 @@ pub unsafe extern "C" fn cavc_pline_get_vertex(
 
         let v = (*pline).0[position as usize];
         vertex.write(cavc_vertex::from_internal(v));
+        0
+    })
+}
+
+/// Set a polyline vertex at a given index position.
+///
+/// `position` is is the index to set the vertex at.
+/// `vertex` is the data to be set.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+/// * 2 = `position` is out of bounds for the `pline` given.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_set_vertex(
+    pline: *mut cavc_pline,
+    position: u32,
+    vertex: cavc_vertex,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+
+        if position >= (*pline).0.len() as u32 {
+            return 2;
+        }
+
+        (*pline).0[position as usize] = PlineVertex::new(vertex.x, vertex.y, vertex.bulge);
         0
     })
 }
@@ -993,7 +1052,7 @@ pub unsafe extern "C" fn cavc_aabbindex_get_extents(
     })
 }
 
-/// Free an existing [cavc_plinelist] object and all [cavc_pline] inside of it.
+/// Free an existing [cavc_plinelist] object and all [cavc_pline] owned by it.
 ///
 /// Nothing happens if `plinelist` is null.
 ///
@@ -1038,11 +1097,13 @@ pub unsafe extern "C" fn cavc_plinelist_get_count(
 
 /// Get a polyline at the given index position in the [cavc_plinelist].
 ///
-/// `pline` used as out parameter to hold the polyline pointer.
+/// `pline` used as out parameter to hold the polyline pointer. NOTE: This does not release
+/// ownership of the [cavc_pline] from the [cavc_plinelist], to do that use [cavc_plinelist_pop] or
+/// [cavc_plinelist_take].
 ///
 /// ## Specific Error Codes
 /// * 1 = `plinelist` is null.
-/// * 2 = `position` is greater than polyline counter in the list.
+/// * 2 = `position` out of range for the [cavc_plinelist].
 ///
 /// # Safety
 ///
@@ -1069,5 +1130,75 @@ pub unsafe extern "C" fn cavc_plinelist_get_pline(
             }
             None => 2,
         }
+    })
+}
+
+/// Efficiently release and return the last [cavc_pline] from a [cavc_plinelist].
+///
+/// `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
+/// NOTE: The caller now must call [cavc_pline_f] at some point to free the released [cavc_pline].
+///
+/// ## Specific Error Codes
+/// * 1 = `plinelist` is null.
+/// * 2 = `plinelist` is empty.
+///
+/// # Safety
+///
+/// `plinelist` must be null or a valid [cavc_plinelist] object.
+/// `pline` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_plinelist_pop(
+    plinelist: *mut cavc_plinelist,
+    pline: *mut *const cavc_pline,
+) -> i32 {
+    ffi_catch_unwind!({
+        if plinelist.is_null() {
+            return 1;
+        }
+
+        match (*plinelist).0.pop() {
+            Some(p) => {
+                pline.write(p);
+                0
+            }
+            None => 2,
+        }
+    })
+}
+
+/// Release and return a [cavc_pline] from a [cavc_plinelist] at a given index position.
+///
+/// `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
+/// NOTE: The caller now must call [cavc_pline_f] at some point to free the released [cavc_pline].
+///
+/// ## Specific Error Codes
+/// * 1 = `plinelist` is null.
+/// * 2 = `position` out of range for the [cavc_plinelist].
+///
+/// # Safety
+///
+/// `plinelist` must be null or a valid [cavc_plinelist] object.
+/// `pline` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_plinelist_take(
+    plinelist: *mut cavc_plinelist,
+    position: u32,
+    pline: *mut *const cavc_pline,
+) -> i32 {
+    ffi_catch_unwind!({
+        if plinelist.is_null() {
+            return 1;
+        }
+
+        let pos = position as usize;
+
+        if pos >= (*plinelist).0.len() {
+            return 2;
+        }
+
+        pline.write((*plinelist).0.remove(pos));
+        0
     })
 }

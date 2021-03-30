@@ -28,6 +28,10 @@ fn pline_data_manipulation() {
     let pline = create_pline(&[], true);
     let null_ptr = ptr::null_mut();
     unsafe {
+        // test reserve
+        assert_eq!(cavc_pline_reserve(pline, 5), 0);
+        assert_eq!(cavc_pline_reserve(null_ptr, 5), 1);
+
         // test pline is closed
         let mut is_closed: u8 = 0;
         assert_eq!(cavc_pline_get_is_closed(pline, &mut is_closed), 0);
@@ -100,8 +104,25 @@ fn pline_data_manipulation() {
         assert_eq!(v.y, 4.0);
         assert_eq!(v.bulge, 1.0);
 
-        // index position out of bounds
+        // get index position out of bounds
         assert_eq!(cavc_pline_get_vertex(pline, 3, &mut v), 2);
+
+        // set vertex at position
+        assert_eq!(
+            cavc_pline_set_vertex(pline, 0, cavc_vertex::new(8.0, 8.0, 0.55)),
+            0
+        );
+
+        assert_eq!(cavc_pline_get_vertex(pline, 0, &mut v), 0);
+        assert_eq!(v.x, 8.0);
+        assert_eq!(v.y, 8.0);
+        assert_eq!(v.bulge, 0.55);
+
+        // set index position out of bounds
+        assert_eq!(
+            cavc_pline_set_vertex(pline, 3, cavc_vertex::new(0.0, 0.0, 0.0)),
+            2
+        );
 
         // remove vertex at position
         assert_eq!(cavc_pline_remove(pline, 0), 0);
@@ -546,6 +567,51 @@ fn pline_eval_boolean() {
             );
             assert_eq!(cavc_pline_eval_area(output_pline, &mut area), 0);
             assert_fuzzy_eq!(area, std::f64::consts::PI);
+
+            // test take on the plinelist
+            // null ptr
+            assert_eq!(
+                cavc_plinelist_take(ptr::null_mut(), 0, &mut output_pline),
+                1
+            );
+            // index position out of range
+            assert_eq!(
+                cavc_plinelist_take(neg_plines as *mut _, 1, &mut output_pline),
+                2
+            );
+            assert_eq!(
+                cavc_plinelist_take(neg_plines as *mut _, 0, &mut output_pline),
+                0
+            );
+
+            let mut area = 0.0;
+            assert_eq!(cavc_pline_eval_area(output_pline, &mut area), 0);
+            assert_fuzzy_eq!(area, std::f64::consts::PI);
+            let mut count = u32::MAX;
+            assert_eq!(cavc_plinelist_get_count(neg_plines, &mut count), 0);
+            assert_eq!(count, 0);
+            cavc_pline_f(output_pline as *mut _);
+
+            // test pop on plinelist
+            // null ptr
+            assert_eq!(cavc_plinelist_pop(ptr::null_mut(), &mut output_pline), 1);
+
+            assert_eq!(
+                cavc_plinelist_pop(pos_plines as *mut _, &mut output_pline),
+                0
+            );
+            assert_eq!(cavc_pline_eval_area(output_pline, &mut area), 0);
+            assert_fuzzy_eq!(area, 16.0);
+            let mut count = u32::MAX;
+            assert_eq!(cavc_plinelist_get_count(pos_plines, &mut count), 0);
+            assert_eq!(count, 0);
+            cavc_pline_f(output_pline as *mut _);
+
+            // empty plinelist
+            assert_eq!(
+                cavc_plinelist_pop(pos_plines as *mut _, &mut output_pline),
+                2
+            );
 
             cavc_plinelist_f(pos_plines as *mut _);
             cavc_plinelist_f(neg_plines as *mut _);
