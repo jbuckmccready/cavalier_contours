@@ -59,8 +59,7 @@ macro_rules! replace_expr {
 macro_rules! pline_open {
     ($( $x:expr ),* $(,)?) => {
         {
-            use cavalier_contours::replace_expr;
-            let size = <[()]>::len(&[$(replace_expr!(($x) ())),*]);
+            let size = <[()]>::len(&[$(cavalier_contours::replace_expr!(($x) ())),*]);
             let mut pl = Polyline::with_capacity(size, false);
             $(
                 pl.add($x.0, $x.1, $x.2);
@@ -86,8 +85,7 @@ macro_rules! pline_open {
 macro_rules! pline_closed {
     ($( $x:expr ),* $(,)?) => {
         {
-            use cavalier_contours::replace_expr;
-            let size = <[()]>::len(&[$(replace_expr!(($x) ())),*]);
+            let size = <[()]>::len(&[$(cavalier_contours::replace_expr!(($x) ())),*]);
             let mut pl = Polyline::with_capacity(size, true);
             $(
                 pl.add($x.0, $x.1, $x.2);

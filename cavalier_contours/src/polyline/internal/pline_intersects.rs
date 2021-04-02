@@ -5,111 +5,12 @@ use crate::{
     },
     polyline::{
         pline_seg_intr, seg_fast_approx_bounding_box, seg_split_at_point, seg_tangent_vector,
+        PlineBasicIntersect, PlineIntersect, PlineIntersectsCollection, PlineOverlappingIntersect,
         PlineSegIntr, Polyline,
     },
 };
 use static_aabb2d_index::StaticAABB2DIndex;
 use std::collections::HashSet;
-
-/// Represents a polyline intersect at a single point.
-#[derive(Debug, Clone, Copy)]
-pub struct PlineBasicIntersect<T> {
-    /// Starting vertex index of the first polyline segment involved in the intersect.
-    pub start_index1: usize,
-    /// Starting vertex index of the second polyline segment involved in the intersect.
-    pub start_index2: usize,
-    /// Point at which the intersect occurs.
-    pub point: Vector2<T>,
-}
-
-impl<T> PlineBasicIntersect<T> {
-    pub fn new(start_index1: usize, start_index2: usize, point: Vector2<T>) -> Self {
-        Self {
-            start_index1,
-            start_index2,
-            point,
-        }
-    }
-}
-
-/// Represents an overlapping polyline intersect segment.
-#[derive(Debug, Clone, Copy)]
-pub struct PlineOverlappingIntersect<T> {
-    /// Starting vertex index of the first polyline segment involved in the overlapping intersect.
-    pub start_index1: usize,
-    /// Starting vertex index of the second polyline segment involved in the intersect.
-    pub start_index2: usize,
-    /// First end point of the overlapping intersect (closest to the second segment start).
-    pub point1: Vector2<T>,
-    /// Second end point of the overlapping intersect (furthest from the second segment start).
-    pub point2: Vector2<T>,
-}
-
-impl<T> PlineOverlappingIntersect<T> {
-    pub fn new(
-        start_index1: usize,
-        start_index2: usize,
-        point1: Vector2<T>,
-        point2: Vector2<T>,
-    ) -> Self {
-        Self {
-            start_index1,
-            start_index2,
-            point1,
-            point2,
-        }
-    }
-}
-
-/// Represents a polyline intersect that may be either a [PlineBasicIntersect] or
-/// [PlineOverlappingIntersect].
-#[derive(Debug, Clone, Copy)]
-pub enum PlineIntersect<T> {
-    Basic(PlineBasicIntersect<T>),
-    Overlapping(PlineOverlappingIntersect<T>),
-}
-
-impl<T> PlineIntersect<T> {
-    pub fn new_basic(start_index1: usize, start_index2: usize, point: Vector2<T>) -> Self {
-        PlineIntersect::Basic(PlineBasicIntersect::new(start_index1, start_index2, point))
-    }
-
-    pub fn new_overlapping(
-        start_index1: usize,
-        start_index2: usize,
-        point1: Vector2<T>,
-        point2: Vector2<T>,
-    ) -> Self {
-        PlineIntersect::Overlapping(PlineOverlappingIntersect::new(
-            start_index1,
-            start_index2,
-            point1,
-            point2,
-        ))
-    }
-}
-
-/// Represents a collection of basic and overlapping polyline intersects.
-#[derive(Debug, Clone)]
-pub struct PlineIntersectsCollection<T> {
-    pub basic_intersects: Vec<PlineBasicIntersect<T>>,
-    pub overlapping_intersects: Vec<PlineOverlappingIntersect<T>>,
-}
-
-impl<T> PlineIntersectsCollection<T> {
-    pub fn new(
-        basic_intersects: Vec<PlineBasicIntersect<T>>,
-        overlapping_intersects: Vec<PlineOverlappingIntersect<T>>,
-    ) -> Self {
-        Self {
-            basic_intersects,
-            overlapping_intersects,
-        }
-    }
-    pub fn new_empty() -> Self {
-        Self::new(Vec::new(), Vec::new())
-    }
-}
 
 /// Visits all local self intersects of the polyline. Local self intersects are defined as between
 /// two polyline segments that share a vertex.
@@ -199,6 +100,14 @@ where
 
 /// Visits all global self intersects of the polyline. Global self intersects are defined as between
 /// two polyline segments that do not share a vertex.
+///
+/// In the case of two intersects on one segment the intersects will be added as two
+/// [PlineBasicIntersect] in the order of distance from the start of the second segment.
+///
+/// In the case of an intersect at the very start of a polyline segment the vertex index of the
+/// start of that segment is recorded (unless the polyline is open and the intersect is at the very
+/// end of the polyline, then the second to last vertex index is used to maintain that it represents
+/// the start of a polyline segment).
 pub fn visit_global_self_intersects<T, F>(
     polyline: &Polyline<T>,
     aabb_index: &StaticAABB2DIndex<T>,
@@ -216,7 +125,10 @@ pub fn visit_global_self_intersects<T, F>(
     let mut visited_pairs = HashSet::with_capacity(ln);
     let mut query_stack = Vec::with_capacity(8);
     let fuzz = T::fuzzy_epsilon();
-    let pline_is_open = !polyline.is_closed();
+
+    // last polyline segment starting indexes for open polyline (used to check when skipping
+    // intersects at end points of polyline segments)
+    let open_last_idx = polyline.len() - 2;
 
     // iterate all segment bounding boxes in the spatial index querying itself to test for self
     // intersects
@@ -243,33 +155,34 @@ pub fn visit_global_self_intersects<T, F>(
 
             let u1 = polyline[hit_i];
             let u2 = polyline[hit_j];
-            let skip_intr_at_start = |intr: Vector2<T>| -> bool {
-                // skip intersect at start position of pline segment since it will be found
-                // again for the end point that connects to the start position (unless the polyline
-                // is open and we're looking at the very start, then include the intersect)
-                (v1.pos().fuzzy_eq(intr) || u1.pos().fuzzy_eq(intr)) && !(pline_is_open && i == 0)
+            let skip_intr_at_end = |intr: Vector2<T>| -> bool {
+                // skip intersect at end point of pline segment since it will be found again by the
+                // segment with it as its start point (unless the polyline is open and we're looking
+                // at the very end point of the polyline, then include the intersect)
+                (v2.pos().fuzzy_eq(intr) && (polyline.is_closed() || i != open_last_idx))
+                    || (u2.pos().fuzzy_eq(intr) && (polyline.is_closed() || hit_i != open_last_idx))
             };
 
             let mut continue_visiting = true;
             match pline_seg_intr(v1, v2, u1, u2) {
                 PlineSegIntr::NoIntersect => {}
                 PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
-                    if !skip_intr_at_start(point) {
+                    if !skip_intr_at_end(point) {
                         continue_visiting = visitor(PlineIntersect::new_basic(i, hit_i, point));
                     }
                 }
                 PlineSegIntr::TwoIntersects { point1, point2 } => {
-                    if !skip_intr_at_start(point1) {
+                    if !skip_intr_at_end(point1) {
                         continue_visiting = visitor(PlineIntersect::new_basic(i, hit_i, point1));
                     }
 
-                    if continue_visiting && !skip_intr_at_start(point2) {
+                    if continue_visiting && !skip_intr_at_end(point2) {
                         continue_visiting = visitor(PlineIntersect::new_basic(i, hit_i, point2));
                     }
                 }
                 PlineSegIntr::OverlappingLines { point1, point2 }
                 | PlineSegIntr::OverlappingArcs { point1, point2 } => {
-                    if !skip_intr_at_start(point1) {
+                    if !skip_intr_at_end(point1) {
                         continue_visiting =
                             visitor(PlineIntersect::new_overlapping(i, hit_i, point1, point2));
                     }
@@ -344,7 +257,6 @@ where
 /// start of that segment is recorded (unless the polyline is open and the intersect is at the very
 /// end of the polyline, then the second to last vertex index is used to maintain that it represents
 /// the start of a polyline segment).
-///
 pub fn find_intersects<T>(
     pline1: &Polyline<T>,
     pline2: &Polyline<T>,
@@ -816,6 +728,7 @@ mod global_self_intersect_tests {
 
     #[test]
     fn short_open_polyline_circle() {
+        // does self intersect at end but is local self intersect
         let mut pline = Polyline::new();
         pline.add(0.0, 0.0, 1.0);
         pline.add(2.0, 0.0, 1.0);
@@ -823,6 +736,24 @@ mod global_self_intersect_tests {
         let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index().unwrap());
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
+
+        // self intersect at end point is returned since not local self intersect
+        let pline_as_lines = pline.arcs_to_approx_lines(1e-2).unwrap();
+        let intrs = global_self_intersects(
+            &pline_as_lines,
+            &pline_as_lines.create_approx_aabb_index().unwrap(),
+        );
+
+        assert_eq!(intrs.basic_intersects.len(), 1);
+        assert_eq!(intrs.overlapping_intersects.len(), 0);
+
+        assert_eq!(intrs.basic_intersects[0].start_index1, 0);
+        assert_eq!(
+            intrs.basic_intersects[0].start_index2,
+            pline_as_lines.len() - 2
+        );
+
+        assert_fuzzy_eq!(intrs.basic_intersects[0].point, Vector2::new(0.0, 0.0));
     }
 
     #[test]

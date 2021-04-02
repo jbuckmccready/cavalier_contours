@@ -1,14 +1,14 @@
 use crate::{
     core::math::dist_squared,
     polyline::{
-        seg_midpoint, seg_split_at_point, BooleanOp, BooleanResult, PlineBooleanOptions,
-        PlineVertex,
+        seg_midpoint, seg_split_at_point, BooleanOp, BooleanResult, PlineBasicIntersect,
+        PlineBooleanOptions, PlineVertex,
     },
 };
 use std::collections::HashMap;
 
 use super::pline_intersects::{
-    find_intersects, sort_and_join_overlapping_intersects, OverlappingSlice, PlineBasicIntersect,
+    find_intersects, sort_and_join_overlapping_intersects, OverlappingSlice,
 };
 use crate::{
     core::{math::Vector2, traits::Real},

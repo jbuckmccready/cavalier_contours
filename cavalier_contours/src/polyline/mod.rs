@@ -4,9 +4,11 @@ pub mod internal;
 mod pline;
 mod pline_seg;
 mod pline_seg_intersect;
+mod pline_types;
 mod pline_vertex;
 
 pub use pline::*;
 pub use pline_seg::*;
 pub use pline_seg_intersect::*;
+pub use pline_types::*;
 pub use pline_vertex::*;

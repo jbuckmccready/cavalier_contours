@@ -602,6 +602,116 @@ fn remove_redundant() {
         assert_fuzzy_eq!(result[3], polyline[3]);
         assert_fuzzy_eq!(result[4], polyline[4]);
     }
+
+    {
+        // circle defined by 4 vertexes
+        let bulge = (PI / 8.0).tan();
+        let mut polyline = Polyline::new_closed();
+        polyline.add(-0.5, 0.0, bulge);
+        polyline.add(0.0, -0.5, bulge);
+        polyline.add(0.5, 0.0, bulge);
+        polyline.add(0.0, 0.5, bulge);
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(-0.5, 0.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(0.5, 0.0, 1.0));
+    }
+
+    {
+        // rounded rectangle collapsed into circle
+        let bulge = (PI / 8.0).tan();
+        let mut polyline = Polyline::new_closed();
+        polyline.add(-0.5, 0.0, bulge);
+        polyline.add(0.0, -0.5, 0.0);
+        polyline.add(0.0, -0.5, bulge);
+        polyline.add(0.5, 0.0, 0.0);
+        polyline.add(0.5, 0.0, bulge);
+        polyline.add(0.0, 0.5, 0.0);
+        polyline.add(0.0, 0.5, bulge);
+        polyline.add(-0.5, 0.0, 0.0);
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(-0.5, 0.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(0.5, 0.0, 1.0));
+    }
+
+    {
+        // rounded rectangle collapsed into circle shifted vertex positions
+        let bulge = (PI / 8.0).tan();
+        let mut polyline = Polyline::new_closed();
+        polyline.add(-0.5, 0.0, 0.0);
+        polyline.add(-0.5, 0.0, bulge);
+        polyline.add(0.0, -0.5, 0.0);
+        polyline.add(0.0, -0.5, bulge);
+        polyline.add(0.5, 0.0, 0.0);
+        polyline.add(0.5, 0.0, bulge);
+        polyline.add(0.0, 0.5, 0.0);
+        polyline.add(0.0, 0.5, bulge);
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(-0.5, 0.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(0.5, 0.0, 1.0));
+    }
+
+    {
+        // rounded rectangle collapsed into circle (but kept as open polyline)
+        let bulge = (PI / 8.0).tan();
+        let mut polyline = Polyline::new();
+        polyline.add(-0.5, 0.0, bulge);
+        polyline.add(0.0, -0.5, 0.0);
+        polyline.add(0.0, -0.5, bulge);
+        polyline.add(0.5, 0.0, 0.0);
+        polyline.add(0.5, 0.0, bulge);
+        polyline.add(0.0, 0.5, 0.0);
+        polyline.add(0.0, 0.5, bulge);
+        polyline.add(-0.5, 0.0, 0.0);
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 3);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(-0.5, 0.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(0.5, 0.0, 1.0));
+        assert_fuzzy_eq!(result[2], PlineVertex::new(-0.5, 0.0, 0.0));
+    }
+
+    {
+        // rounded rectangle collapsed into circle with many repeat vertex positions
+        let bulge = (PI / 8.0).tan();
+        let mut polyline = Polyline::new_closed();
+        polyline.add(-0.5, 0.0, 0.0);
+        polyline.add(-0.5, 0.0, 0.0);
+        polyline.add(-0.5, 0.0, 0.0);
+        polyline.add(-0.5, 0.0, bulge);
+        polyline.add(-0.5, 0.0, bulge);
+        polyline.add(-0.5, 0.0, bulge);
+        polyline.add(0.0, -0.5, 0.0);
+        polyline.add(0.0, -0.5, 0.0);
+        polyline.add(0.0, -0.5, 0.0);
+        polyline.add(0.0, -0.5, bulge);
+        polyline.add(0.5, 0.0, 0.0);
+        polyline.add(0.5, 0.0, bulge);
+        polyline.add(0.0, 0.5, 0.0);
+        polyline.add(0.0, 0.5, bulge);
+        polyline.add(0.0, 0.5, bulge);
+        polyline.add(0.0, 0.5, bulge);
+
+        let result = polyline.remove_redundant(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 2);
+        assert!(result.is_closed());
+        assert_fuzzy_eq!(result[0], PlineVertex::new(-0.5, 0.0, 1.0));
+        assert_fuzzy_eq!(result[1], PlineVertex::new(0.5, 0.0, 1.0));
+    }
 }
 
 #[test]

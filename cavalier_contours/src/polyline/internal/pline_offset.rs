@@ -15,7 +15,7 @@ use crate::{
 };
 use core::panic;
 use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Copy, Clone)]
 pub struct RawPlineOffsetSeg<T>
@@ -671,12 +671,9 @@ where
         return result;
     }
 
-    // using HashMap rather than BTreeMap for performance (as is used in
-    // dualSliceAtIntersectsForOffset) since all slices will stitch together to form closed
-    // loops so later when slices are stitched together the order that slices are visited
-    // does not matter
-    let mut intersects_lookup =
-        HashMap::<usize, Vec<Vector2<T>>>::with_capacity(2 * self_intrs.len());
+    // using BTreeMap as it is faster than HashMap in testing (note: sorted iteration order is not
+    // required)
+    let mut intersects_lookup = BTreeMap::<usize, Vec<Vector2<T>>>::new();
 
     for si in &self_intrs {
         intersects_lookup
