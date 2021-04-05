@@ -160,6 +160,28 @@ where
         }
     }
 
+    /// Returns the forward wrapping distance between two vertex indexes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// let mut polyline = Polyline::new_closed();
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// assert_eq!(polyline.forward_wrapping_dist(0, 2), 2);
+    /// assert_eq!(polyline.forward_wrapping_dist(3, 1), 2);
+    /// ```
+    pub fn forward_wrapping_dist(&self, start_index: usize, end_index: usize) -> usize {
+        if start_index <= end_index {
+            end_index - start_index
+        } else {
+            self.len() - start_index + end_index
+        }
+    }
+
     /// Add a vertex to the polyline by giving a [PlineVertex](crate::polyline::PlineVertex).
     pub fn add_vertex(&mut self, vertex: PlineVertex<T>) {
         self.vertex_data.push(vertex);

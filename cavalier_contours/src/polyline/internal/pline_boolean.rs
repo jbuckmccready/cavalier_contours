@@ -5,7 +5,7 @@ use crate::{
         PlineBooleanOptions, PlineVertex,
     },
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use super::pline_intersects::{
     find_intersects, sort_and_join_overlapping_intersects, OverlappingSlice,
@@ -104,9 +104,7 @@ pub fn slice_at_intersects<T, F>(
     T: Real,
     F: FnMut(Vector2<T>) -> bool,
 {
-    let mut intersects_lookup = HashMap::<usize, Vec<SlicePoint<T>>>::with_capacity(
-        boolean_info.intersects.len() + 2 * boolean_info.overlapping_slices.len(),
-    );
+    let mut intersects_lookup = BTreeMap::<usize, Vec<SlicePoint<T>>>::new();
 
     if use_second_index {
         // using start_index2 from intersects

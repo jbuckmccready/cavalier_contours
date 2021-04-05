@@ -414,7 +414,6 @@ fn pline_eval_parallel_offset() {
             pos_equal_eps: std::f64::NAN,
             slice_join_eps: std::f64::NAN,
             offset_dist_eps: std::f64::NAN,
-            min_length_loop_cull: std::f64::NAN,
             handle_self_intersects: 0,
         };
 
@@ -424,7 +423,6 @@ fn pline_eval_parallel_offset() {
             assert!(!options.pos_equal_eps.is_nan());
             assert!(!options.slice_join_eps.is_nan());
             assert!(!options.offset_dist_eps.is_nan());
-            assert!(!options.min_length_loop_cull.is_nan());
 
             let mut aabb_index = ptr::null();
 

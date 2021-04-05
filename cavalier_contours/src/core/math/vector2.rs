@@ -1,7 +1,7 @@
 use crate::core::traits::Real;
 use std::ops;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub struct Vector2<T = f64> {
     pub x: T,
     pub y: T,

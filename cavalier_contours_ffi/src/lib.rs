@@ -54,7 +54,6 @@ pub struct cavc_pline_parallel_offset_o {
     pub pos_equal_eps: f64,
     pub slice_join_eps: f64,
     pub offset_dist_eps: f64,
-    pub min_length_loop_cull: f64,
     pub handle_self_intersects: u8,
 }
 
@@ -70,7 +69,6 @@ impl cavc_pline_parallel_offset_o {
             pos_equal_eps: self.pos_equal_eps,
             slice_join_eps: self.slice_join_eps,
             offset_dist_eps: self.offset_dist_eps,
-            min_length_loop_cull: self.min_length_loop_cull,
             handle_self_intersects: self.handle_self_intersects != 0,
         }
     }
@@ -84,7 +82,6 @@ impl Default for cavc_pline_parallel_offset_o {
             pos_equal_eps: d.pos_equal_eps,
             slice_join_eps: d.slice_join_eps,
             offset_dist_eps: d.offset_dist_eps,
-            min_length_loop_cull: d.min_length_loop_cull,
             handle_self_intersects: if d.handle_self_intersects { 1 } else { 0 },
         }
     }

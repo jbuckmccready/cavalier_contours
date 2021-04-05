@@ -54,10 +54,6 @@ where
     /// Fuzzy comparison epsilon used when testing distance of slices to original polyline for
     /// validity.
     pub offset_dist_eps: T,
-    /// Any offset polyline loop with length less than this value is culled (determined invalid).
-    /// This can arise due to other epsilon values combined with the input given not catching very
-    /// small invalid offsets.
-    pub min_length_loop_cull: T,
 }
 
 impl<'a, T> PlineOffsetOptions<'a, T>
@@ -71,7 +67,6 @@ where
             pos_equal_eps: T::from(1e-5).unwrap(),
             slice_join_eps: T::from(1e-4).unwrap(),
             offset_dist_eps: T::from(1e-4).unwrap(),
-            min_length_loop_cull: T::from(1e-2).unwrap(),
         }
     }
 }

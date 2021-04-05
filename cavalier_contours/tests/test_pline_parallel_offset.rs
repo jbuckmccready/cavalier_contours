@@ -1,6 +1,6 @@
 mod test_utils;
 
-use cavalier_contours::polyline::Polyline;
+use cavalier_contours::polyline::{PlineOffsetOptions, Polyline};
 use test_utils::{
     create_property_set, property_sets_match, ModifiedPlineSet, ModifiedPlineSetVisitor,
     ModifiedPlineState, PlineProperties,
@@ -10,9 +10,14 @@ fn offset_into_properties_set(
     polyline: &Polyline<f64>,
     offset: f64,
     inverted: bool,
+    handle_self_intersects: bool,
 ) -> Vec<PlineProperties> {
     let offset = if inverted { -offset } else { offset };
-    create_property_set(&polyline.parallel_offset(offset), inverted)
+    let options = PlineOffsetOptions {
+        handle_self_intersects,
+        ..Default::default()
+    };
+    create_property_set(&polyline.parallel_offset_opt(offset, &options), inverted)
 }
 
 struct PlineOffsetTestVisitor<'a> {
@@ -26,12 +31,27 @@ impl<'a> ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'a> {
             &modified_pline,
             self.offset,
             pline_state.inverted_direction,
+            false,
         );
         assert!(
             property_sets_match(&offset_results, self.expected_properties_set),
             "property sets do not match, modified state: {:?}",
             pline_state
         );
+
+        if modified_pline.is_closed() {
+            let offset_results = offset_into_properties_set(
+                &modified_pline,
+                self.offset,
+                pline_state.inverted_direction,
+                true,
+            );
+            assert!(
+            property_sets_match(&offset_results, self.expected_properties_set),
+            "property sets do not match with handle_self_intersects set to true, modified state: {:?}",
+            pline_state
+        );
+        }
     }
 }
 
