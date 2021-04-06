@@ -27,12 +27,8 @@ impl<T> ProcessForBooleanResult<T>
 where
     T: Real,
 {
-    pub fn completely_overlapping(&self, pos_equal_eps: T) -> bool {
-        self.overlapping_slices.len() == 1
-            && self.overlapping_slices[0].polyline[0].pos().fuzzy_eq_eps(
-                self.overlapping_slices[0].polyline.last().unwrap().pos(),
-                pos_equal_eps,
-            )
+    pub fn completely_overlapping(&self) -> bool {
+        self.overlapping_slices.len() == 1 && self.overlapping_slices[0].is_loop
     }
 
     pub fn opposing_directions(&self) -> bool {
@@ -116,8 +112,8 @@ pub fn slice_at_intersects<T, F>(
         }
 
         for overlapping_slice in boolean_info.overlapping_slices.iter() {
-            let sp = overlapping_slice.polyline[0].pos();
-            let ep = overlapping_slice.polyline.last().unwrap().pos();
+            let sp = overlapping_slice.updated_start.pos();
+            let ep = overlapping_slice.end_point;
             let sp_idx = overlapping_slice.start_indexes.1;
             let ep_idx = overlapping_slice.end_indexes.1;
             intersects_lookup
@@ -139,8 +135,8 @@ pub fn slice_at_intersects<T, F>(
         }
 
         for overlapping_slice in boolean_info.overlapping_slices.iter() {
-            let sp = overlapping_slice.polyline[0].pos();
-            let ep = overlapping_slice.polyline.last().unwrap().pos();
+            let sp = overlapping_slice.updated_start.pos();
+            let ep = overlapping_slice.end_point;
             let sp_idx = overlapping_slice.start_indexes.0;
             let ep_idx = overlapping_slice.end_indexes.0;
             // overlapping slices are always constructed following the direction of pline2 so if
@@ -331,7 +327,7 @@ where
     slices_remaining.reserve(2 * boolean_info.overlapping_slices.len());
     // add pline1 overlapping slices
     for overlapping_slice in boolean_info.overlapping_slices.iter() {
-        let mut s = overlapping_slice.polyline.clone();
+        let mut s = overlapping_slice.to_polyline(pline2, pos_equal_eps);
         if overlapping_slice.opposing_directions {
             // invert pline1 overlapping slices to match original pline1 orientation
             s.invert_direction();
@@ -346,7 +342,7 @@ where
         boolean_info
             .overlapping_slices
             .iter()
-            .map(|s| s.polyline.clone()),
+            .map(|s| s.to_polyline(pline2, pos_equal_eps)),
     );
 
     if set_opposing_direction != boolean_info.opposing_directions() {
@@ -675,7 +671,7 @@ where
 
     match operation {
         BooleanOp::Or => {
-            if boolean_info.completely_overlapping(pos_equal_eps) {
+            if boolean_info.completely_overlapping() {
                 // pline1 completely overlapping pline2 just return pline2
                 pos_plines.push(pline2.clone());
             } else if !boolean_info.any_intersects() {
@@ -724,7 +720,7 @@ where
             }
         }
         BooleanOp::And => {
-            if boolean_info.completely_overlapping(pos_equal_eps) {
+            if boolean_info.completely_overlapping() {
                 // pline1 completely overlapping pline2 just return pline2
                 pos_plines.push(pline2.clone());
             } else if !boolean_info.any_intersects() {
@@ -759,7 +755,7 @@ where
             }
         }
         BooleanOp::Not => {
-            if boolean_info.completely_overlapping(pos_equal_eps) {
+            if boolean_info.completely_overlapping() {
                 // completely overlapping, nothing is left
             } else if !boolean_info.any_intersects() {
                 if is_pline1_in_pline2() {
@@ -796,7 +792,7 @@ where
             }
         }
         BooleanOp::Xor => {
-            if boolean_info.completely_overlapping(pos_equal_eps) {
+            if boolean_info.completely_overlapping() {
                 // completely overlapping, nothing is left
             } else if !boolean_info.any_intersects() {
                 if is_pline1_in_pline2() {

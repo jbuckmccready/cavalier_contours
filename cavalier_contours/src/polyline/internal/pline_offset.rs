@@ -10,7 +10,8 @@ use crate::{
     polyline::{
         internal::pline_intersects::{all_self_intersects_as_basic, find_intersects},
         pline_seg_intr, seg_arc_radius_and_center, seg_closest_point, seg_fast_approx_bounding_box,
-        seg_midpoint, seg_split_at_point, PlineOffsetOptions, PlineSegIntr, PlineVertex, Polyline,
+        seg_midpoint, seg_split_at_point, PlineOffsetOptions, PlineSegIntr, PlineSlice,
+        PlineVertex, Polyline,
     },
 };
 use core::panic;
@@ -620,117 +621,13 @@ where
     point_valid
 }
 
-/// Holds information regarding an offset slice (an open polyline sub segment of a source polyline).
-#[derive(Debug, Clone)]
-pub struct PlineOffsetSlice<T> {
-    /// Source polyline start segment index.
-    pub start_index: usize,
-    /// Source polyline end segment index.
-    pub end_index: usize,
-    /// First vertex of the slice (positioned somewhere along the `start_index` segment with bulge
-    /// and position updated).
-    pub updated_start: PlineVertex<T>,
-    /// Second to last vertex of the slice (positioned somewhere along the `end_index` segment with
-    /// bulge and position updated).
-    pub updated_end: PlineVertex<T>,
-    /// Final end point of the slice.
-    pub end_point: Vector2<T>,
-}
-
-impl<T> PlineOffsetSlice<T>
-where
-    T: Real,
-{
-    pub fn new(
-        start_index: usize,
-        end_index: usize,
-        updated_start: PlineVertex<T>,
-        updated_end: PlineVertex<T>,
-        end_point: Vector2<T>,
-    ) -> Self {
-        Self {
-            start_index,
-            end_index,
-            updated_start,
-            updated_end,
-            end_point,
-        }
-    }
-
-    /// Helper private method used to remove collapsed/singularity slices.
-    fn is_valid(&self, pos_equal_eps: T) -> bool {
-        !(self.start_index == self.end_index
-            && self
-                .updated_start
-                .pos()
-                .fuzzy_eq_eps(self.end_point, pos_equal_eps))
-    }
-
-    /// Vertex count required to build the slice into a polyline.
-    pub fn vertex_count(&self, source: &Polyline<T>) -> usize {
-        let index_dist = source.forward_wrapping_dist(self.start_index, self.end_index);
-        index_dist + 2
-    }
-
-    /// Construct an open polyline that represents this slice (source reference required for vertex
-    /// data).
-    pub fn to_polyline(&self, source: &Polyline<T>, pos_equal_eps: T) -> Polyline<T> {
-        let index_dist = source.forward_wrapping_dist(self.start_index, self.end_index);
-        let vertex_count = index_dist + 2;
-        let mut result = Polyline::with_capacity(vertex_count, false);
-
-        let mut visitor = |v| {
-            result.add_vertex(v);
-            true
-        };
-        self.visit_vertexes(source, pos_equal_eps, &mut visitor);
-        result
-    }
-
-    /// Visit all vertexes in this slice (source reference required for vertex data).
-    pub fn visit_vertexes<F>(&self, source: &Polyline<T>, pos_equal_eps: T, visitor: &mut F)
-    where
-        F: FnMut(PlineVertex<T>) -> bool,
-    {
-        let index_dist = source.forward_wrapping_dist(self.start_index, self.end_index);
-
-        if index_dist == 0 {
-            visitor(self.updated_start);
-            visitor(PlineVertex::from_vector2(self.end_point, T::zero()));
-        } else {
-            visitor(self.updated_start);
-
-            let iter = source
-                .iter()
-                .cycle()
-                .skip(self.start_index + 1)
-                .take(index_dist - 1);
-
-            for v in iter {
-                visitor(*v);
-            }
-
-            if self
-                .updated_end
-                .pos()
-                .fuzzy_eq_eps(self.end_point, pos_equal_eps)
-            {
-                visitor(PlineVertex::from_vector2(self.end_point, T::zero()));
-            } else {
-                visitor(self.updated_end);
-                visitor(PlineVertex::from_vector2(self.end_point, T::zero()));
-            }
-        }
-    }
-}
-
 pub fn slices_from_raw_offset<T>(
     original_polyline: &Polyline<T>,
     raw_offset_polyline: &Polyline<T>,
     orig_polyline_index: &StaticAABB2DIndex<T>,
     offset: T,
     options: &PlineOffsetOptions<T>,
-) -> Vec<PlineOffsetSlice<T>>
+) -> Vec<PlineSlice<T>>
 where
     T: Real,
 {
@@ -762,7 +659,7 @@ where
         }
 
         // is valid
-        result.push(PlineOffsetSlice::new(
+        result.push(PlineSlice::new(
             0,
             raw_offset_polyline.len() - 1,
             raw_offset_polyline[0],
@@ -882,7 +779,7 @@ where
                 }
 
                 // passed all tests, add the slice
-                result.push(PlineOffsetSlice::new(
+                result.push(PlineSlice::new(
                     start_index,
                     start_index,
                     split.updated_start,
@@ -900,7 +797,7 @@ where
         }
 
         let split = seg_split_at_point(start_vertex, end_vertex, slice_start_point, pos_equal_eps);
-        let mut slice = PlineOffsetSlice::new(
+        let mut slice = PlineSlice::new(
             start_index,
             start_index,
             split.split_vertex,
@@ -973,7 +870,7 @@ where
             index = raw_offset_polyline.next_wrapping_index(index);
         }
 
-        if is_valid_pline && slice.is_valid(pos_equal_eps) {
+        if is_valid_pline && !slice.is_collapsed(pos_equal_eps) {
             result.push(slice);
         }
     }
@@ -1068,7 +965,7 @@ pub fn slices_from_dual_raw_offsets<T>(
     orig_polyline_index: &StaticAABB2DIndex<T>,
     offset: T,
     options: &PlineOffsetOptions<T>,
-) -> Vec<PlineOffsetSlice<T>>
+) -> Vec<PlineSlice<T>>
 where
     T: Real,
 {
@@ -1158,7 +1055,7 @@ where
         // is valid
         let ln = raw_offset_polyline.len();
         if original_polyline.is_closed() {
-            result.push(PlineOffsetSlice::new(
+            result.push(PlineSlice::new(
                 0,
                 ln - 1,
                 raw_offset_polyline[0],
@@ -1166,7 +1063,7 @@ where
                 raw_offset_polyline[0].pos(),
             ));
         } else {
-            result.push(PlineOffsetSlice::new(
+            result.push(PlineSlice::new(
                 0,
                 ln - 1,
                 raw_offset_polyline[0],
@@ -1226,7 +1123,7 @@ where
     if !original_polyline.is_closed() {
         // build first slice that ends at the first intersect since we will not wrap back to
         // capture it as in the case of a closed polyline
-        let mut first_slice = PlineOffsetSlice::new(
+        let mut first_slice = PlineSlice::new(
             0,
             0,
             raw_offset_polyline[0],
@@ -1355,7 +1252,7 @@ where
                 }
 
                 // passed all tests, add the slice
-                result.push(PlineOffsetSlice::new(
+                result.push(PlineSlice::new(
                     start_index,
                     start_index,
                     split.updated_start,
@@ -1373,7 +1270,7 @@ where
         }
 
         let split = seg_split_at_point(start_vertex, end_vertex, slice_start_point, pos_equal_eps);
-        let mut slice = PlineOffsetSlice::new(
+        let mut slice = PlineSlice::new(
             start_index,
             start_index,
             split.split_vertex,
@@ -1456,7 +1353,7 @@ where
             }
         }
 
-        if is_valid_pline && slice.is_valid(pos_equal_eps) {
+        if is_valid_pline && !slice.is_collapsed(pos_equal_eps) {
             result.push(slice);
         }
     }
@@ -1466,7 +1363,7 @@ where
 
 pub fn stitch_slices_together<T>(
     raw_offset_pline: &Polyline<T>,
-    slices: &[PlineOffsetSlice<T>],
+    slices: &[PlineSlice<T>],
     is_closed: bool,
     orig_max_index: usize,
     options: &PlineOffsetOptions<T>,
@@ -1538,7 +1435,7 @@ where
 
             // append current slice to current pline
             let current_slice = &slices[current_index];
-            current_pline.reserve(current_slice.vertex_count(raw_offset_pline));
+            current_pline.reserve(current_slice.max_vertex_count(raw_offset_pline));
             let mut visitor = |v| {
                 current_pline.add_vertex(v);
                 true

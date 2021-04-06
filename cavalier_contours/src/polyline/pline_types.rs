@@ -1,6 +1,6 @@
 //! Supporting public types used in [Polyline] methods.
 
-use super::Polyline;
+use super::{PlineVertex, Polyline};
 use crate::core::{math::Vector2, traits::Real};
 use static_aabb2d_index::StaticAABB2DIndex;
 
@@ -290,5 +290,125 @@ impl<T> PlineIntersectsCollection<T> {
     }
     pub fn new_empty() -> Self {
         Self::new(Vec::new(), Vec::new())
+    }
+}
+
+/// Holds information regarding a slice from some source polyline.
+#[derive(Debug, Clone)]
+pub struct PlineSlice<T> {
+    /// Source polyline start segment index.
+    pub start_index: usize,
+    /// Source polyline end segment index.
+    pub end_index: usize,
+    /// First vertex of the slice (positioned somewhere along the `start_index` segment with bulge
+    /// and position updated).
+    pub updated_start: PlineVertex<T>,
+    /// Second to last vertex of the slice (positioned somewhere along the `end_index` segment with
+    /// bulge and position updated).
+    pub updated_end: PlineVertex<T>,
+    /// Final end point of the slice.
+    pub end_point: Vector2<T>,
+}
+
+impl<T> PlineSlice<T>
+where
+    T: Real,
+{
+    pub fn new(
+        start_index: usize,
+        end_index: usize,
+        updated_start: PlineVertex<T>,
+        updated_end: PlineVertex<T>,
+        end_point: Vector2<T>,
+    ) -> Self {
+        Self {
+            start_index,
+            end_index,
+            updated_start,
+            updated_end,
+            end_point,
+        }
+    }
+
+    /// Helper method used to check if collapsed/singularity slice.
+    pub fn is_collapsed(&self, pos_equal_eps: T) -> bool {
+        self.start_index == self.end_index
+            && self
+                .updated_start
+                .pos()
+                .fuzzy_eq_eps(self.end_point, pos_equal_eps)
+    }
+
+    /// Total index distance traversed by the slice (forward wrapping distance from start_index to
+    /// end_index based on source polyline).
+    pub fn get_index_dist(&self, source: &Polyline<T>) -> usize {
+        source.forward_wrapping_dist(self.start_index, self.end_index)
+    }
+
+    /// Sufficient vertex count required to build the slice into a polyline (may be one more than
+    /// actually in the slice).
+    pub fn max_vertex_count(&self, source: &Polyline<T>) -> usize {
+        self.get_index_dist(source) + 2
+    }
+
+    /// Construct an open polyline that represents this slice (source reference required for vertex
+    /// data).
+    pub fn to_polyline(&self, source: &Polyline<T>, pos_equal_eps: T) -> Polyline<T> {
+        let vertex_count = self.max_vertex_count(source);
+        let mut result = Polyline::with_capacity(vertex_count, false);
+
+        let mut visitor = |v| {
+            result.add_vertex(v);
+            true
+        };
+        self.visit_vertexes(source, pos_equal_eps, &mut visitor);
+        result
+    }
+
+    /// Visit all vertexes in this slice (source reference required for vertex data) until the slice
+    /// has been fully traversed or the visitor returns false.
+    pub fn visit_vertexes<F>(&self, source: &Polyline<T>, pos_equal_eps: T, visitor: &mut F)
+    where
+        F: FnMut(PlineVertex<T>) -> bool,
+    {
+        let index_dist = self.get_index_dist(source);
+
+        if index_dist == 0 {
+            if !visitor(self.updated_start) {
+                return;
+            }
+            if !visitor(PlineVertex::from_vector2(self.end_point, T::zero())) {
+                return;
+            }
+        } else {
+            if !visitor(self.updated_start) {
+                return;
+            }
+
+            let iter = source
+                .iter()
+                .cycle()
+                .skip(self.start_index + 1)
+                .take(index_dist - 1);
+
+            for v in iter {
+                if !visitor(*v) {
+                    return;
+                }
+            }
+
+            if self
+                .updated_end
+                .pos()
+                .fuzzy_eq_eps(self.end_point, pos_equal_eps)
+            {
+                visitor(PlineVertex::from_vector2(self.end_point, T::zero()));
+            } else {
+                if !visitor(self.updated_end) {
+                    return;
+                }
+                visitor(PlineVertex::from_vector2(self.end_point, T::zero()));
+            }
+        }
     }
 }

@@ -47,6 +47,12 @@ where
         PlineVertex::new(vector2.x, vector2.y, bulge)
     }
 
+    /// Create a copy of the vertex with new bulge value but same `x` and `y` values.
+    #[inline]
+    pub fn with_bulge(&self, bulge: T) -> Self {
+        PlineVertex::new(self.x, self.y, bulge)
+    }
+
     /// Return the position as a 2D vector.
     #[inline]
     pub fn pos(&self) -> Vector2<T> {
