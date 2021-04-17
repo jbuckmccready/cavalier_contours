@@ -498,6 +498,19 @@ where
         } else {
             self.len() - 2
         };
+
+        enum RemoveRedundantCase<U>
+        where
+            U: Real,
+        {
+            /// Include the vertex in the result.
+            IncludeVertex,
+            /// Discard the current vertex.
+            DiscardVertex,
+            /// Discard the current vertex and update the previous vertex bulge with the value computed.
+            UpdateV1BulgeForArc(U),
+        }
+
         // loop through processing/considering to discard the middle vertex v2
         for (i, &v3) in self.iter().cycle().enumerate().skip(i).take(iter_count) {
             use RemoveRedundantCase::*;
@@ -1441,18 +1454,6 @@ where
 }
 
 /// Internal type used by [Polyline::remove_redundant].
-enum RemoveRedundantCase<T>
-where
-    T: Real,
-{
-    /// Include the vertex in the result.
-    IncludeVertex,
-    /// Discard the current vertex.
-    DiscardVertex,
-    /// Discard the current vertex and update the previous vertex bulge with the value computed.
-    UpdateV1BulgeForArc(T),
-}
-
 impl<T> Index<usize> for Polyline<T> {
     type Output = PlineVertex<T>;
 
