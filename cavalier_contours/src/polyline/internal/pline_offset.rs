@@ -24,10 +24,10 @@ pub struct RawPlineOffsetSeg<T>
 where
     T: Real,
 {
-    v1: PlineVertex<T>,
-    v2: PlineVertex<T>,
-    orig_v2_pos: Vector2<T>,
-    collapsed_arc: bool,
+    pub v1: PlineVertex<T>,
+    pub v2: PlineVertex<T>,
+    pub orig_v2_pos: Vector2<T>,
+    pub collapsed_arc: bool,
 }
 
 /// Create all the raw parallel offset segments of a polyline using the `offset` value given.
@@ -141,16 +141,25 @@ fn connect_using_arc<T>(
     result.add_or_replace(ep.x, ep.y, s2.v1.bulge, pos_equal_eps);
 }
 
+/// Parameters passed to segment join functions used to form raw offset polyline.
+struct JoinParams<T> {
+    /// If true then connection arcs should be counter clockwise, otherwise clockwise.
+    connection_arcs_ccw: bool,
+    /// Epsilon to use for testing if positions are fuzzy equal.
+    pos_equal_eps: T,
+}
+
 /// Join two adjacent raw offset segments where both segments are lines.
 fn line_line_join<T>(
     s1: &RawPlineOffsetSeg<T>,
     s2: &RawPlineOffsetSeg<T>,
-    connection_arcs_ccw: bool,
-    pos_equal_eps: T,
+    params: &JoinParams<T>,
     result: &mut Polyline<T>,
 ) where
     T: Real,
 {
+    let connection_arcs_ccw = params.connection_arcs_ccw;
+    let pos_equal_eps = params.pos_equal_eps;
     let v1 = &s1.v1;
     let v2 = &s1.v2;
     let u1 = &s2.v1;
@@ -161,7 +170,7 @@ fn line_line_join<T>(
         "both segments should be lines"
     );
 
-    if s1.collapsed_arc && s2.collapsed_arc {
+    if s1.collapsed_arc || s2.collapsed_arc {
         // connecting to/from collapsed arc, always connect using arc
         connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
     } else {
@@ -195,12 +204,13 @@ fn line_line_join<T>(
 fn line_arc_join<T>(
     s1: &RawPlineOffsetSeg<T>,
     s2: &RawPlineOffsetSeg<T>,
-    connection_arcs_ccw: bool,
-    pos_equal_eps: T,
+    params: &JoinParams<T>,
     result: &mut Polyline<T>,
 ) where
     T: Real,
 {
+    let connection_arcs_ccw = params.connection_arcs_ccw;
+    let pos_equal_eps = params.pos_equal_eps;
     let v1 = &s1.v1;
     let v2 = &s1.v2;
     let u1 = &s2.v1;
@@ -280,12 +290,13 @@ fn line_arc_join<T>(
 fn arc_line_join<T>(
     s1: &RawPlineOffsetSeg<T>,
     s2: &RawPlineOffsetSeg<T>,
-    connection_arcs_ccw: bool,
-    pos_equal_eps: T,
+    params: &JoinParams<T>,
     result: &mut Polyline<T>,
 ) where
     T: Real,
 {
+    let connection_arcs_ccw = params.connection_arcs_ccw;
+    let pos_equal_eps = params.pos_equal_eps;
     let v1 = &s1.v1;
     let v2 = &s1.v2;
     let u1 = &s2.v1;
@@ -359,12 +370,13 @@ fn arc_line_join<T>(
 fn arc_arc_join<T>(
     s1: &RawPlineOffsetSeg<T>,
     s2: &RawPlineOffsetSeg<T>,
-    connection_arcs_ccw: bool,
-    pos_equal_eps: T,
+    params: &JoinParams<T>,
     result: &mut Polyline<T>,
 ) where
     T: Real,
 {
+    let connection_arcs_ccw = params.connection_arcs_ccw;
+    let pos_equal_eps = params.pos_equal_eps;
     let v1 = &s1.v1;
     let v2 = &s1.v2;
     let u1 = &s2.v1;
@@ -378,23 +390,15 @@ fn arc_arc_join<T>(
     let (arc1_radius, arc1_center) = seg_arc_radius_and_center(*v1, *v2);
     let (arc2_radius, arc2_center) = seg_arc_radius_and_center(*u1, *u2);
 
-    let mut process_intersect = |intersect: Vector2<T>| {
-        let true_arc_intr1 = point_within_arc_sweep(
-            arc1_center,
-            v1.pos(),
-            v2.pos(),
-            v1.bulge_is_neg(),
-            intersect,
-        );
-        let true_arc_intr2 = point_within_arc_sweep(
-            arc2_center,
-            u1.pos(),
-            u2.pos(),
-            u1.bulge_is_neg(),
-            intersect,
-        );
+    let both_arcs_sweep_point = |point: Vector2<T>| {
+        point_within_arc_sweep(arc1_center, v1.pos(), v2.pos(), v1.bulge_is_neg(), point)
+            && point_within_arc_sweep(arc2_center, u1.pos(), u2.pos(), u1.bulge_is_neg(), point)
+    };
 
-        if true_arc_intr1 && true_arc_intr2 {
+    let mut process_intersect = |intersect: Vector2<T>, true_intersect: bool| {
+        if !true_intersect {
+            connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
+        } else {
             let prev_vertex = result.last().unwrap();
 
             if !prev_vertex.bulge_is_zero()
@@ -431,8 +435,6 @@ fn arc_arc_join<T>(
 
             return;
         }
-
-        connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
     };
 
     match circle_circle_intr(arc1_radius, arc1_center, arc2_radius, arc2_center) {
@@ -440,16 +442,26 @@ fn arc_arc_join<T>(
             connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
         }
         CircleCircleIntr::TangentIntersect { point } => {
-            process_intersect(point);
+            process_intersect(point, both_arcs_sweep_point(point));
         }
         CircleCircleIntr::TwoIntersects { point1, point2 } => {
             // always use intersect closest to original point
             let dist1 = dist_squared(point1, s1.orig_v2_pos);
             let dist2 = dist_squared(point2, s1.orig_v2_pos);
-            if dist1 < dist2 {
-                process_intersect(point1);
+            if dist1.fuzzy_eq(dist2) {
+                // catch case where both points are equal distance (occurs if input arcs connect at
+                // tangent point), prioritize true intersect (eliminates intersect in raw offset
+                // polyline that must be processed later and prevents false creation of segments if
+                // using dual offset clipping)
+                if both_arcs_sweep_point(point1) {
+                    process_intersect(point1, true);
+                } else {
+                    process_intersect(point2, both_arcs_sweep_point(point2));
+                }
+            } else if dist1 < dist2 {
+                process_intersect(point1, both_arcs_sweep_point(point1));
             } else {
-                process_intersect(point2);
+                process_intersect(point2, both_arcs_sweep_point(point2));
             }
         }
         CircleCircleIntr::Overlapping => {
@@ -482,16 +494,20 @@ where
     }
 
     let connection_arcs_ccw = offset < T::zero();
+    let join_params = JoinParams {
+        connection_arcs_ccw,
+        pos_equal_eps,
+    };
 
     let join_seg_pair =
         |s1: &RawPlineOffsetSeg<T>, s2: &RawPlineOffsetSeg<T>, result: &mut Polyline<T>| {
             let s1_is_line = s1.v1.bulge_is_zero();
             let s2_is_line = s2.v1.bulge_is_zero();
             match (s1_is_line, s2_is_line) {
-                (true, true) => line_line_join(s1, s2, connection_arcs_ccw, pos_equal_eps, result),
-                (true, false) => line_arc_join(s1, s2, connection_arcs_ccw, pos_equal_eps, result),
-                (false, true) => arc_line_join(s1, s2, connection_arcs_ccw, pos_equal_eps, result),
-                (false, false) => arc_arc_join(s1, s2, connection_arcs_ccw, pos_equal_eps, result),
+                (true, true) => line_line_join(s1, s2, &join_params, result),
+                (true, false) => line_arc_join(s1, s2, &join_params, result),
+                (false, true) => arc_line_join(s1, s2, &join_params, result),
+                (false, false) => arc_arc_join(s1, s2, &join_params, result),
             }
         };
 
@@ -631,6 +647,11 @@ pub fn slices_from_raw_offset<T>(
 where
     T: Real,
 {
+    debug_assert!(
+        raw_offset_polyline.is_closed(),
+        "only supports closed polylines, use slices_from_dual_raw_offsets for open polylines"
+    );
+
     let mut result = Vec::new();
     if raw_offset_polyline.len() < 2 {
         return result;
@@ -806,6 +827,14 @@ where
         );
 
         let mut last_vertex = split.split_vertex;
+        if last_vertex
+            .pos()
+            .fuzzy_eq_eps(end_vertex.pos(), pos_equal_eps)
+        {
+            // collapsed slice, skip it
+            continue;
+        }
+
         let mut index = next_index;
         let mut is_valid_pline = true;
         let mut loop_count = 0;
@@ -813,7 +842,9 @@ where
         loop {
             if loop_count > max_loop_count {
                 // prevent infinite loop
-                panic!("loop_count exceeded max_loop_count while creating slices from raw offset");
+                unreachable!(
+                    "loop_count exceeded max_loop_count while creating slices from raw offset"
+                );
             }
             loop_count += 1;
 
@@ -948,7 +979,7 @@ fn visit_circle_intersects<T, F>(
                     if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, point1) {
                         visitor(start_index, point1);
                     }
-                    if is_valid_arc_intr(arc_center, v2.pos(), v2.pos(), v2.bulge, point2) {
+                    if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, point2) {
                         visitor(start_index, point2);
                     }
                 }
@@ -1032,10 +1063,7 @@ where
     for &intr in dual_intrs.basic_intersects.iter() {
         add_intr(intr.start_index1, intr.point);
     }
-    for &intr in dual_intrs.overlapping_intersects.iter() {
-        add_intr(intr.start_index1, intr.point1);
-        add_intr(intr.start_index1, intr.point2);
-    }
+    // Note not adding any overlapping intersects (they can only arise due to collapsing regions)
 
     let mut query_stack = Vec::with_capacity(8);
 
@@ -1065,7 +1093,7 @@ where
         } else {
             result.push(PlineSlice::new(
                 0,
-                ln - 1,
+                ln - 2,
                 raw_offset_polyline[0],
                 raw_offset_polyline[ln - 2],
                 raw_offset_polyline[ln - 1].pos(),
@@ -1130,21 +1158,22 @@ where
             raw_offset_polyline[0],
             raw_offset_polyline[0].pos(),
         );
-        let mut index = 0;
-        let mut loop_count = 0;
-        let max_loop_count = raw_offset_polyline.len();
-        loop {
-            if loop_count > max_loop_count {
-                // prevent infinite loop
-                panic!("loop_count exceeded max_loop_count while creating slices from raw offset");
-            }
-            loop_count += 1;
 
+        // Helper type to return result of attempting to clip to an intersect
+        enum ClipResult<U> {
+            // Intersect found and clipped to, returning updated vertex and end point
+            Valid(PlineVertex<U>, Vector2<U>),
+            // Intersect found and segment not valid
+            Invalid,
+            // No intersect found to clip to
+            None,
+        }
+
+        let clip_to_intersect = |index, stack: &mut Vec<usize>| -> ClipResult<T> {
             if let Some(intr_list) = intersects_lookup.get(&index) {
-                // intersect found, test segment will be valid before adding first slice
                 let intr_pos = intr_list[0];
-                if !point_valid_dist(intr_pos, &mut query_stack) {
-                    break;
+                if !point_valid_dist(intr_pos, stack) {
+                    return ClipResult::Invalid;
                 }
 
                 let split = seg_split_at_point(
@@ -1156,50 +1185,74 @@ where
 
                 let slice_end_vertex = PlineVertex::new(intr_pos.x, intr_pos.y, T::zero());
                 let midpoint = seg_midpoint(split.updated_start, slice_end_vertex);
-                if !point_valid_dist(midpoint, &mut query_stack) {
-                    break;
+                if !point_valid_dist(midpoint, stack) {
+                    return ClipResult::Invalid;
                 }
 
-                if intersects_original_pline(
-                    split.updated_start,
-                    slice_end_vertex,
-                    &mut query_stack,
-                ) {
-                    break;
+                if intersects_original_pline(split.updated_start, slice_end_vertex, stack) {
+                    return ClipResult::Invalid;
                 }
 
-                if first_slice.start_index == 0 && first_slice.end_index == 0 {
-                    first_slice.updated_start = split.updated_start;
-                    first_slice.updated_end = split.updated_start;
-                    first_slice.end_point = intr_pos;
-                } else {
-                    first_slice.updated_end = split.updated_start;
-                    first_slice.end_point = intr_pos;
-                }
-                result.push(first_slice);
-                break;
+                ClipResult::Valid(split.updated_start, intr_pos)
             } else {
-                //no intersect found, test segment will be valid before adding vertex
-                if !point_valid_dist(raw_offset_polyline[index].pos(), &mut query_stack) {
-                    break;
-                }
-
-                // index check (only test segment if we're not adding the first vertex)
-                if index != 0
-                    && intersects_original_pline(
-                        raw_offset_polyline[first_slice.end_index],
-                        raw_offset_polyline[index],
-                        &mut query_stack,
-                    )
-                {
-                    break;
-                }
-
-                first_slice.end_index =
-                    raw_offset_polyline.next_wrapping_index(first_slice.end_index);
+                ClipResult::None
             }
+        };
 
-            index += 1;
+        match clip_to_intersect(0, &mut query_stack) {
+            ClipResult::Valid(updated_vertex, end_point) => {
+                // intersect on first segment
+                first_slice.updated_start = updated_vertex;
+                first_slice.updated_end = updated_vertex;
+                first_slice.end_point = end_point;
+                result.push(first_slice);
+            }
+            ClipResult::Invalid => {
+                // intersect on first segment but invalid (do not add to result)
+            }
+            ClipResult::None => {
+                // no intersect on very first segment, loop until we find an intersect to clip to
+                let mut index = 1;
+                let mut loop_count = 0;
+                let max_loop_count = raw_offset_polyline.len();
+                loop {
+                    if loop_count > max_loop_count {
+                        // prevent infinite loop
+                        unreachable!(
+                        "loop_count exceeded max_loop_count while creating slices from raw offset"
+                    );
+                    }
+                    loop_count += 1;
+                    match clip_to_intersect(index, &mut query_stack) {
+                        ClipResult::Valid(updated_vertex, end_point) => {
+                            first_slice.updated_end = updated_vertex;
+                            first_slice.end_point = end_point;
+                            first_slice.end_index = index;
+                            result.push(first_slice);
+                            break;
+                        }
+                        ClipResult::Invalid => {
+                            break;
+                        }
+                        ClipResult::None => {
+                            if !point_valid_dist(raw_offset_polyline[index].pos(), &mut query_stack)
+                            {
+                                break;
+                            }
+
+                            if intersects_original_pline(
+                                raw_offset_polyline[index - 1],
+                                raw_offset_polyline[index],
+                                &mut query_stack,
+                            ) {
+                                break;
+                            }
+
+                            index += 1;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1279,6 +1332,14 @@ where
         );
 
         let mut last_vertex = split.split_vertex;
+        if last_vertex
+            .pos()
+            .fuzzy_eq_eps(end_vertex.pos(), pos_equal_eps)
+        {
+            // collapsed slice, skip it
+            continue;
+        }
+
         let mut index = next_index;
         let mut is_valid_pline = true;
         let mut loop_count = 0;
@@ -1286,7 +1347,9 @@ where
         loop {
             if loop_count > max_loop_count {
                 // prevent infinite loop
-                panic!("loop_count exceeded max_loop_count while creating slices from raw offset");
+                unreachable!(
+                    "loop_count exceeded max_loop_count while creating slices from raw offset"
+                );
             }
             loop_count += 1;
 
@@ -1346,6 +1409,9 @@ where
                     index = 0;
                 } else {
                     // open polyline, we're done
+                    slice.updated_end = raw_offset_polyline[index - 1];
+                    slice.end_index = index - 1;
+                    slice.end_point = raw_offset_polyline[index].pos();
                     break;
                 }
             } else {
@@ -1429,7 +1495,7 @@ where
         loop {
             if loop_count > max_loop_count {
                 // prevent infinite loop
-                panic!("loop_count exceeded max_loop_count while stitching slices together");
+                unreachable!("loop_count exceeded max_loop_count while stitching slices together");
             }
             loop_count += 1;
 
