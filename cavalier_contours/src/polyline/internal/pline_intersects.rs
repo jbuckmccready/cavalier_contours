@@ -113,6 +113,7 @@ pub fn visit_global_self_intersects<T, F>(
     polyline: &Polyline<T>,
     aabb_index: &StaticAABB2DIndex<T>,
     visitor: &mut F,
+    pos_equal_eps: T,
 ) where
     T: Real,
     F: FnMut(PlineIntersect<T>) -> bool,
@@ -160,8 +161,10 @@ pub fn visit_global_self_intersects<T, F>(
                 // skip intersect at end point of pline segment since it will be found again by the
                 // segment with it as its start point (unless the polyline is open and we're looking
                 // at the very end point of the polyline, then include the intersect)
-                (v2.pos().fuzzy_eq(intr) && (polyline.is_closed() || i != open_last_idx))
-                    || (u2.pos().fuzzy_eq(intr) && (polyline.is_closed() || hit_i != open_last_idx))
+                (v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
+                    && (polyline.is_closed() || i != open_last_idx))
+                    || (u2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
+                        && (polyline.is_closed() || hit_i != open_last_idx))
             };
 
             let mut continue_visiting = true;
@@ -241,7 +244,7 @@ where
     };
 
     visit_local_self_intersects(polyline, &mut visitor, pos_equal_eps);
-    visit_global_self_intersects(polyline, aabb_index, &mut visitor);
+    visit_global_self_intersects(polyline, aabb_index, &mut visitor, pos_equal_eps);
 
     intrs
 }
@@ -262,6 +265,7 @@ pub fn find_intersects<T>(
     pline1: &Polyline<T>,
     pline2: &Polyline<T>,
     pline1_aabb_index: &StaticAABB2DIndex<T>,
+    pos_equal_eps: T,
 ) -> PlineIntersectsCollection<T>
 where
     T: Real,
@@ -293,8 +297,10 @@ where
                 // skip intersect at end point of pline segment since it will be found again by the
                 // segment with it as its start point (unless the polyline is open and we're looking
                 // at the very end point of the polyline, then include the intersect)
-                (p1v2.pos().fuzzy_eq(intr) && (pline1.is_closed() || i1 != open1_last_idx))
-                    || (p2v2.pos().fuzzy_eq(intr) && (pline2.is_closed() || i2 != open2_last_idx))
+                (p1v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
+                    && (pline1.is_closed() || i1 != open1_last_idx))
+                    || (p2v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
+                        && (pline2.is_closed() || i2 != open2_last_idx))
             };
 
             match pline_seg_intr(p1v1, p1v2, p2v1, p2v2) {
@@ -324,10 +330,14 @@ where
                         .overlapping_intersects
                         .push(PlineOverlappingIntersect::new(i1, i2, point1, point2));
 
-                    if p1v2.pos().fuzzy_eq(point1) || p1v2.pos().fuzzy_eq(point2) {
+                    if p1v2.pos().fuzzy_eq_eps(point1, pos_equal_eps)
+                        || p1v2.pos().fuzzy_eq_eps(point2, pos_equal_eps)
+                    {
                         possible_duplicates1.insert(pline1.next_wrapping_index(i1));
                     }
-                    if p2v2.pos().fuzzy_eq(point1) || p2v2.pos().fuzzy_eq(point2) {
+                    if p2v2.pos().fuzzy_eq_eps(point1, pos_equal_eps)
+                        || p2v2.pos().fuzzy_eq_eps(point2, pos_equal_eps)
+                    {
                         possible_duplicates2.insert(pline2.next_wrapping_index(i2));
                     }
                 }
@@ -848,7 +858,7 @@ mod global_self_intersect_tests {
             true
         };
 
-        visit_global_self_intersects(polyline, aabb_index, &mut visitor);
+        visit_global_self_intersects(polyline, aabb_index, &mut visitor, T::from(1e-5).unwrap());
 
         PlineIntersectsCollection::new(intrs, overlapping_intrs)
     }
@@ -948,6 +958,7 @@ mod find_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         assert_eq!(intrs.basic_intersects.len(), 1);
@@ -971,6 +982,7 @@ mod find_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         assert_eq!(intrs.basic_intersects.len(), 1);
@@ -995,6 +1007,7 @@ mod find_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         assert_eq!(intrs.basic_intersects.len(), 1);
@@ -1019,6 +1032,7 @@ mod find_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         assert_eq!(intrs.basic_intersects.len(), 1);
@@ -1042,6 +1056,7 @@ mod find_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         assert_eq!(intrs.basic_intersects.len(), 0);
@@ -1079,6 +1094,7 @@ mod find_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         assert_eq!(intrs.basic_intersects.len(), 0);
@@ -1116,6 +1132,7 @@ mod find_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         assert_eq!(intrs.basic_intersects.len(), 0);
@@ -1159,6 +1176,7 @@ mod sort_and_join_overlapping_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         let slices = sort_and_join_overlapping_intersects(
@@ -1194,6 +1212,7 @@ mod sort_and_join_overlapping_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         let slices = sort_and_join_overlapping_intersects(
@@ -1229,6 +1248,7 @@ mod sort_and_join_overlapping_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         let slices = sort_and_join_overlapping_intersects(
@@ -1264,6 +1284,7 @@ mod sort_and_join_overlapping_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         let slices = sort_and_join_overlapping_intersects(
@@ -1309,6 +1330,7 @@ mod sort_and_join_overlapping_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         let slices = sort_and_join_overlapping_intersects(
@@ -1356,6 +1378,7 @@ mod sort_and_join_overlapping_intersects_tests {
             &pline1,
             &pline2,
             &pline1.create_approx_aabb_index().unwrap(),
+            1e-5,
         );
 
         let slices = sort_and_join_overlapping_intersects(

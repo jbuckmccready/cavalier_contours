@@ -49,7 +49,7 @@ pub fn process_for_boolean<T>(
 where
     T: Real,
 {
-    let mut intrs = find_intersects(pline1, pline2, pline1_aabb_index);
+    let mut intrs = find_intersects(pline1, pline2, pline1_aabb_index, pos_equal_eps);
     let overlapping_slices = sort_and_join_overlapping_intersects(
         &mut intrs.overlapping_intersects,
         pline1,

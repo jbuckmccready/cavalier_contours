@@ -1049,7 +1049,7 @@ where
             visit_local_self_intersects(self, visitor, options.pos_equal_eps);
         }
 
-        visit_global_self_intersects(self, index, visitor);
+        visit_global_self_intersects(self, index, visitor, options.pos_equal_eps);
     }
 
     /// Compute the closed signed area of the polyline.

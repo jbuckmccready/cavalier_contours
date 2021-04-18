@@ -1017,6 +1017,7 @@ where
         raw_offset_polyline,
         dual_raw_offset_polyline,
         &raw_offset_index,
+        options.pos_equal_eps,
     );
 
     // using BTreeMap rather than  HashMap since we want to construct the slices in vertex index
