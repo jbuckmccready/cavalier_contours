@@ -162,6 +162,8 @@ where
 
     /// Returns the forward wrapping distance between two vertex indexes.
     ///
+    /// Assumes `start_index` is valid, debug asserts `start_index < self.len()`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -171,14 +173,58 @@ where
     /// polyline.add(0.0, 0.0, 0.0);
     /// polyline.add(0.0, 0.0, 0.0);
     /// polyline.add(0.0, 0.0, 0.0);
-    /// assert_eq!(polyline.forward_wrapping_dist(0, 2), 2);
-    /// assert_eq!(polyline.forward_wrapping_dist(3, 1), 2);
+    /// assert_eq!(polyline.fwd_wrapping_dist(0, 2), 2);
+    /// assert_eq!(polyline.fwd_wrapping_dist(3, 1), 2);
     /// ```
-    pub fn forward_wrapping_dist(&self, start_index: usize, end_index: usize) -> usize {
+    pub fn fwd_wrapping_dist(&self, start_index: usize, end_index: usize) -> usize {
+        let ln = self.len();
+
+        debug_assert!(
+            start_index < ln,
+            "start_index is out of polyline range bounds"
+        );
+
         if start_index <= end_index {
             end_index - start_index
         } else {
-            self.len() - start_index + end_index
+            ln - start_index + end_index
+        }
+    }
+
+    /// Returns the vertex index after applying `offset` to `start_index` in a wrapping manner.
+    ///
+    /// Assumes `start_index` is valid, debug asserts `start_index < self.len()`.
+    /// Assumes `offset` does not wrap multiple times, debug asserts `offset <= self.len()`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// let mut polyline = Polyline::new_closed();
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// assert_eq!(polyline.fwd_wrapping_index(0, 2), 2);
+    /// assert_eq!(polyline.fwd_wrapping_index(1, 2), 3);
+    /// assert_eq!(polyline.fwd_wrapping_index(1, 3), 0);
+    /// assert_eq!(polyline.fwd_wrapping_index(2, 3), 1);
+    /// ```
+    pub fn fwd_wrapping_index(&self, start_index: usize, offset: usize) -> usize {
+        let ln = self.len();
+
+        debug_assert!(
+            start_index < ln,
+            "start_index is out of polyline range bounds"
+        );
+
+        debug_assert!(offset <= ln, "offset wraps multiple times");
+
+        let sum = start_index + offset;
+        if sum < ln {
+            sum
+        } else {
+            sum - ln
         }
     }
 
@@ -354,6 +400,7 @@ where
             let is_repeat = v.pos().fuzzy_eq_eps(prev_pos, pos_equal_eps);
 
             if is_repeat {
+                // repeat position just update bulge (remove vertex by not adding it to result)
                 result
                     .get_or_insert_with(|| {
                         Polyline::from_iter(self.iter().take(i).copied(), self.is_closed)
@@ -361,14 +408,16 @@ where
                     .last_mut()
                     .unwrap()
                     .bulge = v.bulge;
-            } else if let Some(ref mut r) = result {
-                // not repeat position and result is initialized
-                r.add_vertex(v);
-            }
-            // else not repeat position and result is not initialized, do nothing
+            } else {
+                if let Some(ref mut r) = result {
+                    // not repeat position and result is initialized
+                    r.add_vertex(v);
+                }
+                // else not repeat position and result is not initialized, do nothing
 
-            // update previous position for next iteration
-            prev_pos = v.pos();
+                // update previous position for next iteration
+                prev_pos = v.pos();
+            }
         }
 
         // check if closed and last repeats position on first
@@ -858,12 +907,12 @@ where
     }
 
     /// Iterate through all the vertexes in the polyline.
-    pub fn iter(&self) -> impl Iterator<Item = &PlineVertex<T>> + Clone {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &PlineVertex<T>> + Clone {
         self.vertex_data.iter()
     }
 
     /// Iterate through all the vertexes in the polyline as mutable references.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut PlineVertex<T>> {
+    pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut PlineVertex<T>> {
         self.vertex_data.iter_mut()
     }
 
@@ -949,6 +998,8 @@ where
 
     /// Perform a boolean `operation` between this polyline and another using default options.
     ///
+    /// See [Polyline::boolean_opt] for more information.
+    ///
     /// # Examples
     /// ```
     /// # use cavalier_contours::core::traits::*;
@@ -967,14 +1018,17 @@ where
     /// // circle
     /// assert_eq!(results.pos_plines.len(), 1);
     /// assert_eq!(results.neg_plines.len(), 1);
-    /// assert!(results.pos_plines[0].area().fuzzy_eq(rectangle.area()));
-    /// assert!(results.neg_plines[0].area().fuzzy_eq(circle.area()));
+    /// assert!(results.pos_plines[0].pline.area().fuzzy_eq(rectangle.area()));
+    /// assert!(results.neg_plines[0].pline.area().fuzzy_eq(circle.area()));
     /// ```
     pub fn boolean(&self, other: &Polyline<T>, operation: BooleanOp) -> BooleanResult<T> {
         self.boolean_opt(other, operation, &Default::default())
     }
 
     /// Perform a boolean `operation` between this polyline and another with options provided.
+    ///
+    /// Returns the boolean result polylines and their associated slices that were stitched together
+    /// end to end to form them.
     ///
     /// # Examples
     /// ```
@@ -1000,8 +1054,8 @@ where
     /// // circle
     /// assert_eq!(results.pos_plines.len(), 1);
     /// assert_eq!(results.neg_plines.len(), 1);
-    /// assert!(results.pos_plines[0].area().fuzzy_eq(rectangle.area()));
-    /// assert!(results.neg_plines[0].area().fuzzy_eq(circle.area()));
+    /// assert!(results.pos_plines[0].pline.area().fuzzy_eq(rectangle.area()));
+    /// assert!(results.neg_plines[0].pline.area().fuzzy_eq(circle.area()));
     /// ```
     pub fn boolean_opt(
         &self,

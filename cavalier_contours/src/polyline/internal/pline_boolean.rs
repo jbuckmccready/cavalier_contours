@@ -1,8 +1,9 @@
 use crate::{
     core::math::dist_squared,
     polyline::{
-        seg_midpoint, seg_split_at_point, BooleanOp, BooleanResult, PlineBasicIntersect,
-        PlineBooleanOptions, PlineVertex,
+        seg_midpoint, seg_split_at_point, BooleanOp, BooleanPlineSlice, BooleanResult,
+        BooleanResultPline, OpenPlineSlice, PlineBasicIntersect, PlineBooleanOptions,
+        PolylineSlice,
     },
 };
 use std::collections::BTreeMap;
@@ -94,13 +95,28 @@ pub fn slice_at_intersects<T, F>(
     boolean_info: &ProcessForBooleanResult<T>,
     use_second_index: bool,
     point_on_slice_pred: &mut F,
-    output_slices: &mut Vec<Polyline<T>>,
+    output_slices: &mut Vec<BooleanPlineSlice<T>>,
     pos_equal_eps: T,
 ) where
     T: Real,
     F: FnMut(Vector2<T>) -> bool,
 {
     let mut intersects_lookup = BTreeMap::<usize, Vec<SlicePoint<T>>>::new();
+
+    // helper function to adjust overlapping slice start point and endpoint indexes for lookup
+    let adjust_sp_ep_indexes =
+        |sp_idx: &mut usize, sp: Vector2<T>, ep_idx: &mut usize, ep: Vector2<T>| {
+            // checking if positioned at end of segment in which case the point should use the next
+            // index to match convention used for intersects
+            let sp_idx_next = pline.next_wrapping_index(*sp_idx);
+            if sp.fuzzy_eq_eps(pline[sp_idx_next].pos(), pos_equal_eps) {
+                *sp_idx = sp_idx_next;
+            }
+            let ep_idx_next = pline.next_wrapping_index(*ep_idx);
+            if ep.fuzzy_eq_eps(pline[ep_idx_next].pos(), pos_equal_eps) {
+                *ep_idx = ep_idx_next;
+            }
+        };
 
     if use_second_index {
         // using start_index2 from intersects
@@ -114,8 +130,10 @@ pub fn slice_at_intersects<T, F>(
         for overlapping_slice in boolean_info.overlapping_slices.iter() {
             let sp = overlapping_slice.updated_start.pos();
             let ep = overlapping_slice.end_point;
-            let sp_idx = overlapping_slice.start_indexes.1;
-            let ep_idx = overlapping_slice.end_indexes.1;
+            let mut sp_idx = overlapping_slice.start_indexes.1;
+            let mut ep_idx = overlapping_slice.end_indexes.1;
+            adjust_sp_ep_indexes(&mut sp_idx, sp, &mut ep_idx, ep);
+
             intersects_lookup
                 .entry(sp_idx)
                 .or_default()
@@ -137,8 +155,10 @@ pub fn slice_at_intersects<T, F>(
         for overlapping_slice in boolean_info.overlapping_slices.iter() {
             let sp = overlapping_slice.updated_start.pos();
             let ep = overlapping_slice.end_point;
-            let sp_idx = overlapping_slice.start_indexes.0;
-            let ep_idx = overlapping_slice.end_indexes.0;
+            let mut sp_idx = overlapping_slice.start_indexes.0;
+            let mut ep_idx = overlapping_slice.end_indexes.0;
+            adjust_sp_ep_indexes(&mut sp_idx, sp, &mut ep_idx, ep);
+
             // overlapping slices are always constructed following the direction of pline2 so if
             // pline1 has opposing direction then sp becomes slice end point and ep becomes slice
             // start point
@@ -201,10 +221,21 @@ pub fn slice_at_intersects<T, F>(
                     continue;
                 }
 
-                let mut slice = Polyline::new();
-                slice.add_vertex(split.updated_start);
-                slice.add_vertex(split.split_vertex);
-                output_slices.push(slice);
+                let opl = OpenPlineSlice::create_on_single_segment(
+                    pline,
+                    start_index,
+                    split.updated_start,
+                    split.split_vertex.pos(),
+                    pos_equal_eps,
+                );
+
+                if let Some(s) = opl {
+                    output_slices.push(BooleanPlineSlice::from_open_pline_slice(
+                        &s,
+                        !use_second_index,
+                        false,
+                    ));
+                }
             }
         }
 
@@ -215,13 +246,14 @@ pub fn slice_at_intersects<T, F>(
             continue;
         }
 
-        let slice_start_point = last_intr.pos;
-
         // build the slice between the last intersect in the intr_list and the next intersect found
-        let split = seg_split_at_point(start_vertex, end_vertex, slice_start_point, pos_equal_eps);
 
-        let mut slice = Polyline::new();
-        slice.add_vertex(split.split_vertex);
+        let slice_start_vertex = {
+            let slice_start_point = last_intr.pos;
+            let split =
+                seg_split_at_point(start_vertex, end_vertex, slice_start_point, pos_equal_eps);
+            split.split_vertex
+        };
 
         let mut index = next_index;
         let mut loop_count = 0;
@@ -229,41 +261,43 @@ pub fn slice_at_intersects<T, F>(
         loop {
             if loop_count > max_loop_count {
                 // prevent infinite loop
-                panic!("loop_count exceeded max_loop_count while creating slices from intersects");
+                unreachable!(
+                    "loop_count exceeded max_loop_count while creating slices from intersects"
+                );
             }
             loop_count += 1;
-
-            slice.add_or_replace_vertex(pline[index], pos_equal_eps);
 
             // check if segment that starts at current vertex just added to slice has an intersect
             if let Some(next_intr_list) = intersects_lookup.get(&index) {
                 // there is an intersect, slice is done
                 let intersect_point = next_intr_list[0].pos;
 
-                // trim last added vertex and add final intersect position
-                let next_index = pline.next_wrapping_index(index);
-                let split = seg_split_at_point(
-                    *slice.last().unwrap(),
-                    pline[next_index],
-                    intersect_point,
-                    pos_equal_eps,
+                let slice = BooleanPlineSlice::from_open_pline_slice(
+                    &OpenPlineSlice::create(
+                        pline,
+                        start_index,
+                        intersect_point,
+                        index,
+                        slice_start_vertex,
+                        loop_count,
+                        pos_equal_eps,
+                    ),
+                    !use_second_index,
+                    false,
                 );
-                *slice.last_mut().unwrap() = split.updated_start;
 
-                let end_vertex = PlineVertex::from_vector2(intersect_point, T::zero());
-                slice.add_or_replace_vertex(end_vertex, pos_equal_eps);
+                let midpoint = seg_midpoint(
+                    slice.updated_start,
+                    pline[pline.next_wrapping_index(slice.start_index)],
+                );
+                if point_on_slice_pred(midpoint) {
+                    output_slices.push(slice);
+                }
+
                 break;
             }
             // else there is not an intersect, increment index and continue
             index = pline.next_wrapping_index(index);
-        }
-
-        // check that slice length greater than 1 and 2nd/last vertex isn't on top of the first
-        if slice.len() > 1 && !slice[0].pos().fuzzy_eq_eps(slice[1].pos(), pos_equal_eps) {
-            let midpoint = seg_midpoint(slice[0], slice[1]);
-            if point_on_slice_pred(midpoint) {
-                output_slices.push(slice);
-            }
         }
     }
 }
@@ -279,7 +313,7 @@ pub struct PrunedSlices<T> {
     /// `start_of_pline1_overlapping_slices` is pline1 overlapping slices,
     /// and finally the last block starting at `start_of_pline1_overlapping_slices` holds pline2
     /// overlapping slices.
-    pub slices_remaining: Vec<Polyline<T>>,
+    pub slices_remaining: Vec<BooleanPlineSlice<T>>,
     pub start_of_pline2_slices: usize,
     pub start_of_pline1_overlapping_slices: usize,
     pub start_of_pline2_overlapping_slices: usize,
@@ -325,14 +359,15 @@ where
 
     // reserve space for set of overlapping slices from both polylines
     slices_remaining.reserve(2 * boolean_info.overlapping_slices.len());
+
     // add pline1 overlapping slices
     for overlapping_slice in boolean_info.overlapping_slices.iter() {
-        let mut s = overlapping_slice.to_polyline(pline2, pos_equal_eps);
-        if overlapping_slice.opposing_directions {
-            // invert pline1 overlapping slices to match original pline1 orientation
-            s.invert_direction();
-        }
-        slices_remaining.push(s);
+        let slice = BooleanPlineSlice::from_overlapping(
+            pline2,
+            overlapping_slice,
+            overlapping_slice.opposing_directions,
+        );
+        slices_remaining.push(slice);
     }
 
     let start_of_pline2_overlapping_slices = slices_remaining.len();
@@ -342,14 +377,14 @@ where
         boolean_info
             .overlapping_slices
             .iter()
-            .map(|s| s.to_polyline(pline2, pos_equal_eps)),
+            .map(|s| BooleanPlineSlice::from_overlapping(pline2, s, false)),
     );
 
     if set_opposing_direction != boolean_info.opposing_directions() {
         // invert pline1 directions to match request to set opposing direction
         slices_remaining[0..start_of_pline2_slices]
             .iter_mut()
-            .for_each(|s| s.invert_direction());
+            .for_each(|s| s.inverted = true);
     }
 
     PrunedSlices {
@@ -511,10 +546,13 @@ impl StitchSelector for NotXorStitchSelector {
 /// ordered/agree on direction (every start point connects with an end point). `stitch_selector` is
 /// used to determine priority of stitching in the case multiple possibilities exist.
 pub fn stitch_slices_into_closed_polylines<T, S>(
-    slices: &[Polyline<T>],
+    slices: &[BooleanPlineSlice<T>],
+    source_pline1: &Polyline<T>,
+    source_pline2: &Polyline<T>,
     stitch_selector: &S,
     slice_join_eps: T,
-) -> Vec<Polyline<T>>
+    pos_equal_eps: T,
+) -> Vec<BooleanResultPline<T>>
 where
     T: Real,
     S: StitchSelector,
@@ -529,7 +567,11 @@ where
         let mut builder = StaticAABB2DIndexBuilder::new(slices.len());
 
         for slice in slices.iter() {
-            let pt = slice[0].pos();
+            let pt = if slice.inverted {
+                slice.end_point
+            } else {
+                slice.updated_start.pos()
+            };
             builder.add(
                 pt.x - slice_join_eps,
                 pt.y - slice_join_eps,
@@ -543,20 +585,31 @@ where
 
     let mut visited_slice_idx = vec![false; slices.len()];
 
-    let mut close_pline = |mut pline: Polyline<T>| {
+    let mut close_pline = |mut pline: Polyline<T>, subslices: Vec<BooleanPlineSlice<T>>| {
+        // sanity assert (start should connect back with end)
+        debug_assert!(pline[0]
+            .pos()
+            .fuzzy_eq_eps(pline.last().unwrap().pos(), slice_join_eps));
+
         if pline.len() < 3 {
             // skip slice in case of just two vertexes on top of each other
             return;
         }
-
         pline.remove_last();
         pline.set_is_closed(true);
-        result.push(pline);
+        result.push(BooleanResultPline::new(pline, subslices));
     };
 
     let mut query_results = Vec::new();
     let mut query_stack = Vec::with_capacity(8);
 
+    let get_source = |s: BooleanPlineSlice<T>| {
+        if s.source_is_pline1 {
+            source_pline1
+        } else {
+            source_pline2
+        }
+    };
     // loop through all slice indexes
     for i in 0..slices.len() {
         if visited_slice_idx[i] {
@@ -564,7 +617,9 @@ where
         }
         visited_slice_idx[i] = true;
 
-        let mut current_pline = slices[i].clone();
+        let s = slices[i];
+        let mut current_pline = s.to_polyline(get_source(s), pos_equal_eps);
+        let mut subslices = vec![s];
 
         let beginning_slice_idx = i;
         let mut current_slice_idx = i;
@@ -573,7 +628,7 @@ where
         loop {
             if loop_count > max_loop_count {
                 // prevent infinite loop
-                panic!(
+                unreachable!(
                     "loop_count exceeded max_loop_count while creating closed polylines from slices"
                 );
             }
@@ -611,13 +666,15 @@ where
                 }
                 Some(connected_slice_idx) if connected_slice_idx == beginning_slice_idx => {
                     // connected back to beginning, close pline and add to result
-                    close_pline(current_pline);
+                    close_pline(current_pline, subslices);
                     break;
                 }
                 Some(connected_slice_idx) => {
+                    let s = slices[connected_slice_idx];
                     current_pline.remove_last();
-                    current_pline.extend(&slices[connected_slice_idx]);
+                    s.stitch_onto(get_source(s), &mut current_pline, pos_equal_eps);
                     visited_slice_idx[connected_slice_idx] = true;
+                    subslices.push(s);
 
                     // continue stitching slices to current pline, using last stitched index to find
                     // next
@@ -641,7 +698,7 @@ where
     T: Real,
 {
     if pline1.len() < 2 {
-        return BooleanResult::new();
+        return BooleanResult::default();
     }
 
     let constructed_index;
@@ -663,9 +720,6 @@ where
     let is_pline1_in_pline2 = || point_in_pline2(pline1[0].pos());
     let is_pline2_in_pline1 = || point_in_pline1(pline2[0].pos());
 
-    let mut pos_plines = Vec::new();
-    let mut neg_plines = Vec::new();
-
     let pos_equal_eps = options.pos_equal_eps;
     let slice_join_eps = options.slice_join_eps;
 
@@ -673,17 +727,19 @@ where
         BooleanOp::Or => {
             if boolean_info.completely_overlapping() {
                 // pline1 completely overlapping pline2 just return pline2
-                pos_plines.push(pline2.clone());
+                BooleanResult::from_whole_plines(vec![pline2.clone()], Vec::new())
             } else if !boolean_info.any_intersects() {
                 // no intersects, returning only one pline if one is inside other or both if they
                 // are completely disjoint
                 if is_pline1_in_pline2() {
-                    pos_plines.push(pline2.clone());
+                    BooleanResult::from_whole_plines(vec![pline2.clone()], Vec::new())
                 } else if is_pline2_in_pline1() {
-                    pos_plines.push(pline1.clone());
+                    BooleanResult::from_whole_plines(vec![pline1.clone()], Vec::new())
                 } else {
-                    pos_plines.push(pline1.clone());
-                    pos_plines.push(pline2.clone());
+                    BooleanResult::from_whole_plines(
+                        vec![pline1.clone(), pline2.clone()],
+                        Vec::new(),
+                    )
                 }
             } else {
                 // keep all slices of pline1 that are not in pline2 and all slices of pline2 that
@@ -702,36 +758,45 @@ where
 
                 let remaining = stitch_slices_into_closed_polylines(
                     &pruned_slices.slices_remaining,
+                    pline1,
+                    pline2,
                     &stitch_selector,
                     slice_join_eps,
+                    pos_equal_eps,
                 );
 
-                for pline in remaining {
-                    let orientation = pline.orientation();
+                let mut pos_plines = Vec::new();
+                let mut neg_plines = Vec::new();
+
+                for result_pline in remaining {
+                    let orientation = result_pline.pline.orientation();
                     if orientation != boolean_info.pline2_orientation {
                         // orientation inverted from original, therefore it represents negative
                         // space
-                        neg_plines.push(pline);
+                        neg_plines.push(result_pline);
                     } else {
                         // orientation stayed the same, therefore it represents positive space
-                        pos_plines.push(pline);
+                        pos_plines.push(result_pline);
                     }
                 }
+
+                BooleanResult::new(pos_plines, neg_plines)
             }
         }
         BooleanOp::And => {
             if boolean_info.completely_overlapping() {
                 // pline1 completely overlapping pline2 just return pline2
-                pos_plines.push(pline2.clone());
+                BooleanResult::from_whole_plines(vec![pline2.clone()], Vec::new())
             } else if !boolean_info.any_intersects() {
                 // no intersects, returning only one pline if one is inside other or none if they
                 // are completely disjoint
                 if is_pline1_in_pline2() {
-                    pos_plines.push(pline1.clone());
+                    BooleanResult::from_whole_plines(vec![pline1.clone()], Vec::new())
                 } else if is_pline2_in_pline1() {
-                    pos_plines.push(pline2.clone());
+                    BooleanResult::from_whole_plines(vec![pline2.clone()], Vec::new())
+                } else {
+                    Default::default()
                 }
-                // else none
             } else {
                 // keep all slices from pline1 that are in pline2 and all slices from pline2 that
                 // are in pline1
@@ -746,27 +811,32 @@ where
                 );
 
                 let stitch_selector = OrAndStitchSelector::from_pruned_slices(&pruned_slices);
-                let remaining = stitch_slices_into_closed_polylines(
+                let pos_plines = stitch_slices_into_closed_polylines(
                     &pruned_slices.slices_remaining,
+                    pline1,
+                    pline2,
                     &stitch_selector,
                     slice_join_eps,
+                    pos_equal_eps,
                 );
-                pos_plines.extend(remaining)
+
+                BooleanResult::new(pos_plines, Vec::new())
             }
         }
         BooleanOp::Not => {
             if boolean_info.completely_overlapping() {
                 // completely overlapping, nothing is left
+                Default::default()
             } else if !boolean_info.any_intersects() {
                 if is_pline1_in_pline2() {
                     // everything is subtracted (nothing left)
+                    Default::default()
                 } else if is_pline2_in_pline1() {
                     // negative space island created inside pline1
-                    pos_plines.push(pline1.clone());
-                    neg_plines.push(pline2.clone());
+                    BooleanResult::from_whole_plines(vec![pline1.clone()], vec![pline2.clone()])
                 } else {
                     // disjoint
-                    pos_plines.push(pline1.clone());
+                    BooleanResult::from_whole_plines(vec![pline1.clone()], Vec::new())
                 }
             } else {
                 // keep all slices from pline1 that are not in pline2 and all slices on pline2 that
@@ -783,79 +853,79 @@ where
 
                 let stitch_selector = NotXorStitchSelector::from_pruned_slices(&pruned_slices);
 
-                let remaining = stitch_slices_into_closed_polylines(
+                let pos_plines = stitch_slices_into_closed_polylines(
                     &pruned_slices.slices_remaining,
+                    pline1,
+                    pline2,
                     &stitch_selector,
                     slice_join_eps,
+                    pos_equal_eps,
                 );
-                pos_plines.extend(remaining);
+
+                BooleanResult::new(pos_plines, Vec::new())
             }
         }
         BooleanOp::Xor => {
             if boolean_info.completely_overlapping() {
-                // completely overlapping, nothing is left
+                Default::default()
             } else if !boolean_info.any_intersects() {
                 if is_pline1_in_pline2() {
-                    pos_plines.push(pline2.clone());
-                    neg_plines.push(pline1.clone());
+                    BooleanResult::from_whole_plines(vec![pline2.clone()], vec![pline1.clone()])
                 } else if is_pline2_in_pline1() {
-                    pos_plines.push(pline1.clone());
-                    neg_plines.push(pline2.clone());
+                    BooleanResult::from_whole_plines(vec![pline1.clone()], vec![pline2.clone()])
                 } else {
                     // disjoint
-                    pos_plines.push(pline1.clone());
-                    pos_plines.push(pline2.clone());
+                    BooleanResult::from_whole_plines(
+                        vec![pline1.clone(), pline2.clone()],
+                        Vec::new(),
+                    )
                 }
             } else {
                 // collect pline1 NOT pline2 results
-                {
-                    let pruned_slices = prune_slices(
-                        &pline1,
-                        &pline2,
-                        &boolean_info,
-                        &mut |pt| !point_in_pline2(pt),
-                        &mut point_in_pline1,
-                        true,
-                        pos_equal_eps,
-                    );
+                let pruned_slices1 = prune_slices(
+                    &pline1,
+                    &pline2,
+                    &boolean_info,
+                    &mut |pt| !point_in_pline2(pt),
+                    &mut point_in_pline1,
+                    true,
+                    pos_equal_eps,
+                );
 
-                    let stitch_selector = NotXorStitchSelector::from_pruned_slices(&pruned_slices);
-                    let remaining = stitch_slices_into_closed_polylines(
-                        &pruned_slices.slices_remaining,
-                        &stitch_selector,
-                        slice_join_eps,
-                    );
-
-                    pos_plines.extend(remaining);
-                }
+                let stitch_selector1 = NotXorStitchSelector::from_pruned_slices(&pruned_slices1);
+                let mut remaining1 = stitch_slices_into_closed_polylines(
+                    &pruned_slices1.slices_remaining,
+                    pline1,
+                    pline2,
+                    &stitch_selector1,
+                    slice_join_eps,
+                    pos_equal_eps,
+                );
 
                 // collect pline2 NOT pline1 results
-                {
-                    let pruned_slices = prune_slices(
-                        &pline1,
-                        &pline2,
-                        &boolean_info,
-                        &mut point_in_pline2,
-                        &mut |pt| !point_in_pline1(pt),
-                        true,
-                        pos_equal_eps,
-                    );
+                let pruned_slices2 = prune_slices(
+                    &pline1,
+                    &pline2,
+                    &boolean_info,
+                    &mut point_in_pline2,
+                    &mut |pt| !point_in_pline1(pt),
+                    true,
+                    pos_equal_eps,
+                );
 
-                    let stitch_selector = NotXorStitchSelector::from_pruned_slices(&pruned_slices);
-                    let remaining = stitch_slices_into_closed_polylines(
-                        &pruned_slices.slices_remaining,
-                        &stitch_selector,
-                        slice_join_eps,
-                    );
+                let stitch_selector2 = NotXorStitchSelector::from_pruned_slices(&pruned_slices2);
+                let remaining2 = stitch_slices_into_closed_polylines(
+                    &pruned_slices2.slices_remaining,
+                    pline1,
+                    pline2,
+                    &stitch_selector2,
+                    slice_join_eps,
+                    pos_equal_eps,
+                );
 
-                    pos_plines.extend(remaining);
-                }
+                remaining1.extend(remaining2);
+                BooleanResult::new(remaining1, Vec::new())
             }
         }
-    }
-
-    BooleanResult {
-        pos_plines,
-        neg_plines,
     }
 }

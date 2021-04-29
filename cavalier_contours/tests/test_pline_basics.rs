@@ -275,6 +275,96 @@ fn remove_repeat() {
         assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
         assert_fuzzy_eq!(result[2], PlineVertex::new(2.0, 2.0, 1.0));
     }
+
+    {
+        // catches case where prev position is updated even when vertex is skipped causing the end
+        // result to actually have a repeat position
+        let mut polyline = Polyline::new();
+        polyline.add(149.75759744152376, 2753.341034622115, 0.0);
+        polyline.add(
+            149.75761269666256,
+            2753.341034955893,
+            -0.000000016806842584315973,
+        );
+        polyline.add(
+            149.75760725254852,
+            2753.341034836777,
+            -0.000000026349436410555433,
+        );
+        polyline.add(
+            149.75759871737387,
+            2753.3410346500286,
+            -0.0000000059965514775939255,
+        );
+        polyline.add(
+            149.7576044186626,
+            2753.341034774772,
+            -0.000000017257169693252198,
+        );
+        polyline.add(
+            149.7576208261107,
+            2753.3410351337648,
+            -0.00000001907759705765955,
+        );
+        polyline.add(
+            149.75762700577317,
+            2753.3410352689743,
+            -0.0024145466234173404,
+        );
+        polyline.add(
+            176.35224446582103,
+            2753.7944419559553,
+            -0.000000003667288472897212,
+        );
+        polyline.add(176.35224565393378, 2753.7944419704727, 0.0);
+        polyline.add(176.35227673059205, 2753.794442350188, 0.0);
+        polyline.add(176.35229710705553, 2753.794442599162, 0.0);
+
+        let result = polyline.remove_repeat_pos(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 7);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(
+            result[0],
+            PlineVertex::new(149.75759744152376, 2753.341034622115, 0.0)
+        );
+        assert_fuzzy_eq!(
+            result[1],
+            PlineVertex::new(
+                149.75761269666256,
+                2753.341034955893,
+                -0.000000026349436410555433
+            )
+        );
+        assert_fuzzy_eq!(
+            result[2],
+            PlineVertex::new(
+                149.75759871737387,
+                2753.3410346500286,
+                -0.000000017257169693252198
+            )
+        );
+        assert_fuzzy_eq!(
+            result[3],
+            PlineVertex::new(
+                149.7576208261107,
+                2753.3410351337648,
+                -0.0024145466234173404
+            )
+        );
+        assert_fuzzy_eq!(
+            result[4],
+            PlineVertex::new(176.35224446582103, 2753.7944419559553, 0.0)
+        );
+        assert_fuzzy_eq!(
+            result[5],
+            PlineVertex::new(176.35227673059205, 2753.794442350188, 0.0)
+        );
+        assert_fuzzy_eq!(
+            result[6],
+            PlineVertex::new(176.35229710705553, 2753.794442599162, 0.0)
+        );
+    }
 }
 
 #[test]
@@ -384,6 +474,96 @@ fn remove_redundant_removes_repeat_pos() {
         assert_fuzzy_eq!(result[0], PlineVertex::new(2.0, 2.0, 0.5));
         assert_fuzzy_eq!(result[1], PlineVertex::new(3.0, 3.0, 1.0));
         assert_fuzzy_eq!(result[2], PlineVertex::new(2.0, 2.0, 1.0));
+    }
+
+    {
+        // catches case where prev position is updated even when vertex is skipped causing the end
+        // result to actually have a repeat position
+        let mut polyline = Polyline::new();
+        polyline.add(149.75759744152376, 2753.341034622115, 0.0);
+        polyline.add(
+            149.75761269666256,
+            2753.341034955893,
+            -0.000000016806842584315973,
+        );
+        polyline.add(
+            149.75760725254852,
+            2753.341034836777,
+            -0.000000026349436410555433,
+        );
+        polyline.add(
+            149.75759871737387,
+            2753.3410346500286,
+            -0.0000000059965514775939255,
+        );
+        polyline.add(
+            149.7576044186626,
+            2753.341034774772,
+            -0.000000017257169693252198,
+        );
+        polyline.add(
+            149.7576208261107,
+            2753.3410351337648,
+            -0.00000001907759705765955,
+        );
+        polyline.add(
+            149.75762700577317,
+            2753.3410352689743,
+            -0.0024145466234173404,
+        );
+        polyline.add(
+            176.35224446582103,
+            2753.7944419559553,
+            -0.000000003667288472897212,
+        );
+        polyline.add(176.35224565393378, 2753.7944419704727, 0.0);
+        polyline.add(176.35227673059205, 2753.794442350188, 0.0);
+        polyline.add(176.35229710705553, 2753.794442599162, 0.0);
+
+        let result = polyline.remove_repeat_pos(1e-5);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.len(), 7);
+        assert!(!result.is_closed());
+        assert_fuzzy_eq!(
+            result[0],
+            PlineVertex::new(149.75759744152376, 2753.341034622115, 0.0)
+        );
+        assert_fuzzy_eq!(
+            result[1],
+            PlineVertex::new(
+                149.75761269666256,
+                2753.341034955893,
+                -0.000000026349436410555433
+            )
+        );
+        assert_fuzzy_eq!(
+            result[2],
+            PlineVertex::new(
+                149.75759871737387,
+                2753.3410346500286,
+                -0.000000017257169693252198
+            )
+        );
+        assert_fuzzy_eq!(
+            result[3],
+            PlineVertex::new(
+                149.7576208261107,
+                2753.3410351337648,
+                -0.0024145466234173404
+            )
+        );
+        assert_fuzzy_eq!(
+            result[4],
+            PlineVertex::new(176.35224446582103, 2753.7944419559553, 0.0)
+        );
+        assert_fuzzy_eq!(
+            result[5],
+            PlineVertex::new(176.35227673059205, 2753.794442350188, 0.0)
+        );
+        assert_fuzzy_eq!(
+            result[6],
+            PlineVertex::new(176.35229710705553, 2753.794442599162, 0.0)
+        );
     }
 }
 

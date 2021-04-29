@@ -19,6 +19,11 @@ pub struct PlineProperties {
 }
 
 impl PlineProperties {
+    // positions equal epsilon
+    pub const POS_EQ_EPS: f64 = 1e-5;
+    // property comparer epsilon
+    pub const PROP_CMP_EPS: f64 = 1e-4;
+
     pub fn new(
         vertex_count: usize,
         area: f64,
@@ -38,7 +43,7 @@ impl PlineProperties {
 
     pub fn from_pline(pline: &Polyline<f64>, invert_area: bool) -> Self {
         // remove redundant vertexes for consistent vertex counts
-        let pline = pline.remove_redundant(1e-5);
+        let pline = pline.remove_redundant(PlineProperties::POS_EQ_EPS);
         let area = {
             let a = pline.area();
             if invert_area {
@@ -57,23 +62,44 @@ impl PlineProperties {
     }
 
     pub fn fuzzy_eq_eps(&self, other: &Self, eps: f64) -> bool {
-        self.vertex_count == other.vertex_count
-            && self.area.fuzzy_eq_eps(other.area, eps)
-            && self.path_length.fuzzy_eq_eps(other.path_length, eps)
-            && aabb_fuzzy_eq_eps(&self.extents, &other.extents, eps)
+        if self.vertex_count != other.vertex_count {
+            return false;
+        }
+        if !self.area.fuzzy_eq_eps(other.area, eps) {
+            return false;
+        }
+        if !self.path_length.fuzzy_eq_eps(other.path_length, eps) {
+            return false;
+        }
+        if !aabb_fuzzy_eq_eps(&self.extents, &other.extents, eps) {
+            return false;
+        }
+        true
     }
 
     pub fn fuzzy_eq_eps_abs_a(&self, other: &Self, eps: f64) -> bool {
-        self.vertex_count == other.vertex_count
-            && self.area.abs().fuzzy_eq_eps(other.area.abs(), eps)
-            && self.path_length.fuzzy_eq_eps(other.path_length, eps)
-            && aabb_fuzzy_eq_eps(&self.extents, &other.extents, eps)
+        if self.vertex_count != other.vertex_count {
+            return false;
+        }
+        if !self.area.abs().fuzzy_eq_eps(other.area.abs(), eps) {
+            return false;
+        }
+        if !self.path_length.fuzzy_eq_eps(other.path_length, eps) {
+            return false;
+        }
+        if !aabb_fuzzy_eq_eps(&self.extents, &other.extents, eps) {
+            return false;
+        }
+        true
     }
 }
 
-pub fn create_property_set(polylines: &[Polyline<f64>], invert_area: bool) -> Vec<PlineProperties> {
+pub fn create_property_set<'a, I>(polylines: I, invert_area: bool) -> Vec<PlineProperties>
+where
+    I: IntoIterator<Item = &'a Polyline>,
+{
     polylines
-        .iter()
+        .into_iter()
         .map(|pl| PlineProperties::from_pline(pl, invert_area))
         .collect()
 }
@@ -92,7 +118,8 @@ pub fn property_sets_match(
             let match_count = result_set
                 .iter()
                 .filter(|properties_result| {
-                    properties_expected.fuzzy_eq_eps(properties_result, 1e-5)
+                    properties_expected
+                        .fuzzy_eq_eps(properties_result, PlineProperties::PROP_CMP_EPS)
                 })
                 .count();
 
@@ -125,7 +152,8 @@ pub fn property_sets_match_abs_a(
             let match_count = result_set
                 .iter()
                 .filter(|properties_result| {
-                    properties_expected.fuzzy_eq_eps_abs_a(properties_result, 1e-5)
+                    properties_expected
+                        .fuzzy_eq_eps_abs_a(properties_result, PlineProperties::PROP_CMP_EPS)
                 })
                 .count();
 

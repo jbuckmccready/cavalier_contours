@@ -6,11 +6,10 @@ use crate::{
     polyline::{
         pline_seg_intr, seg_fast_approx_bounding_box, seg_split_at_point, seg_tangent_vector,
         PlineBasicIntersect, PlineIntersect, PlineIntersectsCollection, PlineOverlappingIntersect,
-        PlineSegIntr, PlineVertex, Polyline,
+        PlineSegIntr, PlineVertex, Polyline, PolylineSlice,
     },
 };
 use static_aabb2d_index::StaticAABB2DIndex;
-use std::cmp::max;
 use std::collections::HashSet;
 
 /// Visits all local self intersects of the polyline. Local self intersects are defined as between
@@ -394,18 +393,21 @@ where
 
 /// Represents an open polyline slice where there was overlap between polylines across one or more
 /// segments.
-#[derive(Debug, Clone)]
+///
+/// `source` polyline for purposes of being a [PolylineSlice] is always the second polyline.
+#[derive(Debug, Copy, Clone)]
 pub struct OverlappingSlice<T> {
     /// Start vertex indexes of the slice according to the original polylines that overlapped.
     pub start_indexes: (usize, usize),
     /// End vertex indexes of the slice according to the original polylines that overlapped.
     pub end_indexes: (usize, usize),
+    /// Wrapping offset from `start_index` to reach the last segment index in the source polyline.
+    pub end_index_offset: usize,
     /// First vertex of the slice (updated from second polyline, positioned somewhere along the
     /// `start_indexes.1`).
     pub updated_start: PlineVertex<T>,
-    /// Second to last vertex of the slice (updated from second polyline, positioned somewhere along
-    /// the `end_indexes.1`).
-    pub updated_end: PlineVertex<T>,
+    /// Updated bulge value to be used in the end_index segment.
+    pub updated_end_bulge: T,
     /// Final end point of the slice.
     pub end_point: Vector2<T>,
     /// If true then overlapping slice forms a closed loop on itself, otherwise it does not.
@@ -456,13 +458,16 @@ where
             None => {
                 // slice created from single overlapping intersect
                 let updated_start = create_updated_start();
-                let updated_end = updated_start;
+                let updated_end_bulge = updated_start.bulge;
                 let end_point = start_intr.point2;
+                let end_index_offset = 0;
+
                 Self {
                     start_indexes,
                     end_indexes: start_indexes,
+                    end_index_offset,
                     updated_start,
-                    updated_end,
+                    updated_end_bulge,
                     end_point,
                     is_loop: false,
                     opposing_directions,
@@ -480,8 +485,9 @@ where
                     Self {
                         start_indexes,
                         end_indexes: start_indexes,
+                        end_index_offset: pline2.len() - 1,
                         updated_start: start_u1,
-                        updated_end: pline2[end_intr.start_index2],
+                        updated_end_bulge: pline2[pline2.len() - 1].bulge,
                         end_point: end_intr.point2,
                         is_loop: true,
                         opposing_directions,
@@ -490,6 +496,8 @@ where
                     // slice does not form closed loop
                     let end_point = end_intr.point2;
                     let end_indexes = (end_intr.start_index1, end_intr.start_index2);
+                    let end_index_offset =
+                        pline2.fwd_wrapping_dist(start_indexes.1, end_intr.start_index2);
 
                     // check if all on one pline2 segment or not
                     if start_intr.start_index2 == end_intr.start_index2 {
@@ -513,13 +521,14 @@ where
                             split2.updated_start
                         };
 
-                        let updated_end = updated_start;
+                        let updated_end_bulge = updated_start.bulge;
 
                         Self {
-                            updated_start,
-                            updated_end,
                             start_indexes,
                             end_indexes,
+                            updated_start,
+                            updated_end_bulge,
+                            end_index_offset,
                             end_point,
                             is_loop: false,
                             opposing_directions,
@@ -553,11 +562,13 @@ where
                             );
                             split2.updated_start
                         };
+
                         Self {
                             start_indexes,
                             end_indexes,
+                            end_index_offset,
                             updated_start,
-                            updated_end,
+                            updated_end_bulge: updated_end.bulge,
                             end_point,
                             is_loop: false,
                             opposing_directions,
@@ -567,82 +578,40 @@ where
             }
         }
     }
+}
 
-    /// Total index distance along pline2 traversed by the slice (forward wrapping distance from
-    /// start_index to end_index based on `source_pline2`).
-    fn get_index_dist(&self, source_pline2: &Polyline<T>) -> usize {
-        source_pline2.forward_wrapping_dist(self.start_indexes.1, self.end_indexes.1)
+impl<T> PolylineSlice<T> for OverlappingSlice<T>
+where
+    T: Real,
+{
+    #[inline]
+    fn start_index(&self) -> usize {
+        self.start_indexes.1
     }
 
-    /// Vertex count required to build the slice into a polyline.
-    pub fn vertex_count(&self, source_pline2: &Polyline<T>) -> usize {
-        let index_dist = self.get_index_dist(source_pline2);
-        if self.is_loop {
-            max(3, index_dist + 2)
-        } else {
-            index_dist + 2
-        }
+    #[inline]
+    fn end_index_offset(&self) -> usize {
+        self.end_index_offset
     }
 
-    /// Construct an open polyline representing the overlapping slice in the direction of
-    /// `source_pline2`.
-    pub fn to_polyline(&self, source_pline2: &Polyline<T>, pos_equal_eps: T) -> Polyline<T> {
-        let vertex_count = self.vertex_count(source_pline2);
-        let mut result = Polyline::with_capacity(vertex_count, false);
-
-        let mut visitor = |v| {
-            result.add_vertex(v);
-            true
-        };
-        self.visit_vertexes(source_pline2, pos_equal_eps, &mut visitor);
-        result
+    #[inline]
+    fn updated_start(&self) -> PlineVertex<T> {
+        self.updated_start
     }
 
-    /// Visit all vertexes in this slice (`source_pline2` reference required for vertex data) until
-    /// the slice has been fully traversed or the visitor returns false.
-    pub fn visit_vertexes<F>(&self, source_pline2: &Polyline<T>, pos_equal_eps: T, visitor: &mut F)
-    where
-        F: FnMut(PlineVertex<T>) -> bool,
-    {
-        if !visitor(self.updated_start) {
-            return;
-        }
+    #[inline]
+    fn updated_end_bulge(&self) -> T {
+        self.updated_end_bulge
+    }
 
-        let index_dist = self.get_index_dist(source_pline2);
-        if index_dist == 0 && !self.is_loop {
-            visitor(PlineVertex::from_vector2(self.end_point, T::zero()));
-        } else {
-            let iter_count = if self.is_loop {
-                index_dist
-            } else {
-                index_dist - 1
-            };
+    #[inline]
+    fn end_point(&self) -> Vector2<T> {
+        self.end_point
+    }
 
-            let iter = source_pline2
-                .iter()
-                .cycle()
-                .skip(self.start_indexes.1 + 1)
-                .take(iter_count);
-
-            for v in iter {
-                if !visitor(*v) {
-                    return;
-                }
-            }
-
-            if self
-                .updated_end
-                .pos()
-                .fuzzy_eq_eps(self.end_point, pos_equal_eps)
-            {
-                visitor(PlineVertex::from_vector2(self.end_point, T::zero()));
-            } else {
-                if !visitor(self.updated_end) {
-                    return;
-                }
-                visitor(PlineVertex::from_vector2(self.end_point, T::zero()));
-            }
-        }
+    #[inline]
+    fn inverted_direction(&self) -> bool {
+        false
     }
 }
 
@@ -725,6 +694,15 @@ where
             let first_slice = &mut result[0];
             first_slice.start_indexes = last_slice.start_indexes;
             first_slice.updated_start = last_slice.updated_start;
+            first_slice.end_index_offset += last_slice.end_index_offset;
+
+            if last_slice
+                .end_point
+                .fuzzy_eq_eps(pline2[0].pos(), pos_equal_eps)
+            {
+                // add one to offset to capture pline2[0] vertex (it is at point of connection)
+                first_slice.end_index_offset += 1;
+            }
         }
     }
 
@@ -1161,6 +1139,7 @@ mod find_intersects_tests {
 mod sort_and_join_overlapping_intersects_tests {
     use super::*;
     use crate::core::math::bulge_from_angle;
+    use crate::core::traits::FuzzyEq;
 
     #[test]
     fn overlapping_circles_same_dir() {
@@ -1347,7 +1326,7 @@ mod sort_and_join_overlapping_intersects_tests {
         assert_fuzzy_eq!(slice_pline[1], pline2[1]);
 
         assert_fuzzy_eq!(slices[0].updated_start, PlineVertex::new(-radius, 0.0, 1.0));
-        assert_fuzzy_eq!(slices[0].updated_end, PlineVertex::new(-radius, 0.0, 1.0));
+        assert_fuzzy_eq!(slices[0].updated_end_bulge, 1.0);
         assert_fuzzy_eq!(slices[0].end_point, Vector2::new(radius, 0.0));
         assert_eq!(slices[0].start_indexes, (5, 0));
         assert_eq!(slices[0].end_indexes, (9, 0));
@@ -1399,7 +1378,7 @@ mod sort_and_join_overlapping_intersects_tests {
         assert_fuzzy_eq!(slice_pline[5], pline2[0].with_bulge(0.0));
 
         assert_fuzzy_eq!(slices[0].updated_start, pline2[5]);
-        assert_fuzzy_eq!(slices[0].updated_end, pline2[9]);
+        assert_fuzzy_eq!(slices[0].updated_end_bulge, pline2[9].bulge);
         assert_fuzzy_eq!(slices[0].end_point, Vector2::new(radius, 0.0));
         assert_eq!(slices[0].start_indexes, (0, 5));
         assert_eq!(slices[0].end_indexes, (0, 9));

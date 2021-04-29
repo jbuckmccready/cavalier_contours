@@ -182,7 +182,10 @@ fn boolean_op_from_u32(i: u32) -> Option<BooleanOp> {
 pub struct cavc_plinelist(Vec<*mut cavc_pline>);
 
 impl cavc_plinelist {
-    pub fn from_internal(plines: Vec<Polyline<f64>>) -> *mut cavc_plinelist {
+    pub fn from_internal<I>(plines: I) -> *mut cavc_plinelist
+    where
+        I: IntoIterator<Item = Polyline>,
+    {
         let r = plines
             .into_iter()
             .map(|pl| Box::into_raw(Box::new(cavc_pline(pl))))
@@ -932,8 +935,12 @@ pub unsafe extern "C" fn cavc_pline_boolean(
                 .boolean_opt(&(*pline2).0, op, &(*options).to_internal())
         };
 
-        pos_plines.write(cavc_plinelist::from_internal(results.pos_plines));
-        neg_plines.write(cavc_plinelist::from_internal(results.neg_plines));
+        pos_plines.write(cavc_plinelist::from_internal(
+            results.pos_plines.into_iter().map(|p| p.pline),
+        ));
+        neg_plines.write(cavc_plinelist::from_internal(
+            results.neg_plines.into_iter().map(|p| p.pline),
+        ));
         0
     })
 }

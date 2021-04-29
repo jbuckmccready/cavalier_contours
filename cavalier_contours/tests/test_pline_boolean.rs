@@ -1,10 +1,23 @@
 mod test_utils;
 
-use cavalier_contours::polyline::{BooleanOp, Polyline};
+use cavalier_contours::polyline::{
+    BooleanOp, BooleanPlineSlice, BooleanResult, BooleanResultPline, Polyline, PolylineSlice,
+};
 use test_utils::{
     create_property_set, property_sets_match, property_sets_match_abs_a, ModifiedPlineSet,
     ModifiedPlineSetVisitor, ModifiedPlineState, PlineProperties,
 };
+
+fn create_boolean_property_set(polylines: &[BooleanResultPline<f64>]) -> Vec<PlineProperties> {
+    for r in polylines {
+        assert_eq!(
+            r.pline.remove_repeat_pos(PlineProperties::POS_EQ_EPS).len(),
+            r.pline.len(),
+            "boolean result should not have repeat positioned vertexes"
+        );
+    }
+    create_property_set(polylines.iter().map(|p| &p.pline), false)
+}
 
 fn run_same_boolean_test(
     self1: &Polyline<f64>,
@@ -19,8 +32,10 @@ fn run_same_boolean_test(
         let result = self1.boolean(&self2, op);
         let mut passed = result.pos_plines.len() == 1 && result.neg_plines.is_empty();
         if passed {
-            let result_properties =
-                PlineProperties::from_pline(&result.pos_plines[0], self2_state.inverted_direction);
+            let result_properties = PlineProperties::from_pline(
+                &result.pos_plines[0].pline,
+                self2_state.inverted_direction,
+            );
             passed = property_sets_match(&[result_properties], &[*input_properties]);
         }
 
@@ -56,7 +71,7 @@ fn run_same_boolean_test(
         let op = Or;
         let expected = &[disjoint1_properties, *input_properties];
         let result = disjoint1.boolean(&self2, op);
-        let result_properties = create_property_set(&result.pos_plines, false);
+        let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
         assert!(
@@ -83,7 +98,7 @@ fn run_same_boolean_test(
         let op = Not;
         let expected = &[disjoint1_properties];
         let result = disjoint1.boolean(&self2, op);
-        let result_properties = create_property_set(&result.pos_plines, false);
+        let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
         assert!(
@@ -98,7 +113,7 @@ fn run_same_boolean_test(
         let op = Xor;
         let expected = &[disjoint1_properties, *input_properties];
         let result = disjoint1.boolean(&self2, op);
-        let result_properties = create_property_set(&result.pos_plines, false);
+        let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
         assert!(
@@ -119,7 +134,7 @@ fn run_same_boolean_test(
         let op = Or;
         let expected = &[*input_properties];
         let result = self2.boolean(&self1_inward_offset, op);
-        let result_properties = create_property_set(&result.pos_plines, false);
+        let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
         assert!(
@@ -134,7 +149,7 @@ fn run_same_boolean_test(
         let op = And;
         let expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
-        let result_properties = create_property_set(&result.pos_plines, false);
+        let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
         assert!(
@@ -150,8 +165,8 @@ fn run_same_boolean_test(
         let pos_expected = &[*input_properties];
         let neg_expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
-        let pos_pline_result_properties = create_property_set(&result.pos_plines, false);
-        let neg_pline_result_properties = create_property_set(&result.neg_plines, false);
+        let pos_pline_result_properties = create_boolean_property_set(&result.pos_plines);
+        let neg_pline_result_properties = create_boolean_property_set(&result.neg_plines);
         let passed = property_sets_match_abs_a(&pos_pline_result_properties, pos_expected)
             && property_sets_match_abs_a(&neg_pline_result_properties, neg_expected);
         assert!(
@@ -179,8 +194,8 @@ fn run_same_boolean_test(
         let pos_expected = &[*input_properties];
         let neg_expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
-        let pos_pline_result_properties = create_property_set(&result.pos_plines, false);
-        let neg_pline_result_properties = create_property_set(&result.neg_plines, false);
+        let pos_pline_result_properties = create_boolean_property_set(&result.pos_plines);
+        let neg_pline_result_properties = create_boolean_property_set(&result.neg_plines);
         let passed = property_sets_match_abs_a(&pos_pline_result_properties, pos_expected)
             && property_sets_match_abs_a(&neg_pline_result_properties, neg_expected);
         assert!(
@@ -281,6 +296,54 @@ mod test_same {
     );
 }
 
+fn verify_slice_set(result_pline: &BooleanResultPline<f64>, pline1: &Polyline, pline2: &Polyline) {
+    if result_pline.subslices.is_empty() {
+        return;
+    }
+
+    let get_source = |s: &BooleanPlineSlice<f64>| {
+        if s.source_is_pline1 {
+            pline1
+        } else {
+            pline2
+        }
+    };
+    let first_slice = &result_pline.subslices[0];
+    let mut stitched =
+        first_slice.to_polyline(get_source(first_slice), PlineProperties::POS_EQ_EPS);
+
+    for s in result_pline.subslices.iter().skip(1) {
+        stitched.remove_last();
+        s.stitch_onto(get_source(s), &mut stitched, PlineProperties::POS_EQ_EPS);
+    }
+    assert!(
+        stitched[0].pos().fuzzy_eq(stitched.last().unwrap().pos()),
+        "start does not connect with end when stitching slices together"
+    );
+    stitched.remove_last();
+    stitched.set_is_closed(true);
+
+    let expected_properties = PlineProperties::from_pline(&result_pline.pline, false);
+    let stitched_properties = PlineProperties::from_pline(&stitched, false);
+
+    assert!(
+        expected_properties.fuzzy_eq_eps(&stitched_properties, PlineProperties::PROP_CMP_EPS),
+        "slices stitched together do not match result polyline, expected: {:?}, actual: {:?}",
+        expected_properties,
+        stitched_properties
+    );
+}
+
+fn verify_all_slices(pline1: &Polyline, pline2: &Polyline, boolean_result: &BooleanResult<f64>) {
+    for result_pline in boolean_result
+        .pos_plines
+        .iter()
+        .chain(boolean_result.neg_plines.iter())
+    {
+        verify_slice_set(result_pline, pline1, pline2);
+    }
+}
+
 fn run_pline_boolean_tests(
     pline1: &Polyline<f64>,
     pline2: &Polyline<f64>,
@@ -294,15 +357,18 @@ fn run_pline_boolean_tests(
         test_set2.accept_closure(&mut |modified_pline2, state2| {
             for &(op, pos_set_expected, neg_set_expected) in cases {
                 let result = modified_pline1.boolean(&modified_pline2, op);
-                let pos_set_result = create_property_set(&result.pos_plines, false);
-                let neg_set_result = create_property_set(&result.neg_plines, false);
+                let pos_set_result = create_boolean_property_set(&result.pos_plines);
+                let neg_set_result = create_boolean_property_set(&result.neg_plines);
                 let passed = property_sets_match_abs_a(&pos_set_result, &pos_set_expected)
                     && property_sets_match_abs_a(&neg_set_result, &neg_set_expected);
                 assert!(
                     passed,
-                    "property sets do not match, op: {:?}, state1: {:?}, state2: {:?}",
+                    "property sets do not match\nop: {:?}\nstate1: {:?}\nstate2: {:?}",
                     op, state1, state2
                 );
+
+                println!("{:?}", op);
+                verify_all_slices(&modified_pline1, &modified_pline2, &result);
             }
         });
     });
