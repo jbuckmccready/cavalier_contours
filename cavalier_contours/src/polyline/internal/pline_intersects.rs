@@ -127,10 +127,6 @@ pub fn visit_global_self_intersects<T, F>(
     let mut query_stack = Vec::with_capacity(8);
     let fuzz = T::fuzzy_epsilon();
 
-    // last polyline segment starting indexes for open polyline (used to check when skipping
-    // intersects at end points of polyline segments)
-    let open_last_idx = polyline.len() - 2;
-
     // iterate all segment bounding boxes in the spatial index querying itself to test for self
     // intersects
     let mut break_loop = false;
@@ -146,7 +142,8 @@ pub fn visit_global_self_intersects<T, F>(
                 return true;
             }
 
-            // skip already visited pairs (reverse index pair order for lookup to work)
+            // skip already visited pairs (reverse index pair order for lookup to work, e.g. we
+            // visit (1, 2) then (2, 1) and we only want to visit the segment pair once)
             if visited_pairs.contains(&(hit_i, i)) {
                 return true;
             }
@@ -157,13 +154,11 @@ pub fn visit_global_self_intersects<T, F>(
             let u1 = polyline[hit_i];
             let u2 = polyline[hit_j];
             let skip_intr_at_end = |intr: Vector2<T>| -> bool {
-                // skip intersect at end point of pline segment since it will be found again by the
-                // segment with it as its start point (unless the polyline is open and we're looking
-                // at the very end point of the polyline, then include the intersect)
-                (v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
-                    && (polyline.is_closed() || i != open_last_idx))
-                    || (u2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
-                        && (polyline.is_closed() || hit_i != open_last_idx))
+                // skip intersect if it is at end point of either pline segment since it will be
+                // found again by another segment with the intersect at its start point (this is
+                // true even for an open polyline since we're finding self intersects)
+                v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
+                    && u2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
             };
 
             let mut continue_visiting = true;
