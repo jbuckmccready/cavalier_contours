@@ -23,6 +23,24 @@ macro_rules! ffi_catch_unwind {
 #[derive(Debug, Clone)]
 pub struct cavc_aabbindex(StaticAABB2DIndex<f64>);
 
+/// Represents a simple 2D point with x and y coordinate values.
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct cavc_point {
+    pub x: f64,
+    pub y: f64,
+}
+
+impl cavc_point {
+    pub fn new(x: f64, y: f64) -> Self {
+        cavc_point { x, y }
+    }
+
+    pub fn from_internal(v: Vector2<f64>) -> Self {
+        cavc_point::new(v.x, v.y)
+    }
+}
+
 /// Represents a polyline vertex holding x, y, and bulge.
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -37,7 +55,7 @@ impl cavc_vertex {
         cavc_vertex { x, y, bulge }
     }
 
-    fn from_internal(v: PlineVertex<f64>) -> Self {
+    pub fn from_internal(v: PlineVertex<f64>) -> Self {
         cavc_vertex::new(v.x, v.y, v.bulge)
     }
 }
