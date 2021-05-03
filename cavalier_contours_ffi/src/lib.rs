@@ -114,6 +114,7 @@ impl Default for cavc_pline_parallel_offset_o {
 ///
 /// `options` must point to a valid place in memory to be written.
 #[no_mangle]
+#[must_use]
 pub unsafe extern "C" fn cavc_pline_parallel_offset_o_init(
     options: *mut cavc_pline_parallel_offset_o,
 ) -> i32 {
@@ -171,6 +172,7 @@ impl Default for cavc_pline_boolean_o {
 ///
 /// `options` must point to a valid place in memory to be written.
 #[no_mangle]
+#[must_use]
 pub unsafe extern "C" fn cavc_pline_boolean_o_init(options: *mut cavc_pline_boolean_o) -> i32 {
     ffi_catch_unwind!({
         if options.is_null() {
