@@ -782,6 +782,9 @@ pub struct BooleanPlineSlice<T> {
     /// Whether the slice direction is inverted or not before being stitched together for final
     /// boolean result polyline.
     pub inverted: bool,
+    /// Whether the slice is an overlapping slice or not (both polylines in the boolean operation
+    /// overlapped along this slice).
+    pub overlapping: bool,
 }
 
 impl<T> BooleanPlineSlice<T>
@@ -796,6 +799,7 @@ where
         end_point: Vector2<T>,
         source_is_pline1: bool,
         inverted: bool,
+        overlapping: bool,
     ) -> Self {
         Self {
             start_index,
@@ -805,6 +809,7 @@ where
             end_point,
             source_is_pline1,
             inverted,
+            overlapping,
         }
     }
 
@@ -821,6 +826,7 @@ where
             end_point: slice.end_point,
             source_is_pline1,
             inverted,
+            overlapping: false,
         }
     }
 
@@ -837,6 +843,7 @@ where
             overlapping_slice.end_point,
             false,
             inverted,
+            true,
         );
         debug_assert_eq!(result.validate_for_source(source), SliceValidation::IsValid);
         result
