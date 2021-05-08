@@ -1,6 +1,7 @@
 use cavalier_contours::{
     assert_fuzzy_eq,
     core::{math::bulge_from_angle, traits::FuzzyEq},
+    pline_closed, pline_open,
     polyline::{PlineVertex, Polyline},
 };
 use std::{
@@ -1021,5 +1022,89 @@ fn path_length() {
         assert_fuzzy_eq!(open_polyline.path_length(), 8.0);
         open_polyline.invert_direction();
         assert_fuzzy_eq!(open_polyline.path_length(), 8.0);
+    }
+}
+
+#[test]
+fn extents() {
+    {
+        let empty_pline = Polyline::<f64>::new();
+        debug_assert_eq!(empty_pline.extents(), None);
+    }
+
+    {
+        let mut one_vertex_pline = Polyline::new();
+        one_vertex_pline.add(1.0, 1.0, 0.0);
+        debug_assert_eq!(one_vertex_pline.extents(), None);
+    }
+
+    {
+        // basic line
+        let mut pline = pline_open![(-2.0, -1.0, 0.0), (3.0, 4.0, 0.0)];
+        let extents = pline.extents().unwrap();
+        assert_eq!(extents.min_x, -2.0);
+        assert_eq!(extents.min_y, -1.0);
+        assert_eq!(extents.max_x, 3.0);
+        assert_eq!(extents.max_y, 4.0);
+
+        pline.set_is_closed(true);
+        let extents = pline.extents().unwrap();
+        assert_eq!(extents.min_x, -2.0);
+        assert_eq!(extents.min_y, -1.0);
+        assert_eq!(extents.max_x, 3.0);
+        assert_eq!(extents.max_y, 4.0);
+    }
+
+    {
+        // axis aligned circle
+        let mut pline = pline_closed![(-1.0, 0.0, 1.0), (1.0, 0.0, 1.0),];
+        let extents = pline.extents().unwrap();
+        assert_eq!(extents.min_x, -1.0);
+        assert_eq!(extents.min_y, -1.0);
+        assert_eq!(extents.max_x, 1.0);
+        assert_eq!(extents.max_y, 1.0);
+
+        // half circle
+        pline.set_is_closed(false);
+        let extents = pline.extents().unwrap();
+        assert_eq!(extents.min_x, -1.0);
+        assert_eq!(extents.min_y, -1.0);
+        assert_eq!(extents.max_x, 1.0);
+        assert_eq!(extents.max_y, 0.0);
+    }
+
+    {
+        // axis aligned circle
+        let mut pline = pline_closed![(0.0, -1.0, 1.0), (0.0, 1.0, 1.0),];
+        let extents = pline.extents().unwrap();
+        assert_eq!(extents.min_x, -1.0);
+        assert_eq!(extents.min_y, -1.0);
+        assert_eq!(extents.max_x, 1.0);
+        assert_eq!(extents.max_y, 1.0);
+
+        // half circle
+        pline.set_is_closed(false);
+        let extents = pline.extents().unwrap();
+        assert_eq!(extents.min_x, 0.0);
+        assert_eq!(extents.min_y, -1.0);
+        assert_eq!(extents.max_x, 1.0);
+        assert_eq!(extents.max_y, 1.0);
+    }
+
+    {
+        // handles repeat position vertexes
+        let pline = pline_closed![
+            (-1.0, 0.0, 0.0),
+            (-1.0, 0.0, 1.0),
+            (-1.0, 0.0, 0.0),
+            (-1.0, 0.0, 1.0),
+            (1.0, 0.0, 1.0),
+            (1.0, 0.0, 1.0)
+        ];
+        let extents = pline.extents().unwrap();
+        assert_eq!(extents.min_x, -1.0);
+        assert_eq!(extents.min_y, -1.0);
+        assert_eq!(extents.max_x, 1.0);
+        assert_eq!(extents.max_y, 1.0);
     }
 }

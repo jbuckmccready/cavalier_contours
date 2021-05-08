@@ -280,6 +280,10 @@ where
 {
     debug_assert!(!v1.bulge_is_zero(), "expected arc");
 
+    if v1.pos().fuzzy_eq(v2.pos()) {
+        return AABB::new(v1.x, v1.y, v1.x, v1.y);
+    }
+
     let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
     let start_angle = angle(arc_center, v1.pos());
     let end_angle = angle(arc_center, v2.pos());

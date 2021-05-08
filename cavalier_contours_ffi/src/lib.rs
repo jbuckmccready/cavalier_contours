@@ -835,7 +835,7 @@ pub unsafe extern "C" fn cavc_pline_remove_redundant(
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
-/// * 2 = `pline` is empty.
+/// * 2 = `pline` vertex count is less than 2.
 ///
 /// # Safety
 ///

@@ -748,8 +748,7 @@ where
 
     /// Compute the XY extents of the polyline.
     ///
-    /// Returns `None` if polyline is empty. If polyline has only one vertex then
-    /// `min_x = max_x = polyline[0].x` and `min_y = max_y = polyline[0].y`.
+    /// Returns `None` if polyline has less than 2 vertexes.
     ///
     /// # Examples
     ///
@@ -759,11 +758,7 @@ where
     /// let mut polyline = Polyline::new();
     /// assert_eq!(polyline.extents(), None);
     /// polyline.add(1.0, 1.0, 1.0);
-    /// let pt_extents = polyline.extents().unwrap();
-    /// assert!(pt_extents.min_x.fuzzy_eq(1.0));
-    /// assert!(pt_extents.min_y.fuzzy_eq(1.0));
-    /// assert!(pt_extents.max_x.fuzzy_eq(1.0));
-    /// assert!(pt_extents.max_y.fuzzy_eq(1.0));
+    /// assert_eq!(polyline.extents(), None);
     ///
     /// polyline.add(3.0, 1.0, 1.0);
     /// let extents = polyline.extents().unwrap();
@@ -780,7 +775,7 @@ where
     /// assert!(extents.max_y.fuzzy_eq(2.0));
     /// ```
     pub fn extents(&self) -> Option<AABB<T>> {
-        if self.is_empty() {
+        if self.len() < 2 {
             return None;
         }
 
