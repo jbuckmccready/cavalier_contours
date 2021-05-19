@@ -3,7 +3,10 @@ use super::{
     internal::pline_intersects::OverlappingSlice, seg_closest_point, seg_split_at_point,
     PlineVertex, Polyline,
 };
-use crate::core::{math::Vector2, traits::Real};
+use crate::core::{
+    math::Vector2,
+    traits::{ControlFlow, Real},
+};
 use static_aabb2d_index::StaticAABB2DIndex;
 
 /// Represents the orientation of a polyline.
@@ -311,6 +314,32 @@ impl<T> PlineIntersect<T> {
             point1,
             point2,
         ))
+    }
+}
+
+pub trait PlineIntersectVisitor<T, C>
+where
+    T: Real,
+    C: ControlFlow,
+{
+    fn visit_basic_intr(&mut self, intr: PlineBasicIntersect<T>) -> C;
+    fn visit_overlapping_intr(&mut self, intr: PlineOverlappingIntersect<T>) -> C;
+}
+
+impl<T, C, F> PlineIntersectVisitor<T, C> for F
+where
+    T: Real,
+    C: ControlFlow,
+    F: FnMut(PlineIntersect<T>) -> C,
+{
+    #[inline]
+    fn visit_basic_intr(&mut self, intr: PlineBasicIntersect<T>) -> C {
+        self(PlineIntersect::Basic(intr))
+    }
+
+    #[inline]
+    fn visit_overlapping_intr(&mut self, intr: PlineOverlappingIntersect<T>) -> C {
+        self(PlineIntersect::Overlapping(intr))
     }
 }
 

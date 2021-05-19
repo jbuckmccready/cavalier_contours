@@ -9,15 +9,15 @@ use super::{
         seg_fast_approx_bounding_box, seg_length,
     },
     seg_bounding_box, BooleanOp, BooleanResult, ClosestPointResult, PlineBooleanOptions,
-    PlineIntersect, PlineOffsetOptions, PlineOrientation, PlineSelfIntersectOptions, PlineVertex,
-    SelfIntersectsInclude,
+    PlineIntersectVisitor, PlineOffsetOptions, PlineOrientation, PlineSelfIntersectOptions,
+    PlineVertex, SelfIntersectsInclude,
 };
 use crate::core::{
     math::{
         angle, angle_from_bulge, bulge_from_angle, delta_angle, dist_squared, is_left,
         is_left_or_equal, point_on_circle, Vector2,
     },
-    traits::Real,
+    traits::{ControlFlow, Real},
 };
 use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder, AABB};
 use std::{
@@ -1061,29 +1061,32 @@ where
         polyline_boolean(self, other, operation, &options)
     }
 
-    /// Visit all self intersects of the polyline using default options.
-    pub fn visit_self_intersects<F>(&self, visitor: &mut F)
+    /// Visit self intersects of the polyline using default options.
+    pub fn visit_self_intersects<C, V>(&self, visitor: &mut V) -> C
     where
-        F: FnMut(PlineIntersect<T>) -> bool,
+        C: ControlFlow,
+        V: PlineIntersectVisitor<T, C>,
     {
-        self.visit_self_intersects_opt(visitor, &Default::default());
+        self.visit_self_intersects_opt(visitor, &Default::default())
     }
 
-    /// Visit all self intersects of the polyline using options provided.
-    pub fn visit_self_intersects_opt<F>(
+    /// Visit self intersects of the polyline using options provided.
+    pub fn visit_self_intersects_opt<C, V>(
         &self,
-        visitor: &mut F,
+        visitor: &mut V,
         options: &PlineSelfIntersectOptions<T>,
-    ) where
-        F: FnMut(PlineIntersect<T>) -> bool,
+    ) -> C
+    where
+        C: ControlFlow,
+        V: PlineIntersectVisitor<T, C>,
     {
         if self.len() < 2 {
-            return;
+            return C::continuing();
         }
 
         if options.include == SelfIntersectsInclude::Local {
-            visit_local_self_intersects(self, visitor, options.pos_equal_eps);
-            return;
+            // local intersects only
+            return visit_local_self_intersects(self, visitor, options.pos_equal_eps);
         }
 
         let constructed_index;
@@ -1094,11 +1097,18 @@ where
             &constructed_index
         };
 
-        if options.include == SelfIntersectsInclude::All {
-            visit_local_self_intersects(self, visitor, options.pos_equal_eps);
+        if options.include == SelfIntersectsInclude::Global {
+            // global intersects only
+            return visit_global_self_intersects(self, index, visitor, options.pos_equal_eps);
         }
 
-        visit_global_self_intersects(self, index, visitor, options.pos_equal_eps);
+        // else all intersects
+        try_cf!(visit_local_self_intersects(
+            self,
+            visitor,
+            options.pos_equal_eps
+        ));
+        return visit_global_self_intersects(self, index, visitor, options.pos_equal_eps);
     }
 
     /// Compute the closed signed area of the polyline.

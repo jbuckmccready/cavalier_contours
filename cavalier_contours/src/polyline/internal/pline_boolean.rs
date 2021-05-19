@@ -635,12 +635,11 @@ where
             loop_count += 1;
 
             query_results.clear();
-            let mut query_visitor = |i: usize| -> bool {
+            let mut query_visitor = |i: usize| {
                 // skip already visited
                 if i == beginning_slice_idx || !visited_slice_idx[i] {
                     query_results.push(i);
                 }
-                true
             };
 
             let ep = current_pline.last().unwrap().pos();

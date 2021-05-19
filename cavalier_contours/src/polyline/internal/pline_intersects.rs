@@ -1,27 +1,34 @@
 use crate::{
     core::{
         math::{dist_squared, Vector2},
-        traits::Real,
+        traits::{ControlFlow, Real},
+        Control,
     },
     polyline::{
         pline_seg_intr, seg_fast_approx_bounding_box, seg_split_at_point, seg_tangent_vector,
-        PlineBasicIntersect, PlineIntersect, PlineIntersectsCollection, PlineOverlappingIntersect,
-        PlineSegIntr, PlineVertex, Polyline, PolylineSlice,
+        PlineBasicIntersect, PlineIntersectVisitor, PlineIntersectsCollection,
+        PlineOverlappingIntersect, PlineSegIntr, PlineVertex, Polyline, PolylineSlice,
     },
 };
+use static_aabb2d_index as aabb_index;
 use static_aabb2d_index::StaticAABB2DIndex;
 use std::collections::HashSet;
 
 /// Visits all local self intersects of the polyline. Local self intersects are defined as between
 /// two polyline segments that share a vertex.
-pub fn visit_local_self_intersects<T, F>(polyline: &Polyline<T>, visitor: &mut F, pos_equal_eps: T)
+pub fn visit_local_self_intersects<T, C, V>(
+    polyline: &Polyline<T>,
+    visitor: &mut V,
+    pos_equal_eps: T,
+) -> C
 where
     T: Real,
-    F: FnMut(PlineIntersect<T>) -> bool,
+    C: ControlFlow,
+    V: PlineIntersectVisitor<T, C>,
 {
     let ln = polyline.len();
     if ln < 2 {
-        return;
+        return C::continuing();
     }
 
     if ln == 2 {
@@ -29,7 +36,7 @@ where
             // check if entirely overlaps self
             if polyline[0].bulge.fuzzy_eq(-polyline[1].bulge) {
                 // overlapping
-                visitor(PlineIntersect::new_overlapping(
+                return visitor.visit_overlapping_intr(PlineOverlappingIntersect::new(
                     0,
                     1,
                     polyline[0].pos(),
@@ -37,7 +44,7 @@ where
                 ));
             }
         }
-        return;
+        return C::continuing();
     }
 
     let mut visit_indexes = |i: usize, j: usize, k: usize| {
@@ -45,57 +52,61 @@ where
         let v2 = polyline[j];
         let v3 = polyline[k];
 
-        let mut continue_visiting = true;
-
         // testing for intersection between v1->v2 and v2->v3 segments
         if v1.pos().fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
             // singularity
-            continue_visiting = visitor(PlineIntersect::new_overlapping(i, j, v1.pos(), v2.pos()));
+            try_cf!(
+                visitor.visit_overlapping_intr(PlineOverlappingIntersect::new(
+                    i,
+                    j,
+                    v1.pos(),
+                    v2.pos()
+                ))
+            );
         } else {
             match pline_seg_intr(v1, v2, v2, v3) {
                 PlineSegIntr::NoIntersect => {}
                 PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
                     if !point.fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
-                        continue_visiting = visitor(PlineIntersect::new_basic(i, j, point));
+                        try_cf!(visitor.visit_basic_intr(PlineBasicIntersect::new(i, j, point)));
                     }
                 }
                 PlineSegIntr::TwoIntersects { point1, point2 } => {
                     if !point1.fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
-                        continue_visiting = visitor(PlineIntersect::new_basic(i, j, point1));
+                        try_cf!(visitor.visit_basic_intr(PlineBasicIntersect::new(i, j, point1)));
                     }
 
-                    if continue_visiting && !point2.fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
+                    if !point2.fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
                         pline_seg_intr(v1, v2, v2, v3);
-                        continue_visiting = visitor(PlineIntersect::new_basic(i, j, point2));
+                        try_cf!(visitor.visit_basic_intr(PlineBasicIntersect::new(i, j, point2)));
                     }
                 }
                 PlineSegIntr::OverlappingLines { point1, point2 }
                 | PlineSegIntr::OverlappingArcs { point1, point2 } => {
-                    continue_visiting =
-                        visitor(PlineIntersect::new_overlapping(i, j, point1, point2));
+                    try_cf!(
+                        visitor.visit_overlapping_intr(PlineOverlappingIntersect::new(
+                            i, j, point1, point2
+                        ))
+                    );
                 }
             }
         }
 
-        continue_visiting
+        C::continuing()
     };
 
-    // bool to track state of whether to continue visiting segments or not
-    let mut continue_visiting = true;
     for i in 2..ln {
-        continue_visiting = visit_indexes(i - 2, i - 1, i);
-        if !continue_visiting {
-            break;
-        }
+        try_cf!(visit_indexes(i - 2, i - 1, i));
     }
 
-    if continue_visiting && polyline.is_closed() {
+    if polyline.is_closed() {
         // we tested for intersect between segments at indexes 0->1, 1->2 and everything up to and
         // including (count-3)->(count-2), (count-2)->(count-1), polyline is closed so now test
         // [(count-2)->(count-1), (count-1)->0] and [(count-1)->0, 0->1]
-        visit_indexes(ln - 2, ln - 1, 0);
-        visit_indexes(ln - 1, 0, 1);
+        try_cf!(visit_indexes(ln - 2, ln - 1, 0));
+        try_cf!(visit_indexes(ln - 1, 0, 1));
     }
+    C::continuing()
 }
 
 /// Visits all global self intersects of the polyline. Global self intersects are defined as between
@@ -108,19 +119,21 @@ where
 /// start of that segment is recorded (unless the polyline is open and the intersect is at the very
 /// end of the polyline, then the second to last vertex index is used to maintain that it represents
 /// the start of a polyline segment).
-pub fn visit_global_self_intersects<T, F>(
+pub fn visit_global_self_intersects<T, C, V>(
     polyline: &Polyline<T>,
     aabb_index: &StaticAABB2DIndex<T>,
-    visitor: &mut F,
+    visitor: &mut V,
     pos_equal_eps: T,
-) where
+) -> C
+where
     T: Real,
-    F: FnMut(PlineIntersect<T>) -> bool,
+    C: ControlFlow,
+    V: PlineIntersectVisitor<T, C>,
 {
     let ln = polyline.len();
 
     if ln < 3 {
-        return;
+        return C::continuing();
     }
 
     let mut visited_pairs = HashSet::with_capacity(ln);
@@ -129,23 +142,23 @@ pub fn visit_global_self_intersects<T, F>(
 
     // iterate all segment bounding boxes in the spatial index querying itself to test for self
     // intersects
-    let mut break_loop = false;
+    let mut cf = C::continuing();
     for (box_index, aabb) in aabb_index.item_boxes().iter().enumerate() {
         let i = aabb_index.map_all_boxes_index(box_index);
         let j = polyline.next_wrapping_index(i);
         let v1 = polyline[i];
         let v2 = polyline[j];
-        let mut query_visitor = |hit_i: usize| -> bool {
+        let mut query_visitor = |hit_i: usize| {
             let hit_j = polyline.next_wrapping_index(hit_i);
             // skip local segments
             if i == hit_i || i == hit_j || j == hit_i || j == hit_j {
-                return true;
+                return aabb_index::Control::Continue;
             }
 
             // skip already visited pairs (reverse index pair order for lookup to work, e.g. we
             // visit (1, 2) then (2, 1) and we only want to visit the segment pair once)
             if visited_pairs.contains(&(hit_i, i)) {
-                return true;
+                return aabb_index::Control::Continue;
             }
 
             // add pair being visited
@@ -161,33 +174,45 @@ pub fn visit_global_self_intersects<T, F>(
                     && u2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
             };
 
-            let mut continue_visiting = true;
             match pline_seg_intr(v1, v2, u1, u2) {
                 PlineSegIntr::NoIntersect => {}
                 PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
                     if !skip_intr_at_end(point) {
-                        continue_visiting = visitor(PlineIntersect::new_basic(i, hit_i, point));
+                        cf = visitor.visit_basic_intr(PlineBasicIntersect::new(i, hit_i, point));
+                        if cf.should_break() {
+                            return aabb_index::Control::Break(());
+                        }
                     }
                 }
                 PlineSegIntr::TwoIntersects { point1, point2 } => {
                     if !skip_intr_at_end(point1) {
-                        continue_visiting = visitor(PlineIntersect::new_basic(i, hit_i, point1));
+                        cf = visitor.visit_basic_intr(PlineBasicIntersect::new(i, hit_i, point1));
+                        if cf.should_break() {
+                            return aabb_index::Control::Break(());
+                        }
                     }
 
-                    if continue_visiting && !skip_intr_at_end(point2) {
-                        continue_visiting = visitor(PlineIntersect::new_basic(i, hit_i, point2));
+                    if !skip_intr_at_end(point2) {
+                        cf = visitor.visit_basic_intr(PlineBasicIntersect::new(i, hit_i, point2));
+                        if cf.should_break() {
+                            return aabb_index::Control::Break(());
+                        }
                     }
                 }
                 PlineSegIntr::OverlappingLines { point1, point2 }
                 | PlineSegIntr::OverlappingArcs { point1, point2 } => {
                     if !skip_intr_at_end(point1) {
-                        continue_visiting =
-                            visitor(PlineIntersect::new_overlapping(i, hit_i, point1, point2));
+                        cf = visitor.visit_overlapping_intr(PlineOverlappingIntersect::new(
+                            i, hit_i, point1, point2,
+                        ));
+                        if cf.should_break() {
+                            return aabb_index::Control::Break(());
+                        }
                     }
                 }
             };
-            break_loop = !continue_visiting;
-            continue_visiting
+
+            aabb_index::Control::Continue
         };
 
         aabb_index.visit_query_with_stack(
@@ -199,10 +224,12 @@ pub fn visit_global_self_intersects<T, F>(
             &mut query_stack,
         );
 
-        if break_loop {
+        if cf.should_break() {
             break;
         }
     }
+
+    cf
 }
 
 /// Find all self intersects of a polyline, returning any overlapping intersects as basic intersects
@@ -215,32 +242,42 @@ pub fn all_self_intersects_as_basic<T>(
 where
     T: Real,
 {
-    let mut intrs = Vec::new();
-    let mut visitor = |intr: PlineIntersect<T>| {
-        match intr {
-            PlineIntersect::Basic(b) => {
-                intrs.push(b);
-            }
-            PlineIntersect::Overlapping(o) => {
-                intrs.push(PlineBasicIntersect::new(
-                    o.start_index1,
-                    o.start_index2,
-                    o.point1,
-                ));
-                intrs.push(PlineBasicIntersect::new(
-                    o.start_index1,
-                    o.start_index2,
-                    o.point2,
-                ));
-            }
+    struct Visitor<U> {
+        intrs: Vec<PlineBasicIntersect<U>>,
+    }
+
+    impl<U> PlineIntersectVisitor<U, Control> for Visitor<U>
+    where
+        U: Real,
+    {
+        fn visit_basic_intr(&mut self, intr: PlineBasicIntersect<U>) -> Control {
+            self.intrs.push(intr);
+            ControlFlow::continuing()
         }
-        true
-    };
+
+        fn visit_overlapping_intr(&mut self, intr: PlineOverlappingIntersect<U>) -> Control {
+            self.intrs.push(PlineBasicIntersect::new(
+                intr.start_index1,
+                intr.start_index2,
+                intr.point1,
+            ));
+
+            self.intrs.push(PlineBasicIntersect::new(
+                intr.start_index1,
+                intr.start_index2,
+                intr.point2,
+            ));
+
+            ControlFlow::continuing()
+        }
+    }
+
+    let mut visitor = Visitor { intrs: Vec::new() };
 
     visit_local_self_intersects(polyline, &mut visitor, pos_equal_eps);
     visit_global_self_intersects(polyline, aabb_index, &mut visitor, pos_equal_eps);
 
-    intrs
+    visitor.intrs
 }
 
 /// Find all intersects between two polylines.
@@ -336,9 +373,6 @@ where
                     }
                 }
             }
-
-            // visit all query results
-            true
         };
 
         let bb = seg_fast_approx_bounding_box(p2v1, p2v2);
@@ -707,7 +741,7 @@ where
 #[cfg(test)]
 mod local_self_intersect_tests {
     use super::*;
-    use crate::core::math::bulge_from_angle;
+    use crate::{core::math::bulge_from_angle, polyline::PlineIntersect};
 
     fn local_self_intersects<T>(
         polyline: &Polyline<T>,
@@ -718,16 +752,13 @@ mod local_self_intersect_tests {
     {
         let mut intrs = Vec::new();
         let mut overlapping_intrs = Vec::new();
-        let mut visitor = |intr: PlineIntersect<T>| {
-            match intr {
-                PlineIntersect::Basic(b) => {
-                    intrs.push(b);
-                }
-                PlineIntersect::Overlapping(o) => {
-                    overlapping_intrs.push(o);
-                }
+        let mut visitor = |intr: PlineIntersect<T>| match intr {
+            PlineIntersect::Basic(b) => {
+                intrs.push(b);
             }
-            true
+            PlineIntersect::Overlapping(o) => {
+                overlapping_intrs.push(o);
+            }
         };
 
         visit_local_self_intersects(polyline, &mut visitor, pos_equal_eps);
@@ -808,7 +839,7 @@ mod local_self_intersect_tests {
 #[cfg(test)]
 mod global_self_intersect_tests {
     use super::*;
-    use crate::core::math::bulge_from_angle;
+    use crate::{core::math::bulge_from_angle, polyline::PlineIntersect};
 
     fn global_self_intersects<T>(
         polyline: &Polyline<T>,
@@ -819,16 +850,13 @@ mod global_self_intersect_tests {
     {
         let mut intrs = Vec::new();
         let mut overlapping_intrs = Vec::new();
-        let mut visitor = |intr: PlineIntersect<T>| {
-            match intr {
-                PlineIntersect::Basic(b) => {
-                    intrs.push(b);
-                }
-                PlineIntersect::Overlapping(o) => {
-                    overlapping_intrs.push(o);
-                }
+        let mut visitor = |intr: PlineIntersect<T>| match intr {
+            PlineIntersect::Basic(b) => {
+                intrs.push(b);
             }
-            true
+            PlineIntersect::Overlapping(o) => {
+                overlapping_intrs.push(o);
+            }
         };
 
         visit_global_self_intersects(polyline, aabb_index, &mut visitor, T::from(1e-5).unwrap());

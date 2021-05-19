@@ -15,7 +15,7 @@ use crate::{
     },
 };
 use core::panic;
-use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder};
+use static_aabb2d_index::{Control, StaticAABB2DIndex, StaticAABB2DIndexBuilder};
 use std::collections::BTreeMap;
 
 /// A raw offset segment representing line or arc that has been parallel offset.
@@ -616,12 +616,16 @@ where
     let abs_offset = offset.abs() - offset_tol;
     let min_dist = abs_offset * abs_offset;
     let mut point_valid = true;
-    let mut visitor = |i: usize| -> bool {
+    let mut visitor = |i: usize| {
         let j = polyline.next_wrapping_index(i);
         let closest_point = seg_closest_point(polyline[i], polyline[j], point);
         let dist = dist_squared(closest_point, point);
         point_valid = dist > min_dist;
-        point_valid
+        if point_valid {
+            Control::Continue
+        } else {
+            Control::Break(())
+        }
     };
 
     aabb_index.visit_query_with_stack(
@@ -712,13 +716,17 @@ where
         |v1: PlineVertex<T>, v2: PlineVertex<T>, query_stack: &mut Vec<usize>| -> bool {
             let approx_bb = seg_fast_approx_bounding_box(v1, v2);
             let mut has_intersect = false;
-            let mut visitor = |i: usize| -> bool {
+            let mut visitor = |i: usize| {
                 let j = original_polyline.next_wrapping_index(i);
                 has_intersect = !matches!(
                     pline_seg_intr(v1, v2, original_polyline[i], original_polyline[j]),
                     PlineSegIntr::NoIntersect
                 );
-                !has_intersect
+                if has_intersect {
+                    Control::Break(())
+                } else {
+                    Control::Continue
+                }
             };
 
             let fuzz = T::fuzzy_epsilon();
@@ -1088,13 +1096,17 @@ where
         |v1: PlineVertex<T>, v2: PlineVertex<T>, query_stack: &mut Vec<usize>| -> bool {
             let approx_bb = seg_fast_approx_bounding_box(v1, v2);
             let mut has_intersect = false;
-            let mut visitor = |i: usize| -> bool {
+            let mut visitor = |i: usize| {
                 let j = original_polyline.next_wrapping_index(i);
                 has_intersect = !matches!(
                     pline_seg_intr(v1, v2, original_polyline[i], original_polyline[j]),
                     PlineSegIntr::NoIntersect
                 );
-                !has_intersect
+                if has_intersect {
+                    Control::Break(())
+                } else {
+                    Control::Continue
+                }
             };
 
             let fuzz = T::fuzzy_epsilon();
@@ -1485,11 +1497,10 @@ where
             let current_end_point = current_slice.end_point;
 
             query_results.clear();
-            let mut aabb_index_visitor = |i: usize| -> bool {
+            let mut aabb_index_visitor = |i: usize| {
                 if !visited_indexes[i] {
                     query_results.push(i);
                 }
-                true
             };
             aabb_index.visit_query_with_stack(
                 current_end_point.x - join_eps,

@@ -5,5 +5,6 @@ pub use static_aabb2d_index;
 
 #[macro_use]
 mod macros;
+#[macro_use]
 pub mod core;
 pub mod polyline;
