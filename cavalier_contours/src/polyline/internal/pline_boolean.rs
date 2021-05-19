@@ -2,8 +2,8 @@ use crate::{
     core::math::dist_squared,
     polyline::{
         seg_midpoint, seg_split_at_point, BooleanOp, BooleanPlineSlice, BooleanResult,
-        BooleanResultPline, OpenPlineSlice, PlineBasicIntersect, PlineBooleanOptions,
-        PolylineSlice,
+        BooleanResultPline, FindIntersectsOptions, OpenPlineSlice, PlineBasicIntersect,
+        PlineBooleanOptions, PolylineSlice,
     },
 };
 use std::collections::BTreeMap;
@@ -50,7 +50,14 @@ pub fn process_for_boolean<T>(
 where
     T: Real,
 {
-    let mut intrs = find_intersects(pline1, pline2, pline1_aabb_index, pos_equal_eps);
+    let mut intrs = find_intersects(
+        pline1,
+        pline2,
+        &FindIntersectsOptions {
+            pline1_aabb_index: Some(pline1_aabb_index),
+            pos_equal_eps,
+        },
+    );
     let overlapping_slices = sort_and_join_overlapping_intersects(
         &mut intrs.overlapping_intersects,
         pline1,

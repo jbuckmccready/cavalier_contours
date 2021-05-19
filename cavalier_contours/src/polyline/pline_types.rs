@@ -167,8 +167,12 @@ pub struct PlineBooleanOptions<'a, T>
 where
     T: Real,
 {
+    /// Spatial index for `self` or first polyline argument for the boolean operation.
     pub pline1_aabb_index: Option<&'a StaticAABB2DIndex<T>>,
+    /// Fuzzy comparison epsilon used for determining if two positions are equal.
     pub pos_equal_eps: T,
+    /// Fuzzy comparison epsilon used for determining if two positions are equal when stitching
+    /// polyline slices together.
     pub slice_join_eps: T,
 }
 
@@ -212,8 +216,12 @@ pub struct PlineSelfIntersectOptions<'a, T>
 where
     T: Real,
 {
+    /// Spatial index for the polyline.
     pub aabb_index: Option<&'a StaticAABB2DIndex<T>>,
+    /// Fuzzy comparison epsilon used for determining if two positions are equal.
     pub pos_equal_eps: T,
+    /// Controls whether to include all (local + global), only local, or only global self
+    /// intersects.
     pub include: SelfIntersectsInclude,
 }
 
@@ -231,6 +239,38 @@ where
 }
 
 impl<'a, T> Default for PlineSelfIntersectOptions<'a, T>
+where
+    T: Real,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug)]
+pub struct FindIntersectsOptions<'a, T>
+where
+    T: Real,
+{
+    /// Spatial index for `self` or first polyline argument to find intersects.
+    pub pline1_aabb_index: Option<&'a StaticAABB2DIndex<T>>,
+    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    pub pos_equal_eps: T,
+}
+
+impl<'a, T> FindIntersectsOptions<'a, T>
+where
+    T: Real,
+{
+    pub fn new() -> Self {
+        Self {
+            pline1_aabb_index: None,
+            pos_equal_eps: T::from(1e-5).unwrap(),
+        }
+    }
+}
+
+impl<'a, T> Default for FindIntersectsOptions<'a, T>
 where
     T: Real,
 {
@@ -820,28 +860,7 @@ impl<T> BooleanPlineSlice<T>
 where
     T: Real,
 {
-    pub fn new(
-        start_index: usize,
-        end_index_offset: usize,
-        updated_start: PlineVertex<T>,
-        updated_end_bulge: T,
-        end_point: Vector2<T>,
-        source_is_pline1: bool,
-        inverted: bool,
-        overlapping: bool,
-    ) -> Self {
-        Self {
-            start_index,
-            end_index_offset,
-            updated_start,
-            updated_end_bulge,
-            end_point,
-            source_is_pline1,
-            inverted,
-            overlapping,
-        }
-    }
-
+    #[inline]
     pub fn from_open_pline_slice(
         slice: &OpenPlineSlice<T>,
         source_is_pline1: bool,
@@ -859,21 +878,22 @@ where
         }
     }
 
+    #[inline]
     pub fn from_overlapping(
         source: &Polyline<T>,
         overlapping_slice: &OverlappingSlice<T>,
         inverted: bool,
     ) -> Self {
-        let result = BooleanPlineSlice::new(
-            overlapping_slice.start_indexes.1,
-            overlapping_slice.end_index_offset,
-            overlapping_slice.updated_start,
-            overlapping_slice.updated_end_bulge,
-            overlapping_slice.end_point,
-            false,
+        let result = Self {
+            start_index: overlapping_slice.start_indexes.1,
+            end_index_offset: overlapping_slice.end_index_offset,
+            updated_start: overlapping_slice.updated_start,
+            updated_end_bulge: overlapping_slice.updated_end_bulge,
+            end_point: overlapping_slice.end_point,
+            source_is_pline1: false,
             inverted,
-            true,
-        );
+            overlapping: true,
+        };
         debug_assert_eq!(result.validate_for_source(source), SliceValidation::IsValid);
         result
     }
@@ -908,6 +928,7 @@ where
         self.end_point
     }
 
+    #[inline]
     fn inverted_direction(&self) -> bool {
         self.inverted
     }

@@ -10,8 +10,8 @@ use crate::{
     polyline::{
         internal::pline_intersects::{all_self_intersects_as_basic, find_intersects},
         pline_seg_intr, seg_arc_radius_and_center, seg_closest_point, seg_fast_approx_bounding_box,
-        seg_midpoint, seg_split_at_point, OpenPlineSlice, PlineOffsetOptions, PlineSegIntr,
-        PlineVertex, Polyline, PolylineSlice,
+        seg_midpoint, seg_split_at_point, FindIntersectsOptions, OpenPlineSlice,
+        PlineOffsetOptions, PlineSegIntr, PlineVertex, Polyline, PolylineSlice,
     },
 };
 use core::panic;
@@ -1011,8 +1011,10 @@ where
     let dual_intrs = find_intersects(
         raw_offset_polyline,
         dual_raw_offset_polyline,
-        &raw_offset_index,
-        options.pos_equal_eps,
+        &FindIntersectsOptions {
+            pline1_aabb_index: Some(&raw_offset_index),
+            pos_equal_eps: options.pos_equal_eps,
+        },
     );
 
     // using BTreeMap rather than  HashMap since we want to construct the slices in vertex index

@@ -1,16 +1,18 @@
 use super::{
     internal::{
         pline_boolean::polyline_boolean,
-        pline_intersects::{visit_global_self_intersects, visit_local_self_intersects},
+        pline_intersects::{
+            find_intersects, visit_global_self_intersects, visit_local_self_intersects,
+        },
         pline_offset::parallel_offset,
     },
     pline_seg::{
         arc_seg_bounding_box, seg_arc_radius_and_center, seg_closest_point,
         seg_fast_approx_bounding_box, seg_length,
     },
-    seg_bounding_box, BooleanOp, BooleanResult, ClosestPointResult, PlineBooleanOptions,
-    PlineIntersectVisitor, PlineOffsetOptions, PlineOrientation, PlineSelfIntersectOptions,
-    PlineVertex, SelfIntersectsInclude,
+    seg_bounding_box, BooleanOp, BooleanResult, ClosestPointResult, FindIntersectsOptions,
+    PlineBooleanOptions, PlineIntersectVisitor, PlineIntersectsCollection, PlineOffsetOptions,
+    PlineOrientation, PlineSelfIntersectOptions, PlineVertex, SelfIntersectsInclude,
 };
 use crate::core::{
     math::{
@@ -1108,7 +1110,22 @@ where
             visitor,
             options.pos_equal_eps
         ));
-        return visit_global_self_intersects(self, index, visitor, options.pos_equal_eps);
+
+        visit_global_self_intersects(self, index, visitor, options.pos_equal_eps)
+    }
+
+    /// Find all intersects between two polylines using default options.
+    pub fn find_intersects(&self, other: &Polyline<T>) -> PlineIntersectsCollection<T> {
+        self.find_intersects_opt(other, &Default::default())
+    }
+
+    /// Find all intersects between two polylines using the options provided.
+    pub fn find_intersects_opt(
+        &self,
+        other: &Polyline<T>,
+        options: &FindIntersectsOptions<T>,
+    ) -> PlineIntersectsCollection<T> {
+        find_intersects(self, other, options)
     }
 
     /// Compute the closed signed area of the polyline.
