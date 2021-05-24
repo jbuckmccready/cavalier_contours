@@ -683,11 +683,11 @@ where
     pub fn create_on_single_segment(
         source: &Polyline<T>,
         start_index: usize,
-        slice_start_vertex: PlineVertex<T>,
+        updated_start: PlineVertex<T>,
         end_intersect: Vector2<T>,
         pos_equal_eps: T,
     ) -> Option<Self> {
-        if slice_start_vertex
+        if updated_start
             .pos()
             .fuzzy_eq_eps(end_intersect, pos_equal_eps)
         {
@@ -696,8 +696,8 @@ where
         let slice = Self {
             start_index,
             end_index_offset: 0,
-            updated_start: slice_start_vertex,
-            updated_end_bulge: slice_start_vertex.bulge,
+            updated_start,
+            updated_end_bulge: updated_start.bulge,
             end_point: end_intersect,
         };
 
@@ -716,7 +716,7 @@ where
         start_index: usize,
         end_intersect: Vector2<T>,
         intersect_index: usize,
-        slice_start_vertex: PlineVertex<T>,
+        updated_start: PlineVertex<T>,
         traverse_count: usize,
         pos_equal_eps: T,
     ) -> Self {
@@ -732,7 +732,7 @@ where
                 let updated_end_bulge = if offset != 0 {
                     source[source.prev_wrapping_index(intersect_index)].bulge
                 } else {
-                    slice_start_vertex.bulge
+                    updated_start.bulge
                 };
                 (offset, updated_end_bulge)
             } else {
@@ -750,7 +750,7 @@ where
         let slice = Self {
             start_index,
             end_index_offset,
-            updated_start: slice_start_vertex,
+            updated_start,
             updated_end_bulge,
             end_point: end_intersect,
         };
@@ -793,6 +793,69 @@ where
         debug_assert_eq!(slice.validate_for_source(source), SliceValidation::IsValid);
 
         slice
+    }
+
+    /// Construct slice that is contiguous between two points on a source polyline (start and end of
+    /// source polyline are trimmed).
+    pub fn from_slice_points(
+        source: &Polyline<T>,
+        start_point: Vector2<T>,
+        start_index: usize,
+        end_point: Vector2<T>,
+        end_index: usize,
+        pos_equal_eps: T,
+    ) -> Option<Self> {
+        debug_assert!(
+            start_index <= end_index || source.is_closed(),
+            "start index should be less than or equal to end index if polyline is open"
+        );
+
+        // catch if start_point is at end of first segment
+        let (start_index, start_point_at_seg_end) = {
+            let next_index = source.next_wrapping_index(start_index);
+            if source[next_index]
+                .pos()
+                .fuzzy_eq_eps(start_point, pos_equal_eps)
+            {
+                (next_index, true)
+            } else {
+                (start_index, false)
+            }
+        };
+
+        let updated_start = {
+            if start_point_at_seg_end {
+                source[start_index]
+            } else {
+                let start_v1 = source[start_index];
+                let start_v2 = source[source.next_wrapping_index(start_index)];
+                if start_v1.pos().fuzzy_eq_eps(start_point, pos_equal_eps) {}
+                let start_split =
+                    seg_split_at_point(start_v1, start_v2, start_point, pos_equal_eps);
+                start_split.split_vertex
+            }
+        };
+
+        let traverse_count = source.fwd_wrapping_dist(start_index, end_index);
+        if traverse_count == 0 {
+            Self::create_on_single_segment(
+                source,
+                start_index,
+                updated_start,
+                end_point,
+                pos_equal_eps,
+            )
+        } else {
+            Some(Self::create(
+                source,
+                start_index,
+                end_point,
+                end_index,
+                updated_start,
+                traverse_count,
+                pos_equal_eps,
+            ))
+        }
     }
 }
 
