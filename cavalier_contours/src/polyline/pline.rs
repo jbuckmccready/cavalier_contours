@@ -114,7 +114,7 @@ where
     ///
     /// If the vertex position is fuzzy equal then just update the bulge of the last vertex with
     /// the bulge given.
-    pub(crate) fn add_or_replace(&mut self, x: T, y: T, bulge: T, pos_equal_eps: T) {
+    pub fn add_or_replace(&mut self, x: T, y: T, bulge: T, pos_equal_eps: T) {
         let ln = self.len();
         if ln == 0 {
             self.add(x, y, bulge);
@@ -135,7 +135,7 @@ where
     ///
     /// If the vertex position is fuzzy equal then just update the bulge of the last vertex with
     /// the bulge given.
-    pub(crate) fn add_or_replace_vertex(&mut self, vertex: PlineVertex<T>, pos_equal_eps: T) {
+    pub fn add_or_replace_vertex(&mut self, vertex: PlineVertex<T>, pos_equal_eps: T) {
         self.add_or_replace(vertex.x, vertex.y, vertex.bulge, pos_equal_eps)
     }
 
@@ -290,10 +290,12 @@ where
 
     /// Fuzzy equal comparison with another polyline using `fuzzy_epsilon` given.
     pub fn fuzzy_eq_eps(&self, other: &Self, fuzzy_epsilon: T) -> bool {
-        self.vertex_data
-            .iter()
-            .zip(&other.vertex_data)
-            .all(|(v1, v2)| v1.fuzzy_eq_eps(*v2, fuzzy_epsilon))
+        self.len() == other.len()
+            && self
+                .vertex_data
+                .iter()
+                .zip(&other.vertex_data)
+                .all(|(v1, v2)| v1.fuzzy_eq_eps(*v2, fuzzy_epsilon))
     }
 
     /// Fuzzy equal comparison with another vertex using T::fuzzy_epsilon().
