@@ -643,6 +643,17 @@ where
         self.visit_vertexes(source, &mut visitor);
     }
 
+    /// Compute the path length of the slice.
+    fn path_length(&self, source: &Polyline<T>) -> T {
+        let mut acc_length = T::zero();
+        let mut visitor = |v1, v2| {
+            acc_length = acc_length + seg_length(v1, v2);
+        };
+        self.visit_segs(source, &mut visitor);
+
+        acc_length
+    }
+
     /// Find the segment index offset and point on the slice corresponding to the path length given.
     ///
     /// Returns `Ok((0, first_vertex_position))` if `target_path_length` is negative.

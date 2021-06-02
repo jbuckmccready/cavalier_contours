@@ -515,3 +515,27 @@ fn find_point_at_path_length() {
         assert_path_length_result_eq!(r, expected);
     }
 }
+
+#[test]
+fn path_length() {
+    let pline = pline_closed![
+        (0.0, 0.0, 1.0),
+        (1.0, 0.0, -1.0),
+        (1.0, 1.0, 0.0),
+        (1.0, 2.0, 0.0)
+    ];
+    let slice = OpenPlineSlice::from_entire_pline(&pline);
+    assert_fuzzy_eq!(slice.path_length(&pline), pline.path_length());
+
+    let partial_slice = OpenPlineSlice::from_slice_points(
+        &pline,
+        Vector2::new(0.0, 0.0),
+        0,
+        Vector2::new(1.0, 1.0),
+        2,
+        POS_EQ_EPS,
+    )
+    .unwrap();
+
+    assert_fuzzy_eq!(partial_slice.path_length(&pline), PI);
+}
