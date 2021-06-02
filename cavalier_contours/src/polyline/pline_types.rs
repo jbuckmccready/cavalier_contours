@@ -643,11 +643,20 @@ where
         self.visit_vertexes(source, &mut visitor);
     }
 
-    /// Find the point on the slice corresponding to the path length given.
+    /// Find the segment index offset and point on the slice corresponding to the path length given.
     ///
-    /// Returns `Ok((segment_index, point))` if `target_path_length` is less than the slice's total
-    /// path length, `Ok((0, first_vertex))` if `target_path_length` is negative, otherwise returns
-    /// `Err((slice_total_path_length))`.
+    /// Returns `Ok((0, first_vertex_position))` if `target_path_length` is negative.
+    ///
+    /// Returns `Ok((seg_index_offset, point))` if `target_path_length` is less than or equal to the
+    /// slice's total path length. Where `seg_index_offset` is offset from start of slice, e.g. if
+    /// point is on the first segment of the slice then `seg_index_offset = 0` regardless of what
+    /// segment index the slice starts on the source polyline.
+    ///
+    /// If the original source segment index is desired then `slice.updated_start()` must be added
+    /// to `seg_index_offset` (wrapping add if the source is a closed polyline).
+    ///
+    /// Returns `Err((slice_total_path_length))` if `target_path_length` is greater than total path
+    /// length of the slice.
     fn find_point_at_path_length(
         &self,
         source: &Polyline<T>,

@@ -453,6 +453,13 @@ fn find_point_at_path_length() {
         assert_path_length_result_eq!(r, expected);
     }
 
+    // target path length greater than total
+    {
+        let r = slice.find_point_at_path_length(&pline, pline_path_length + 1.0);
+        let expected = Err(pline_path_length);
+        assert_path_length_result_eq!(r, expected);
+    }
+
     // half path length of first seg
     {
         let target_path_length = seg_length(pline[0], pline[1]) / 2.0;
@@ -485,6 +492,26 @@ fn find_point_at_path_length() {
             + seg_length(pline[2], pline[3]) / 2.0;
         let r = slice.find_point_at_path_length(&pline, target_path_length);
         let expected = Ok((2, Vector2::new(1.0, 1.5)));
+        assert_path_length_result_eq!(r, expected);
+    }
+
+    // sub slice tests (mostly to validate segment index offset)
+    let sub_slice =
+        OpenPlineSlice::from_slice_points(&pline, pline[2].pos(), 2, pline[3].pos(), 3, POS_EQ_EPS)
+            .unwrap();
+    let sub_slice_length = seg_length(pline[2], pline[3]);
+
+    // 0 path length (point at very start)
+    {
+        let r = sub_slice.find_point_at_path_length(&pline, 0.0);
+        let expected = Ok((0, Vector2::new(1.0, 1.0)));
+        assert_path_length_result_eq!(r, expected);
+    }
+
+    // total path length (point at very end)
+    {
+        let r = sub_slice.find_point_at_path_length(&pline, sub_slice_length);
+        let expected = Ok((0, Vector2::new(1.0, 2.0)));
         assert_path_length_result_eq!(r, expected);
     }
 }
