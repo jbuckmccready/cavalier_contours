@@ -423,7 +423,12 @@ fn visit_segs() {
 
 #[test]
 fn find_point_at_path_length() {
-    let pline = pline_closed![(0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0)];
+    let pline = pline_closed![
+        (0.0, 0.0, 1.0),
+        (1.0, 0.0, -1.0),
+        (1.0, 1.0, 0.0),
+        (1.0, 2.0, 0.0)
+    ];
     let pline_path_length = pline.path_length();
     let slice = OpenPlineSlice::from_entire_pline(&pline);
 
@@ -437,7 +442,7 @@ fn find_point_at_path_length() {
     // total path length (point at very end)
     {
         let r = slice.find_point_at_path_length(&pline, pline_path_length);
-        let expected = Ok((2, Vector2::new(0.0, 0.0)));
+        let expected = Ok((3, Vector2::new(0.0, 0.0)));
         assert_path_length_result_eq!(r, expected);
     }
 
@@ -469,7 +474,17 @@ fn find_point_at_path_length() {
         let target_path_length =
             seg_length(pline[0], pline[1]) + seg_length(pline[1], pline[2]) / 2.0;
         let r = slice.find_point_at_path_length(&pline, target_path_length);
-        let expected = Ok((1, Vector2::new(1.0, 0.5)));
+        let expected = Ok((1, Vector2::new(0.5, 0.5)));
+        assert_path_length_result_eq!(r, expected);
+    }
+
+    // half path length into third seg
+    {
+        let target_path_length = seg_length(pline[0], pline[1])
+            + seg_length(pline[1], pline[2])
+            + seg_length(pline[2], pline[3]) / 2.0;
+        let r = slice.find_point_at_path_length(&pline, target_path_length);
+        let expected = Ok((2, Vector2::new(1.0, 1.5)));
         assert_path_length_result_eq!(r, expected);
     }
 }

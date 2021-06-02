@@ -680,11 +680,7 @@ where
                 let (radius, center) = seg_arc_radius_and_center(v1, v2);
                 let start_angle = angle(center, v1.pos());
                 let total_sweep_angle = angle_from_bulge(v1.bulge);
-                let target_angle = if v1.bulge_is_pos() {
-                    start_angle + total_sweep_angle * t
-                } else {
-                    start_angle - total_sweep_angle * t
-                };
+                let target_angle = start_angle + total_sweep_angle * t;
 
                 let pt = point_on_circle(radius, center, target_angle);
                 Control::Break((seg_index, pt))
