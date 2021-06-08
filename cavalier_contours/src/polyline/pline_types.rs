@@ -800,6 +800,8 @@ pub struct OpenPlineSlice<T> {
     pub updated_end_bulge: T,
     /// Final end point of the slice.
     pub end_point: Vector2<T>,
+    /// Whether the slice direction is inverted or not when visiting vertexes/segments.
+    pub inverted: bool,
 }
 
 impl<T> OpenPlineSlice<T>
@@ -828,6 +830,7 @@ where
             updated_start,
             updated_end_bulge: updated_start.bulge,
             end_point: end_intersect,
+            inverted: false,
         };
 
         debug_assert_eq!(slice.validate_for_source(source), SliceValidation::IsValid);
@@ -882,6 +885,7 @@ where
             updated_start,
             updated_end_bulge,
             end_point: end_intersect,
+            inverted: false,
         };
 
         debug_assert_eq!(slice.validate_for_source(source), SliceValidation::IsValid);
@@ -908,6 +912,7 @@ where
                 updated_start: source[0],
                 updated_end_bulge: source.last().unwrap().bulge,
                 end_point: source[0].pos(),
+                inverted: false,
             }
         } else {
             Self {
@@ -916,6 +921,7 @@ where
                 updated_start: source[0],
                 updated_end_bulge: source[ln - 2].bulge,
                 end_point: source[ln - 1].pos(),
+                inverted: false,
             }
         };
 
@@ -1041,7 +1047,7 @@ where
 
     #[inline]
     fn inverted_direction(&self) -> bool {
-        false
+        self.inverted
     }
 }
 
