@@ -235,6 +235,19 @@ where
         self.vertex_data.push(vertex);
     }
 
+    /// Insert a new vertex into the polyline at position `index` by giving the `x`, `y`, and
+    /// `bulge` values of the new vertex.
+    pub fn insert(&mut self, index: usize, x: T, y: T, bulge: T) {
+        self.vertex_data
+            .insert(index, PlineVertex::new(x, y, bulge));
+    }
+
+    /// Insert a new vertex into the polyline at position `index` by giving a
+    /// [PlineVertex](crate::polyline::PlineVertex).
+    pub fn insert_vertex(&mut self, index: usize, vertex: PlineVertex<T>) {
+        self.vertex_data.insert(index, vertex);
+    }
+
     /// Copy all vertexes from `other` to the end of this polyline.
     pub fn extend(&mut self, other: &Polyline<T>) {
         self.vertex_data.extend(other.vertex_data.iter());
