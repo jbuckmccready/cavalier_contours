@@ -23,6 +23,8 @@ impl PlineProperties {
     pub const POS_EQ_EPS: f64 = 1e-5;
     // property comparer epsilon
     pub const PROP_CMP_EPS: f64 = 1e-4;
+    // epsilon for use of remove_redundant for consistent property compare
+    pub const REMOVE_REDUNDANT_EPS: f64 = 1e-4;
 
     pub fn new(
         vertex_count: usize,
@@ -43,7 +45,7 @@ impl PlineProperties {
 
     pub fn from_pline(pline: &Polyline<f64>, invert_area: bool) -> Self {
         // remove redundant vertexes for consistent vertex counts
-        let pline = pline.remove_redundant(PlineProperties::POS_EQ_EPS);
+        let pline = pline.remove_redundant(PlineProperties::REMOVE_REDUNDANT_EPS);
         let area = {
             let a = pline.area();
             if invert_area {

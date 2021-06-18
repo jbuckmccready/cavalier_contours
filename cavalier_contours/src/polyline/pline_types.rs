@@ -598,6 +598,7 @@ where
 
     /// Visit all vertexes in this slice (source reference required for vertex data) until the slice
     /// has been fully traversed or the visitor breaks.
+    #[inline]
     fn visit_vertexes<V, C>(&self, source: &Polyline<T>, visitor: &mut V) -> C
     where
         C: ControlFlow,
@@ -612,6 +613,7 @@ where
 
     /// Visit all polyline segments in this slice (source reference required for vertex data) until
     /// the slice has been fully traversed or the visitor breaks.
+    #[inline]
     fn visit_segs<V, C>(&self, source: &Polyline<T>, visitor: &mut V) -> C
     where
         C: ControlFlow,
@@ -634,6 +636,7 @@ where
     /// Stitch this slice onto a target polyline by appending all its vertexes onto the target.
     ///
     /// `pos_equal_eps` is used to prevent repeat position vertexes.
+    #[inline]
     fn stitch_onto(&self, source: &Polyline<T>, target: &mut Polyline<T>, pos_equal_eps: T) {
         target.reserve(self.vertex_count());
         let mut visitor = |v: PlineVertex<T>| {
@@ -644,6 +647,7 @@ where
     }
 
     /// Compute the path length of the slice.
+    #[inline]
     fn path_length(&self, source: &Polyline<T>) -> T {
         let mut acc_length = T::zero();
         let mut visitor = |v1, v2| {

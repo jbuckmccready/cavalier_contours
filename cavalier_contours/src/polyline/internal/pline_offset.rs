@@ -10,8 +10,8 @@ use crate::{
     polyline::{
         internal::pline_intersects::{all_self_intersects_as_basic, find_intersects},
         pline_seg_intr, seg_arc_radius_and_center, seg_closest_point, seg_fast_approx_bounding_box,
-        seg_midpoint, seg_split_at_point, FindIntersectsOptions, OpenPlineSlice,
-        PlineOffsetOptions, PlineSegIntr, PlineVertex, Polyline, PolylineSlice,
+        seg_midpoint, FindIntersectsOptions, OpenPlineSlice, PlineOffsetOptions, PlineSegIntr,
+        PlineVertex, Polyline, PolylineSlice,
     },
 };
 use core::panic;
@@ -752,152 +752,118 @@ where
         )
     };
 
+    let slice_is_valid = |slice: &OpenPlineSlice<T>, query_stack: &mut Vec<usize>| -> bool {
+        if slice.end_index_offset == 0 {
+            // slice all on one segment, test start, end, midpoint, and if it intersects the
+            // original
+            let v1 = slice.updated_start;
+            if !point_valid_dist(v1.pos(), query_stack) {
+                return false;
+            }
+            let v2 = PlineVertex::from_vector2(slice.end_point, T::zero());
+            if !point_valid_dist(v2.pos(), query_stack) {
+                return false;
+            }
+            let midpoint = seg_midpoint(v1, v2);
+            if !point_valid_dist(midpoint, query_stack) {
+                return false;
+            }
+
+            return !intersects_original_pline(v1, v2, query_stack);
+        }
+
+        // slice not all on one segment, start by checking midpoints of first and last segment of
+        // the slice
+        let start_seg_midpoint = seg_midpoint(
+            slice.updated_start,
+            raw_offset_polyline[raw_offset_polyline.next_wrapping_index(slice.start_index)],
+        );
+
+        if !point_valid_dist(start_seg_midpoint, query_stack) {
+            return false;
+        }
+
+        let end_index =
+            raw_offset_polyline.fwd_wrapping_index(slice.start_index, slice.end_index_offset);
+        let end_seg_midpoint = seg_midpoint(
+            raw_offset_polyline[end_index].with_bulge(slice.updated_end_bulge),
+            PlineVertex::from_vector2(slice.end_point, T::zero()),
+        );
+
+        if !point_valid_dist(end_seg_midpoint, query_stack) {
+            return false;
+        }
+
+        // test all segments
+        let mut seg_visitor = |v1: PlineVertex<T>, v2: PlineVertex<T>| {
+            // test start point
+            if !point_valid_dist(v1.pos(), query_stack) {
+                return Control::Break(());
+            }
+
+            // test intersection with original polyline
+            if intersects_original_pline(v1, v2, query_stack) {
+                return Control::Break(());
+            }
+
+            Control::Continue
+        };
+
+        match slice.visit_segs(raw_offset_polyline, &mut seg_visitor) {
+            Control::Continue => {
+                // check final end point (seg checks only start point and intersection)
+                point_valid_dist(slice.end_point, query_stack)
+            }
+            Control::Break(_) => {
+                // a slice segment failed check
+                false
+            }
+        }
+    };
+
     for (&start_index, intr_list) in intersects_lookup.iter() {
-        let next_index = raw_offset_polyline.next_wrapping_index(start_index);
-        let start_vertex = raw_offset_polyline[start_index];
-        let end_vertex = raw_offset_polyline[next_index];
-        if intr_list.len() != 1 {
-            // build all the slices between the N intersects in intr_list (N > 1), skipping the
-            // first slice (to be processed at the end)
-            let first_split =
-                seg_split_at_point(start_vertex, end_vertex, intr_list[0], pos_equal_eps);
-            let mut prev_vertex = first_split.split_vertex;
-            for &intr in intr_list.iter().skip(1) {
-                let split = seg_split_at_point(prev_vertex, end_vertex, intr, pos_equal_eps);
-                // update prev_vertex for next loop iteration
-                prev_vertex = split.split_vertex;
-                // skip if positions overlap
-                if split
-                    .updated_start
-                    .pos()
-                    .fuzzy_eq_eps(split.split_vertex.pos(), pos_equal_eps)
-                {
-                    continue;
-                }
+        let mut intr_list_iter = intr_list.windows(2);
+        while let Some(&[intr1, intr2]) = intr_list_iter.next() {
+            let slice = OpenPlineSlice::from_slice_points(
+                raw_offset_polyline,
+                intr1,
+                start_index,
+                intr2,
+                start_index,
+                pos_equal_eps,
+            );
 
-                // test start point
-                if !point_valid_dist(split.updated_start.pos(), &mut query_stack) {
-                    continue;
-                }
-
-                // test end point
-                if !point_valid_dist(split.split_vertex.pos(), &mut query_stack) {
-                    continue;
-                }
-
-                // test segment midpoint
-                let midpoint = seg_midpoint(split.updated_start, split.split_vertex);
-                if !point_valid_dist(midpoint, &mut query_stack) {
-                    continue;
-                }
-
-                // test intersection with original polyline
-                if intersects_original_pline(
-                    split.updated_start,
-                    split.split_vertex,
-                    &mut query_stack,
-                ) {
-                    continue;
-                }
-
-                // passed all tests, add the slice
-                let slice = OpenPlineSlice::create_on_single_segment(
-                    raw_offset_polyline,
-                    start_index,
-                    split.updated_start,
-                    split.split_vertex.pos(),
-                    pos_equal_eps,
-                );
-                if let Some(s) = slice {
+            if let Some(s) = slice {
+                if slice_is_valid(&s, &mut query_stack) {
                     result.push(s);
                 }
             }
         }
 
         // build the slice between the last intersect in the intr_list and the next intersect found
-        // check that the first point is valid
-        let slice_start_point = *intr_list.last().unwrap();
-        if !point_valid_dist(slice_start_point, &mut query_stack) {
-            continue;
-        }
+        let next_index = raw_offset_polyline.next_wrapping_index(start_index);
 
-        let split = seg_split_at_point(start_vertex, end_vertex, slice_start_point, pos_equal_eps);
-        let slice_start_vertex = split.split_vertex;
+        let (found_index, next_intr_list) =
+            if let Some(list) = intersects_lookup.range(next_index..).next() {
+                list
+            } else {
+                // wrap around polyline
+                intersects_lookup.range(..=start_index).next().unwrap()
+            };
 
-        let mut last_vertex = split.split_vertex;
-        if last_vertex
-            .pos()
-            .fuzzy_eq_eps(end_vertex.pos(), pos_equal_eps)
-        {
-            // collapsed slice, skip it
-            continue;
-        }
+        let slice = OpenPlineSlice::from_slice_points(
+            raw_offset_polyline,
+            *intr_list.last().unwrap(),
+            start_index,
+            next_intr_list[0],
+            *found_index,
+            pos_equal_eps,
+        );
 
-        let mut index = next_index;
-        let mut loop_count = 0;
-        let max_loop_count = raw_offset_polyline.len();
-        loop {
-            if loop_count > max_loop_count {
-                // prevent infinite loop
-                unreachable!(
-                    "loop_count exceeded max_loop_count while creating slices from raw offset"
-                );
+        if let Some(s) = slice {
+            if slice_is_valid(&s, &mut query_stack) {
+                result.push(s);
             }
-            loop_count += 1;
-
-            let current_vertex = raw_offset_polyline[index];
-            // check that vertex point is valid
-            if !point_valid_dist(current_vertex.pos(), &mut query_stack) {
-                break;
-            }
-
-            // check that the segment does not intersect original polyline
-            if intersects_original_pline(last_vertex, current_vertex, &mut query_stack) {
-                break;
-            }
-
-            // include vertex
-            last_vertex = current_vertex;
-
-            // check if segment that starts at current vertex just added to slice has an intersect
-            if let Some(next_intr_list) = intersects_lookup.get(&index) {
-                // there is an intersect, slice is done, check if final segment is valid
-
-                // check intersect point is valid (which will be the end of the slice)
-                let intersect_point = next_intr_list[0];
-                if !point_valid_dist(intersect_point, &mut query_stack) {
-                    break;
-                }
-
-                let next_index = raw_offset_polyline.next_wrapping_index(index);
-                let split = seg_split_at_point(
-                    current_vertex,
-                    raw_offset_polyline[next_index],
-                    intersect_point,
-                    pos_equal_eps,
-                );
-
-                let slice_end_vertex = PlineVertex::from_vector2(intersect_point, T::zero());
-                // check midpoint is valid
-                let midpoint = seg_midpoint(split.updated_start, slice_end_vertex);
-                if !point_valid_dist(midpoint, &mut query_stack) {
-                    break;
-                }
-
-                let slice = OpenPlineSlice::create(
-                    raw_offset_polyline,
-                    start_index,
-                    intersect_point,
-                    index,
-                    slice_start_vertex,
-                    loop_count,
-                    pos_equal_eps,
-                );
-                result.push(slice);
-                break;
-            }
-            // else there is not an intersect, increment index and continue
-            index = raw_offset_polyline.next_wrapping_index(index);
         }
     }
 
@@ -1134,284 +1100,154 @@ where
         )
     };
 
+    let slice_is_valid = |slice: &OpenPlineSlice<T>, query_stack: &mut Vec<usize>| -> bool {
+        if slice.end_index_offset == 0 {
+            // slice all on one segment, test start, end, midpoint, and if it intersects the
+            // original
+            let v1 = slice.updated_start;
+            if !point_valid_dist(v1.pos(), query_stack) {
+                return false;
+            }
+            let v2 = PlineVertex::from_vector2(slice.end_point, T::zero());
+            if !point_valid_dist(v2.pos(), query_stack) {
+                return false;
+            }
+            let midpoint = seg_midpoint(v1, v2);
+            if !point_valid_dist(midpoint, query_stack) {
+                return false;
+            }
+
+            return !intersects_original_pline(v1, v2, query_stack);
+        }
+
+        // slice not all on one segment, start by checking midpoints of first and last segment of
+        // the slice
+        let start_seg_midpoint = seg_midpoint(
+            slice.updated_start,
+            raw_offset_polyline[raw_offset_polyline.next_wrapping_index(slice.start_index)],
+        );
+
+        if !point_valid_dist(start_seg_midpoint, query_stack) {
+            return false;
+        }
+
+        let end_index =
+            raw_offset_polyline.fwd_wrapping_index(slice.start_index, slice.end_index_offset);
+        let end_seg_midpoint = seg_midpoint(
+            raw_offset_polyline[end_index].with_bulge(slice.updated_end_bulge),
+            PlineVertex::from_vector2(slice.end_point, T::zero()),
+        );
+
+        if !point_valid_dist(end_seg_midpoint, query_stack) {
+            return false;
+        }
+
+        // test all segments
+        let mut seg_visitor = |v1: PlineVertex<T>, v2: PlineVertex<T>| {
+            // test start point
+            if !point_valid_dist(v1.pos(), query_stack) {
+                return Control::Break(());
+            }
+
+            // test intersection with original polyline
+            if intersects_original_pline(v1, v2, query_stack) {
+                return Control::Break(());
+            }
+
+            Control::Continue
+        };
+
+        match slice.visit_segs(raw_offset_polyline, &mut seg_visitor) {
+            Control::Continue => {
+                // check final end point (seg checks only start point and intersection)
+                point_valid_dist(slice.end_point, query_stack)
+            }
+            Control::Break(_) => {
+                // a slice segment failed check
+                false
+            }
+        }
+    };
+
     if !original_polyline.is_closed() {
         // build first slice that ends at the first intersect since we will not wrap back to
         // capture it as in the case of a closed polyline
+        let (intr_idx, intr_list) = intersects_lookup.iter().next().unwrap();
+        let intr = intr_list[0];
+        let slice = OpenPlineSlice::from_slice_points(
+            raw_offset_polyline,
+            raw_offset_polyline[0].pos(),
+            0,
+            intr,
+            *intr_idx,
+            pos_equal_eps,
+        );
 
-        // Helper type to return result of attempting to clip to an intersect
-        enum ClipResult<U> {
-            // Intersect found and clipped to, returning the built slice
-            Valid(OpenPlineSlice<U>),
-            // Intersect found and segment not valid
-            Invalid,
-            // No intersect found to clip to
-            None,
-        }
-
-        let clip_to_intersect = |index, loop_count, stack: &mut Vec<usize>| -> ClipResult<T> {
-            if let Some(intr_list) = intersects_lookup.get(&index) {
-                let intr_pos = intr_list[0];
-                if !point_valid_dist(intr_pos, stack) {
-                    return ClipResult::Invalid;
-                }
-
-                let split = seg_split_at_point(
-                    raw_offset_polyline[index],
-                    raw_offset_polyline[index + 1],
-                    intr_pos,
-                    pos_equal_eps,
-                );
-
-                let slice_end_vertex = PlineVertex::new(intr_pos.x, intr_pos.y, T::zero());
-                let midpoint = seg_midpoint(split.updated_start, slice_end_vertex);
-                if !point_valid_dist(midpoint, stack) {
-                    return ClipResult::Invalid;
-                }
-
-                if intersects_original_pline(split.updated_start, slice_end_vertex, stack) {
-                    return ClipResult::Invalid;
-                }
-
-                if loop_count == 0 {
-                    let slice = OpenPlineSlice::create_on_single_segment(
-                        raw_offset_polyline,
-                        0,
-                        split.updated_start,
-                        intr_pos,
-                        pos_equal_eps,
-                    );
-                    return slice.map_or_else(|| ClipResult::Invalid, ClipResult::Valid);
-                }
-                let slice = OpenPlineSlice::create(
-                    raw_offset_polyline,
-                    0,
-                    intr_pos,
-                    index,
-                    raw_offset_polyline[0],
-                    loop_count,
-                    pos_equal_eps,
-                );
-                ClipResult::Valid(slice)
-            } else {
-                ClipResult::None
-            }
-        };
-
-        match clip_to_intersect(0, 0, &mut query_stack) {
-            ClipResult::Valid(slice) => {
-                // intersect on first segment
-                result.push(slice);
-            }
-            ClipResult::Invalid => {
-                // intersect on first segment but invalid (do not add to result)
-            }
-            ClipResult::None => {
-                // no intersect on very first segment, loop until we find an intersect to clip to
-                let mut index = 1;
-                let mut loop_count = 0;
-                let max_loop_count = raw_offset_polyline.len();
-                loop {
-                    if loop_count > max_loop_count {
-                        // prevent infinite loop
-                        unreachable!(
-                        "loop_count exceeded max_loop_count while creating slices from raw offset"
-                    );
-                    }
-                    loop_count += 1;
-                    match clip_to_intersect(index, loop_count, &mut query_stack) {
-                        ClipResult::Valid(slice) => {
-                            result.push(slice);
-                            break;
-                        }
-                        ClipResult::Invalid => {
-                            break;
-                        }
-                        ClipResult::None => {
-                            if !point_valid_dist(raw_offset_polyline[index].pos(), &mut query_stack)
-                            {
-                                break;
-                            }
-
-                            if intersects_original_pline(
-                                raw_offset_polyline[index - 1],
-                                raw_offset_polyline[index],
-                                &mut query_stack,
-                            ) {
-                                break;
-                            }
-
-                            index += 1;
-                        }
-                    }
-                }
+        if let Some(s) = slice {
+            if slice_is_valid(&s, &mut query_stack) {
+                result.push(s);
             }
         }
     }
 
     for (&start_index, intr_list) in intersects_lookup.iter() {
-        let next_index = raw_offset_polyline.next_wrapping_index(start_index);
-        let start_vertex = raw_offset_polyline[start_index];
-        let end_vertex = raw_offset_polyline[next_index];
-        if intr_list.len() != 1 {
-            // build all the slices between the N intersects in intr_list (N > 1), skipping the
-            // first slice (to be processed at the end)
-            let first_split =
-                seg_split_at_point(start_vertex, end_vertex, intr_list[0], pos_equal_eps);
-            let mut prev_vertex = first_split.split_vertex;
-            for &intr in intr_list.iter().skip(1) {
-                let split = seg_split_at_point(prev_vertex, end_vertex, intr, pos_equal_eps);
-                // update prev_vertex for next loop iteration
-                prev_vertex = split.split_vertex;
-                // skip if positions overlap
-                if split
-                    .updated_start
-                    .pos()
-                    .fuzzy_eq_eps(split.split_vertex.pos(), pos_equal_eps)
-                {
-                    continue;
-                }
+        let mut intr_list_iter = intr_list.windows(2);
+        while let Some(&[intr1, intr2]) = intr_list_iter.next() {
+            let slice = OpenPlineSlice::from_slice_points(
+                raw_offset_polyline,
+                intr1,
+                start_index,
+                intr2,
+                start_index,
+                pos_equal_eps,
+            );
 
-                // test start point
-                if !point_valid_dist(split.updated_start.pos(), &mut query_stack) {
-                    continue;
-                }
-
-                // test end point
-                if !point_valid_dist(split.split_vertex.pos(), &mut query_stack) {
-                    continue;
-                }
-
-                // test segment midpoint
-                let midpoint = seg_midpoint(split.updated_start, split.split_vertex);
-                if !point_valid_dist(midpoint, &mut query_stack) {
-                    continue;
-                }
-
-                // test intersection with original polyline
-                if intersects_original_pline(
-                    split.updated_start,
-                    split.split_vertex,
-                    &mut query_stack,
-                ) {
-                    continue;
-                }
-
-                // passed all tests, add the slice
-                let slice = OpenPlineSlice::create_on_single_segment(
-                    raw_offset_polyline,
-                    start_index,
-                    split.updated_start,
-                    split.split_vertex.pos(),
-                    pos_equal_eps,
-                );
-                if let Some(s) = slice {
+            if let Some(s) = slice {
+                if slice_is_valid(&s, &mut query_stack) {
                     result.push(s);
                 }
             }
         }
 
         // build the slice between the last intersect in the intr_list and the next intersect found
-        // check that the first point is valid
-        let slice_start_point = *intr_list.last().unwrap();
-        if !point_valid_dist(slice_start_point, &mut query_stack) {
-            continue;
-        }
+        let next_index = raw_offset_polyline.next_wrapping_index(start_index);
 
-        let split = seg_split_at_point(start_vertex, end_vertex, slice_start_point, pos_equal_eps);
-        let slice_start_vertex = split.split_vertex;
-        let mut last_vertex = split.split_vertex;
-        if last_vertex
-            .pos()
-            .fuzzy_eq_eps(end_vertex.pos(), pos_equal_eps)
-        {
-            // collapsed slice, skip it
-            continue;
-        }
-
-        let mut index = next_index;
-        let mut loop_count = 0;
-        let max_loop_count = raw_offset_polyline.len();
-        loop {
-            if loop_count > max_loop_count {
-                // prevent infinite loop
-                unreachable!(
-                    "loop_count exceeded max_loop_count while creating slices from raw offset"
-                );
-            }
-            loop_count += 1;
-
-            let current_vertex = raw_offset_polyline[index];
-            // check that vertex point is valid
-            if !point_valid_dist(current_vertex.pos(), &mut query_stack) {
-                break;
-            }
-
-            // check that the segment does not intersect original polyline
-            if intersects_original_pline(last_vertex, current_vertex, &mut query_stack) {
-                break;
-            }
-
-            // include vertex
-            last_vertex = current_vertex;
-
-            // check if segment that starts at current vertex just added to slice has an intersect
-            if let Some(next_intr_list) = intersects_lookup.get(&index) {
-                // there is an intersect, slice is done, check if final segment is valid
-
-                // check intersect point is valid (which will be the end of the slice)
-                let intersect_point = next_intr_list[0];
-                if !point_valid_dist(intersect_point, &mut query_stack) {
-                    break;
-                }
-
-                let next_index = raw_offset_polyline.next_wrapping_index(index);
-                let split = seg_split_at_point(
-                    current_vertex,
-                    raw_offset_polyline[next_index],
-                    intersect_point,
-                    pos_equal_eps,
-                );
-
-                let slice_end_vertex = PlineVertex::from_vector2(intersect_point, T::zero());
-                // check midpoint is valid
-                let midpoint = seg_midpoint(split.updated_start, slice_end_vertex);
-                if !point_valid_dist(midpoint, &mut query_stack) {
-                    break;
-                }
-
-                let slice = OpenPlineSlice::create(
-                    raw_offset_polyline,
-                    start_index,
-                    intersect_point,
-                    index,
-                    slice_start_vertex,
-                    loop_count,
-                    pos_equal_eps,
-                );
-                result.push(slice);
-                break;
-            }
-            // else there is not an intersect, increment index and continue
-            if index == raw_offset_polyline.len() - 1 {
-                if original_polyline.is_closed() {
-                    // wrap index
-                    index = 0;
-                } else {
-                    // open polyline, we're done
-                    let slice = OpenPlineSlice::create(
-                        raw_offset_polyline,
-                        start_index,
-                        raw_offset_polyline[index].pos(),
-                        index,
-                        slice_start_vertex,
-                        loop_count,
-                        pos_equal_eps,
-                    );
-                    result.push(slice);
-                    break;
-                }
+        let (found_index, next_intr_list) =
+            if let Some(list) = intersects_lookup.range(next_index..).next() {
+                list
+            } else if original_polyline.is_closed() {
+                // wrap around polyline
+                intersects_lookup.range(..=start_index).next().unwrap()
             } else {
-                index += 1;
+                // open polyline and didn't find next intersect, we're done
+                let slice = OpenPlineSlice::from_slice_points(
+                    raw_offset_polyline,
+                    *intr_list.last().unwrap(),
+                    start_index,
+                    raw_offset_polyline.last().unwrap().pos(),
+                    raw_offset_polyline.len() - 1,
+                    pos_equal_eps,
+                );
+                if let Some(s) = slice {
+                    if slice_is_valid(&s, &mut query_stack) {
+                        result.push(s);
+                    }
+                }
+                return result;
+            };
+
+        let slice = OpenPlineSlice::from_slice_points(
+            raw_offset_polyline,
+            *intr_list.last().unwrap(),
+            start_index,
+            next_intr_list[0],
+            *found_index,
+            pos_equal_eps,
+        );
+
+        if let Some(s) = slice {
+            if slice_is_valid(&s, &mut query_stack) {
+                result.push(s);
             }
         }
     }
