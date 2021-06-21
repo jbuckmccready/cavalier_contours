@@ -142,6 +142,7 @@ where
     /// Returns the next wrapping vertex index for the polyline.
     ///
     /// If `i + 1 >= self.len()` then 0 is returned, otherwise `i + 1` is returned.
+    #[inline]
     pub fn next_wrapping_index(&self, i: usize) -> usize {
         let next = i + 1;
         if next >= self.len() {

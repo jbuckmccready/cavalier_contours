@@ -108,6 +108,7 @@ where
 }
 
 /// Compute the bulge for connecting two raw offset segments.
+#[inline]
 fn bulge_for_connection<T>(
     arc_center: Vector2<T>,
     start_point: Vector2<T>,
@@ -124,6 +125,7 @@ where
 
 /// Connect two raw offset segments by joining them with an arc and push the vertexes to the
 /// `result` output parameter.
+#[inline]
 fn connect_using_arc<T>(
     s1: &RawPlineOffsetSeg<T>,
     s2: &RawPlineOffsetSeg<T>,
@@ -176,9 +178,16 @@ fn line_line_join<T>(
     } else {
         match line_line_intr(v1.pos(), v2.pos(), u1.pos(), u2.pos()) {
             LineLineIntr::NoIntersect => {
-                // just join with straight line
-                result.add_or_replace(v2.x, v2.y, T::zero(), pos_equal_eps);
-                result.add_or_replace(u1.x, u1.y, u1.bulge, pos_equal_eps);
+                // parallel lines, join with half circle
+                let sp = s1.v2.pos();
+                let ep = s2.v1.pos();
+                let bulge = if connection_arcs_ccw {
+                    T::one()
+                } else {
+                    -T::one()
+                };
+                result.add_or_replace(sp.x, sp.y, bulge, pos_equal_eps);
+                result.add_or_replace(ep.x, ep.y, s2.v1.bulge, pos_equal_eps);
             }
             LineLineIntr::TrueIntersect { seg1_t, .. } => {
                 let intr_point = point_from_parametric(v1.pos(), v2.pos(), seg1_t);
@@ -602,6 +611,7 @@ where
     result
 }
 
+#[inline]
 fn point_valid_for_offset<T>(
     polyline: &Polyline<T>,
     offset: T,
