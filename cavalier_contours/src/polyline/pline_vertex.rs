@@ -20,6 +20,43 @@ pub struct PlineVertex<T = f64> {
     pub bulge: T,
 }
 
+#[cfg(feature = "serde")]
+mod serde_impl {
+    use super::PlineVertex;
+    use serde::{ser::SerializeTuple, Deserialize, Serialize};
+
+    impl<T> Serialize for PlineVertex<T>
+    where
+        T: Serialize,
+    {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            let mut tuple = serializer.serialize_tuple(3)?;
+            tuple.serialize_element(&self.x)?;
+            tuple.serialize_element(&self.y)?;
+            tuple.serialize_element(&self.bulge)?;
+            tuple.end()
+        }
+    }
+
+    impl<'de, T> Deserialize<'de> for PlineVertex<T>
+    where
+        T: Deserialize<'de>,
+    {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let [x, y, bulge]: [T; 3] = Deserialize::deserialize(deserializer)?;
+            Ok(PlineVertex { x, y, bulge })
+        }
+    }
+}
+#[cfg(feature = "serde")]
+pub use serde_impl::*;
+
 impl<T> PlineVertex<T>
 where
     T: Real,

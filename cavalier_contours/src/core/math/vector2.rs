@@ -89,6 +89,42 @@ where
     }
 }
 
+#[cfg(feature = "serde")]
+mod serde_impl {
+    use super::Vector2;
+    use serde::{ser::SerializeTuple, Deserialize, Serialize};
+
+    impl<T> Serialize for Vector2<T>
+    where
+        T: Serialize,
+    {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            let mut tuple = serializer.serialize_tuple(3)?;
+            tuple.serialize_element(&self.x)?;
+            tuple.serialize_element(&self.y)?;
+            tuple.end()
+        }
+    }
+
+    impl<'de, T> Deserialize<'de> for Vector2<T>
+    where
+        T: Deserialize<'de>,
+    {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let [x, y]: [T; 2] = Deserialize::deserialize(deserializer)?;
+            Ok(Vector2 { x, y })
+        }
+    }
+}
+#[cfg(feature = "serde")]
+pub use serde_impl::*;
+
 #[inline(always)]
 pub fn vec2<T>(x: T, y: T) -> Vector2<T>
 where

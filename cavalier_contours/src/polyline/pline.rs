@@ -21,6 +21,8 @@ use crate::core::{
     },
     traits::{ControlFlow, Real},
 };
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder, AABB};
 use std::{
     borrow::Cow,
@@ -31,8 +33,14 @@ use std::{
 /// Polyline represented by a sequence of [PlineVertex](crate::polyline::PlineVertex) and a bool
 /// indicating whether the polyline is open (last vertex is end of polyline) or closed (last vertex
 /// forms segment with first vertex).
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(rename_all = "camelCase")
+)]
 #[derive(Debug, Clone)]
 pub struct Polyline<T = f64> {
+    #[cfg_attr(feature = "serde", serde(rename = "vertexes"))]
     vertex_data: Vec<PlineVertex<T>>,
     is_closed: bool,
 }

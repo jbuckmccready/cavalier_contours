@@ -11,6 +11,9 @@ use crate::core::{
 };
 use static_aabb2d_index::StaticAABB2DIndex;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Represents the orientation of a polyline.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PlineOrientation {
@@ -100,6 +103,11 @@ pub enum BooleanOp {
     Xor,
 }
 
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(rename_all = "camelCase")
+)]
 /// Represents one of the polyline results from a boolean operation between two polylines.
 #[derive(Debug, Clone, Default)]
 pub struct BooleanResultPline<T>
@@ -1055,6 +1063,11 @@ where
     }
 }
 
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(rename_all = "camelCase")
+)]
 /// Open polyline slice created in the process of performing a polyline boolean operation.
 #[derive(Debug, Copy, Clone)]
 pub struct BooleanPlineSlice<T> {
