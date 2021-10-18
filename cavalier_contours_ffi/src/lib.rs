@@ -20,8 +20,11 @@ macro_rules! ffi_catch_unwind {
 }
 
 /// Opaque type that wraps a [StaticAABB2DIndex].
+///
+/// Note the internal member is only public for composing in other Rust libraries wanting to use the
+/// FFI opaque type as part of their FFI API.
 #[derive(Debug, Clone)]
-pub struct cavc_aabbindex(StaticAABB2DIndex<f64>);
+pub struct cavc_aabbindex(pub StaticAABB2DIndex<f64>);
 
 /// Represents a simple 2D point with x and y coordinate values.
 #[repr(C)]
@@ -61,8 +64,11 @@ impl cavc_vertex {
 }
 
 /// Opaque type that wraps a [Polyline].
+///
+/// Note the internal member is only public for composing in other Rust libraries wanting to use the
+/// FFI opaque type as part of their FFI API.
 #[derive(Debug, Clone)]
-pub struct cavc_pline(Polyline<f64>);
+pub struct cavc_pline(pub Polyline<f64>);
 
 /// FFI representation of [PlineOffsetOptions].
 #[repr(C)]
@@ -199,7 +205,10 @@ fn boolean_op_from_u32(i: u32) -> Option<BooleanOp> {
 }
 
 /// Opaque type that represents a list of [cavc_pline].
-pub struct cavc_plinelist(Vec<*mut cavc_pline>);
+///
+/// Note the internal member is only public for composing in other Rust libraries wanting to use the
+/// FFI opaque type as part of their FFI API.
+pub struct cavc_plinelist(pub Vec<*mut cavc_pline>);
 
 impl cavc_plinelist {
     pub fn from_internal<I>(plines: I) -> *mut cavc_plinelist
