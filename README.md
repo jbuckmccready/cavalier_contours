@@ -1,6 +1,12 @@
 ## Summary
 
-This project is a continuation of the C++ [CavalierContours](https://github.com/jbuckmccready/CavalierContours) library rewritten in Rust with the goal of building out more functionality, better documentation, and creating a stable C FFI. This project is still in early development, with no APIs yet solidified, the code is not fully tested, and some functions still need to be ported from C++. For tracking progress and contributing checkout the project GitHub issues.
+This project is a continuation of the C++ [CavalierContours](https://github.com/jbuckmccready/CavalierContours) library rewritten in Rust with the goal of building out more functionality, better documentation, and creating a stable C FFI. This project has all of the functionality of the C++ repository except for simultaneous/multi polyline island offsetting. There is a lot more code documentation, test coverage, and some additional functions for working with polylines. For tracking progress and contributing checkout the project GitHub issues.
+
+## Interactive Web Page for Visualizing and Testing
+This project is compiled to wasm to create an interactive web demo page for visualing and testing.
+* Interactive hosted page here: https://jbuckmccready.github.io/cavalier_contours_web_demo_page
+* Interactive page source code here: https://github.com/jbuckmccready/cavalier_contours_web_demo
+
 
 ## Why go to Rust?
 
