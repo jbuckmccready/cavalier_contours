@@ -10,9 +10,10 @@ use super::{
         arc_seg_bounding_box, seg_arc_radius_and_center, seg_closest_point,
         seg_fast_approx_bounding_box, seg_length,
     },
-    seg_bounding_box, BooleanOp, BooleanResult, ClosestPointResult, FindIntersectsOptions,
-    PlineBooleanOptions, PlineIntersectVisitor, PlineIntersectsCollection, PlineOffsetOptions,
-    PlineOrientation, PlineSelfIntersectOptions, PlineVertex, SelfIntersectsInclude,
+    seg_bounding_box, seg_split_at_point, BooleanOp, BooleanResult, ClosestPointResult,
+    FindIntersectsOptions, PlineBooleanOptions, PlineIntersectVisitor, PlineIntersectsCollection,
+    PlineOffsetOptions, PlineOrientation, PlineSelfIntersectOptions, PlineVertex,
+    SelfIntersectsInclude,
 };
 use crate::core::{
     math::{
@@ -772,6 +773,78 @@ where
         result.map_or_else(|| Cow::Borrowed(self), Cow::Owned)
     }
 
+    /// Rotates the vertexes in a closed polyline such that the first vertex's position is at
+    /// `point`. `start_index` indicates which segment `point` lies on before rotation. This does
+    /// not change the shape of the polyline curve. `pos_equal_eps` is epsilon value used for
+    /// comparing the positions of points. `None` is returned if the polyline is not closed, the
+    /// polyline length is less than 2, or the `start_index` is out of bounds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::traits::*;
+    /// # use cavalier_contours::core::math::*;
+    /// let mut polyline = Polyline::new_closed();
+    /// assert!(matches!(polyline.rotate_start(0, Vector2::new(0.0, 0.0), 1e-5), None));
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// assert!(matches!(polyline.rotate_start(0, Vector2::new(0.0, 0.0), 1e-5), None));
+    /// polyline.add(1.0, 0.0, 0.0);
+    /// polyline.add(1.0, 1.0, 0.0);
+    /// polyline.add(0.0, 1.0, 0.0);
+    ///
+    /// let rot = polyline.rotate_start(0, Vector2::new(0.5, 0.0), 1e-5).unwrap();
+    /// let mut expected_rot = Polyline::new_closed();
+    /// expected_rot.add(0.5, 0.0, 0.0);
+    /// expected_rot.add(1.0, 0.0, 0.0);
+    /// expected_rot.add(1.0, 1.0, 0.0);
+    /// expected_rot.add(0.0, 1.0, 0.0);
+    /// expected_rot.add(0.0, 0.0, 0.0);
+    /// assert!(rot.fuzzy_eq(&expected_rot));
+    /// ```
+    pub fn rotate_start(
+        &self,
+        start_index: usize,
+        point: Vector2<T>,
+        pos_equal_eps: T,
+    ) -> Option<Self> {
+        if !self.is_closed || self.len() < 2 || start_index > self.len() - 1 {
+            return None;
+        }
+
+        let wrapping_vertexes_starting_at = |start: usize| {
+            self.vertex_data[start..self.len()]
+                .iter()
+                .chain(self.vertex_data[0..start].iter())
+                .copied()
+        };
+
+        let mut result = Self::new_closed();
+
+        let start_v = self[start_index];
+        if start_v.pos().fuzzy_eq_eps(point, pos_equal_eps) {
+            // point lies on top of start index vertex
+            result.extend_vertexes(wrapping_vertexes_starting_at(start_index))
+        } else {
+            // check if it's at the end of the segment, if it is then use that next index
+            let next_index = self.next_wrapping_index(start_index);
+            if point.fuzzy_eq_eps(self[next_index].pos(), pos_equal_eps) {
+                result.reserve(self.len());
+                result.extend_vertexes(wrapping_vertexes_starting_at(next_index));
+            } else {
+                // must split at the point
+                result.reserve(self.len() + 1);
+                let split =
+                    seg_split_at_point(self[start_index], self[next_index], point, pos_equal_eps);
+                result.add_vertex(split.split_vertex);
+                result.extend_vertexes(wrapping_vertexes_starting_at(next_index));
+                *result.last_mut().unwrap() = split.updated_start;
+            }
+        }
+
+        Some(result)
+    }
+
     /// Compute the XY extents of the polyline.
     ///
     /// Returns `None` if polyline has less than 2 vertexes.
@@ -945,7 +1018,7 @@ where
     pub fn iter_segments(
         &self,
     ) -> impl Iterator<Item = (PlineVertex<T>, PlineVertex<T>)> + Clone + '_ {
-        PlineSegIterator::new(&self)
+        PlineSegIterator::new(self)
     }
 
     /// Iterate through all the polyline segment vertex positional indexes.
@@ -1084,7 +1157,7 @@ where
         operation: BooleanOp,
         options: &PlineBooleanOptions<T>,
     ) -> BooleanResult<T> {
-        polyline_boolean(self, other, operation, &options)
+        polyline_boolean(self, other, operation, options)
     }
 
     /// Visit self intersects of the polyline using default options.

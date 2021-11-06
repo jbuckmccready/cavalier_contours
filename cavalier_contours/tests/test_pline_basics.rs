@@ -1,6 +1,9 @@
 use cavalier_contours::{
     assert_fuzzy_eq,
-    core::{math::bulge_from_angle, traits::FuzzyEq},
+    core::{
+        math::{bulge_from_angle, Vector2},
+        traits::FuzzyEq,
+    },
     pline_closed, pline_open,
     polyline::{PlineVertex, Polyline},
 };
@@ -892,6 +895,124 @@ fn remove_redundant() {
         assert!(result.is_closed());
         assert_fuzzy_eq!(result[0], PlineVertex::new(-0.5, 0.0, 1.0));
         assert_fuzzy_eq!(result[1], PlineVertex::new(0.5, 0.0, 1.0));
+    }
+}
+
+#[test]
+fn rotate_start() {
+    {
+        // empty polyline
+        let polyline = Polyline::new_closed();
+        assert!(matches!(
+            polyline.rotate_start(0, Vector2::new(0.0, 0.0), 1e-5),
+            None
+        ));
+    }
+
+    {
+        // single vertex polyline
+        let polyline = pline_closed![(1.0, 0.0, 0.0)];
+        assert!(matches!(
+            polyline.rotate_start(0, Vector2::new(0.0, 0.0), 1e-5),
+            None
+        ));
+    }
+
+    {
+        // open polyline
+        let polyline = pline_open![
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.5),
+            (1.0, 1.0, 0.2),
+            (0.0, 1.0, -0.1),
+        ];
+        assert!(matches!(
+            polyline.rotate_start(0, Vector2::new(0.0, 0.0), 1e-5),
+            None
+        ));
+    }
+
+    {
+        // no change
+        let polyline = pline_closed![
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.5),
+            (1.0, 1.0, 0.2),
+            (0.0, 1.0, -0.1),
+        ];
+
+        let rot_no_change = polyline
+            .rotate_start(0, Vector2::new(0.0, 0.0), 1e-5)
+            .unwrap();
+        assert!(rot_no_change.fuzzy_eq(&polyline));
+    }
+
+    {
+        // end becomes start
+        let polyline = pline_closed![
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.5),
+            (1.0, 1.0, 0.2),
+            (0.0, 1.0, -0.1),
+        ];
+
+        let rot_end_is_start = polyline
+            .rotate_start(polyline.len() - 1, Vector2::new(0.0, 1.0), 1e-5)
+            .unwrap();
+
+        let expected_end_as_start = pline_closed![
+            (0.0, 1.0, -0.1),
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.5),
+            (1.0, 1.0, 0.2),
+        ];
+
+        assert_fuzzy_eq!(&rot_end_is_start, &expected_end_as_start);
+    }
+
+    {
+        // split in middle of line segment
+        let polyline = pline_closed![
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ];
+
+        let rot = polyline
+            .rotate_start(0, Vector2::new(0.5, 0.0), 1e-5)
+            .unwrap();
+        let expected_rot = pline_closed![
+            (0.5, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (0.0, 0.0, 0.0),
+        ];
+        assert_fuzzy_eq!(rot, &expected_rot);
+    }
+
+    {
+        // split in middle of arc segment
+        let polyline = pline_closed![
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 1.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ];
+
+        let rot = polyline
+            .rotate_start(1, Vector2::new(1.5, 0.5), 1e-5)
+            .unwrap();
+
+        let expected_rot = pline_closed![
+            (1.5, 0.5, bulge_from_angle(std::f64::consts::FRAC_PI_2)),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, bulge_from_angle(std::f64::consts::FRAC_PI_2)),
+        ];
+        assert_fuzzy_eq!(rot, &expected_rot);
     }
 }
 

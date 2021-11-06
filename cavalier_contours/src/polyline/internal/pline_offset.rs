@@ -680,9 +680,9 @@ where
     if self_intrs.is_empty() {
         // no self intersects, test point on polyline is valid
         if !point_valid_for_offset(
-            &original_polyline,
+            original_polyline,
             offset,
-            &orig_polyline_index,
+            orig_polyline_index,
             raw_offset_polyline[0].pos(),
             &mut query_stack,
             offset_dist_eps,
@@ -755,7 +755,7 @@ where
         point_valid_for_offset(
             original_polyline,
             offset,
-            &orig_polyline_index,
+            orig_polyline_index,
             point,
             query_stack,
             offset_dist_eps,
@@ -1014,7 +1014,7 @@ where
             circle_radius,
             &raw_offset_index,
             &mut add_intr,
-            &options,
+            options,
         );
         visit_circle_intersects(
             raw_offset_polyline,
@@ -1022,7 +1022,7 @@ where
             circle_radius,
             &raw_offset_index,
             &mut add_intr,
-            &options,
+            options,
         );
     }
 
@@ -1046,7 +1046,7 @@ where
         if !point_valid_for_offset(
             original_polyline,
             offset,
-            &orig_polyline_index,
+            orig_polyline_index,
             raw_offset_polyline[0].pos(),
             &mut query_stack,
             offset_dist_eps,
@@ -1103,7 +1103,7 @@ where
         point_valid_for_offset(
             original_polyline,
             offset,
-            &orig_polyline_index,
+            orig_polyline_index,
             point,
             query_stack,
             offset_dist_eps,

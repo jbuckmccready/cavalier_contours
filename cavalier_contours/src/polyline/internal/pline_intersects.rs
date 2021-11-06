@@ -710,10 +710,10 @@ where
             let slice = OverlappingSlice::new(pline1, pline2, start_intr, end_intr, pos_equal_eps);
             result.push(slice);
 
-            start_intr = &intr;
+            start_intr = intr;
             end_intr = None;
         } else {
-            end_intr = Some(&intr);
+            end_intr = Some(intr);
         }
 
         current_end_point = intr.point2;

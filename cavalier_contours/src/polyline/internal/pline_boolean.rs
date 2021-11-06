@@ -751,8 +751,8 @@ where
                 // keep all slices of pline1 that are not in pline2 and all slices of pline2 that
                 // are not in pline1
                 let pruned_slices = prune_slices(
-                    &pline1,
-                    &pline2,
+                    pline1,
+                    pline2,
                     &boolean_info,
                     &mut |pt| !point_in_pline2(pt),
                     &mut |pt| !point_in_pline1(pt),
@@ -807,8 +807,8 @@ where
                 // keep all slices from pline1 that are in pline2 and all slices from pline2 that
                 // are in pline1
                 let pruned_slices = prune_slices(
-                    &pline1,
-                    &pline2,
+                    pline1,
+                    pline2,
                     &boolean_info,
                     &mut point_in_pline2,
                     &mut point_in_pline1,
@@ -848,8 +848,8 @@ where
                 // keep all slices from pline1 that are not in pline2 and all slices on pline2 that
                 // are in pline1
                 let pruned_slices = prune_slices(
-                    &pline1,
-                    &pline2,
+                    pline1,
+                    pline2,
                     &boolean_info,
                     &mut |pt| !point_in_pline2(pt),
                     &mut point_in_pline1,
@@ -889,8 +889,8 @@ where
             } else {
                 // collect pline1 NOT pline2 results
                 let pruned_slices1 = prune_slices(
-                    &pline1,
-                    &pline2,
+                    pline1,
+                    pline2,
                     &boolean_info,
                     &mut |pt| !point_in_pline2(pt),
                     &mut point_in_pline1,
@@ -910,8 +910,8 @@ where
 
                 // collect pline2 NOT pline1 results
                 let pruned_slices2 = prune_slices(
-                    &pline1,
-                    &pline2,
+                    pline1,
+                    pline2,
                     &boolean_info,
                     &mut point_in_pline2,
                     &mut |pt| !point_in_pline1(pt),
