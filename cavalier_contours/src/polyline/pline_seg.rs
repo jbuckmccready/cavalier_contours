@@ -62,7 +62,10 @@ pub struct SplitResult<T = f64>
 where
     T: Real,
 {
+    /// Updated start vertex (has same position as start of segment but with updated bulge value).
     pub updated_start: PlineVertex<T>,
+    /// Vertex at split point (position is equal to split point, bulge set to maintain same curve to
+    /// the next vertex).
     pub split_vertex: PlineVertex<T>,
 }
 
