@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::core::{math::Vector2, traits::Real};
 
 /// A polyline vertex is represented by an `x`, `y`, and `bulge` value.
@@ -18,6 +20,15 @@ pub struct PlineVertex<T = f64> {
     pub y: T,
     /// Bulge for the polyline segment that starts with this vertex.
     pub bulge: T,
+}
+
+impl<T> Display for PlineVertex<T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}, {}, {}]", self.x, self.y, self.bulge)
+    }
 }
 
 #[cfg(feature = "serde")]

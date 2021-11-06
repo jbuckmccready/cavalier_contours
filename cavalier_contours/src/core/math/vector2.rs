@@ -1,10 +1,19 @@
 use crate::core::traits::Real;
-use std::ops;
+use std::{fmt::Display, ops};
 
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub struct Vector2<T = f64> {
     pub x: T,
     pub y: T,
+}
+
+impl<T> Display for Vector2<T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}, {}]", self.x, self.y)
+    }
 }
 
 impl<T> Vector2<T>
