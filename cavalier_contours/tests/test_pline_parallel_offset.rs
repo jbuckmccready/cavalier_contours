@@ -1,6 +1,6 @@
 mod test_utils;
 
-use cavalier_contours::polyline::{PlineOffsetOptions, Polyline};
+use cavalier_contours::polyline::{PlineOffsetOptions, PlineSource, Polyline};
 use test_utils::{
     create_property_set, property_sets_match, ModifiedPlineSet, ModifiedPlineSetVisitor,
     ModifiedPlineState, PlineProperties,
@@ -19,10 +19,9 @@ fn offset_into_properties_set(
     };
     let offset_results = polyline.parallel_offset_opt(offset, &options);
     for r in offset_results.iter() {
-        assert_eq!(
-            r.remove_repeat_pos(PlineProperties::POS_EQ_EPS).len(),
-            r.len(),
-            "offset result should not have repeat positioned vertexes"
+        assert!(
+            r.remove_repeat_pos(PlineProperties::POS_EQ_EPS).is_none(),
+            "offset result should not have repeat positioned vertexes",
         );
     }
     create_property_set(&offset_results, inverted)

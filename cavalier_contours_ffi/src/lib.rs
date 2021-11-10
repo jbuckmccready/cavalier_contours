@@ -2,7 +2,10 @@
 #![allow(non_camel_case_types)]
 use cavalier_contours::{
     core::math::Vector2,
-    polyline::{BooleanOp, PlineBooleanOptions, PlineOffsetOptions, PlineVertex, Polyline},
+    polyline::{
+        BooleanOp, PlineBooleanOptions, PlineOffsetOptions, PlineSource, PlineSourceMut,
+        PlineVertex, Polyline,
+    },
     static_aabb2d_index::StaticAABB2DIndex,
 };
 use core::slice;
@@ -408,7 +411,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_count(
 
         // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
         // prevent memory corruption/access errors but just panic as internal error if it does occur
-        count.write(u32::try_from((*pline).0.len()).unwrap());
+        count.write(u32::try_from((*pline).0.vertex_count()).unwrap());
         0
     })
 }
@@ -440,9 +443,9 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_data(
             return 1;
         }
 
-        let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).0.len());
-        for (i, v) in (*pline).0.iter().enumerate() {
-            buffer[i] = cavc_vertex::new(v.x, v.y, v.bulge);
+        let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).0.vertex_count());
+        for (i, v) in (*pline).0.iter_vertexes().enumerate() {
+            buffer[i] = cavc_vertex::from_internal(v);
         }
         0
     })
@@ -554,7 +557,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex(
             return 1;
         }
 
-        if position >= (*pline).0.len() as u32 {
+        if position >= (*pline).0.vertex_count() as u32 {
             return 2;
         }
 
@@ -589,7 +592,7 @@ pub unsafe extern "C" fn cavc_pline_set_vertex(
             return 1;
         }
 
-        if position >= (*pline).0.len() as u32 {
+        if position >= (*pline).0.vertex_count() as u32 {
             return 2;
         }
 
@@ -618,7 +621,7 @@ pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32
             return 1;
         }
 
-        if position as usize >= (*pline).0.len() {
+        if position as usize >= (*pline).0.vertex_count() {
             return 2;
         }
 
@@ -627,7 +630,7 @@ pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32
     })
 }
 
-/// Wraps [Polyline::path_length].
+/// Wraps [PlineSource::path_length].
 ///
 /// `path_length` is used as the out parameter to hold the computed path length.
 ///
@@ -654,7 +657,7 @@ pub unsafe extern "C" fn cavc_pline_eval_path_length(
     })
 }
 
-/// Wraps [Polyline::area].
+/// Wraps [PlineSource::area].
 ///
 /// `area` is used as the out parameter to hold the computed area.
 ///
@@ -678,7 +681,7 @@ pub unsafe extern "C" fn cavc_pline_eval_area(pline: *const cavc_pline, area: *m
     })
 }
 
-/// Wraps [Polyline::winding_number].
+/// Wraps [PlineSource::winding_number].
 ///
 /// `winding_number` is used as the out parameter to hold the computed winding number.
 ///
@@ -707,7 +710,7 @@ pub unsafe extern "C" fn cavc_pline_eval_wn(
     })
 }
 
-/// Wraps [Polyline::invert_direction].
+/// Wraps [PlineSourceMut::invert_direction_mut].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
@@ -723,12 +726,12 @@ pub unsafe extern "C" fn cavc_pline_invert_direction(pline: *mut cavc_pline) -> 
         if pline.is_null() {
             return 1;
         }
-        (*pline).0.invert_direction();
+        (*pline).0.invert_direction_mut();
         0
     })
 }
 
-/// Wraps [Polyline::scale].
+/// Wraps [PlineSourceMut::scale_mut].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
@@ -744,12 +747,12 @@ pub unsafe extern "C" fn cavc_pline_scale(pline: *mut cavc_pline, scale_factor: 
         if pline.is_null() {
             return 1;
         }
-        (*pline).0.scale(scale_factor);
+        (*pline).0.scale_mut(scale_factor);
         0
     })
 }
 
-/// Wraps [Polyline::translate].
+/// Wraps [PlineSourceMut::translate_mut].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
@@ -769,12 +772,12 @@ pub unsafe extern "C" fn cavc_pline_translate(
         if pline.is_null() {
             return 1;
         }
-        (*pline).0.translate(x_offset, y_offset);
+        (*pline).0.translate_mut(x_offset, y_offset);
         0
     })
 }
 
-/// Wraps [Polyline::remove_repeat_pos] but modifies in place rather than returning a result.
+/// Wraps [PlineSource::remove_repeat_pos] but modifies in place rather than returning a result.
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
@@ -794,11 +797,11 @@ pub unsafe extern "C" fn cavc_pline_remove_repeat_pos(
             return 1;
         }
         match (*pline).0.remove_repeat_pos(pos_equal_eps) {
-            std::borrow::Cow::Borrowed(_) => {
+            None => {
                 // do nothing (no repeat positions, leave unchanged)
                 0
             }
-            std::borrow::Cow::Owned(x) => {
+            Some(x) => {
                 // update self with result
                 (*pline).0 = x;
                 0
@@ -807,7 +810,7 @@ pub unsafe extern "C" fn cavc_pline_remove_repeat_pos(
     })
 }
 
-/// Wraps [Polyline::remove_redundant] but modifies in place rather than returning a result.
+/// Wraps [PlineSource::remove_redundant] but modifies in place rather than returning a result.
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
@@ -827,11 +830,11 @@ pub unsafe extern "C" fn cavc_pline_remove_redundant(
             return 1;
         }
         match (*pline).0.remove_redundant(pos_equal_eps) {
-            std::borrow::Cow::Borrowed(_) => {
+            None => {
                 // do nothing (no repeat positions, leave unchanged)
                 0
             }
-            std::borrow::Cow::Owned(x) => {
+            Some(x) => {
                 // update self with result
                 (*pline).0 = x;
                 0
@@ -840,7 +843,7 @@ pub unsafe extern "C" fn cavc_pline_remove_redundant(
     })
 }
 
-/// Wraps [Polyline::extents].
+/// Wraps [PlineSource::extents].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
@@ -877,7 +880,7 @@ pub unsafe extern "C" fn cavc_pline_eval_extents(
     })
 }
 
-/// Wraps [Polyline::parallel_offset_opt].
+/// Wraps [PlineSource::parallel_offset_opt].
 ///
 /// `options` is allowed to be null (default options will be used).
 ///
@@ -914,7 +917,7 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset(
         0
     })
 }
-/// Wraps [Polyline::boolean_opt].
+/// Wraps [PlineSource::boolean_opt].
 ///
 /// `options` is allowed to be null (default options will be used).
 ///
@@ -974,7 +977,7 @@ pub unsafe extern "C" fn cavc_pline_boolean(
     })
 }
 
-/// Wraps [Polyline::create_approx_aabb_index].
+/// Wraps [PlineSource::create_approx_aabb_index].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
@@ -1006,7 +1009,7 @@ pub unsafe extern "C" fn cavc_pline_create_approx_aabbindex(
     })
 }
 
-/// Wraps [Polyline::create_aabb_index].
+/// Wraps [PlineSource::create_aabb_index].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.

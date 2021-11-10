@@ -1,11 +1,11 @@
-use cavalier_contours::polyline::Polyline;
+use cavalier_contours::polyline::{PlineCreation, PlineSource, PlineSourceMut, Polyline};
 
 /// Cycles all the vertex index positions forward by `n`. E.g. index 0 becomes 1, last index becomes
 /// 0, etc. (only applicable to closed polylines)
 pub fn cycle_start_index_forward(input: &Polyline<f64>, n: usize) -> Polyline<f64> {
     assert!(n > 0, "cycling forward by 0 just returns the same polyline");
     assert!(
-        n < input.len(),
+        n < input.vertex_count(),
         "cycling forward by more than the polyline length is unnecessary"
     );
     assert!(
@@ -13,7 +13,11 @@ pub fn cycle_start_index_forward(input: &Polyline<f64>, n: usize) -> Polyline<f6
         "cycling vertex index positions not possible with open polyline"
     );
     Polyline::from_iter(
-        input.iter().cycle().skip(n).take(input.len()).copied(),
+        input
+            .iter_vertexes()
+            .cycle()
+            .skip(n)
+            .take(input.vertex_count()),
         input.is_closed(),
     )
 }
@@ -64,20 +68,20 @@ impl<'a> ModifiedPlineSet<'a> {
         visitor(self.input.clone(), ModifiedPlineState::new(false, 0));
         if self.invert_direction {
             let mut pl = self.input.clone();
-            pl.invert_direction();
+            pl.invert_direction_mut();
             visitor(pl, ModifiedPlineState::new(true, 0));
         }
 
         if self.cycle_index_positions && self.input.is_closed() {
-            for i in 1..self.input.len() {
+            for i in 1..self.input.vertex_count() {
                 let cycled = cycle_start_index_forward(self.input, i);
                 visitor(cycled, ModifiedPlineState::new(false, i));
             }
 
             if self.invert_direction {
-                for i in 1..self.input.len() {
+                for i in 1..self.input.vertex_count() {
                     let mut inverted = self.input.clone();
-                    inverted.invert_direction();
+                    inverted.invert_direction_mut();
                     let cycled = cycle_start_index_forward(&inverted, i);
                     visitor(cycled, ModifiedPlineState::new(true, i));
                 }

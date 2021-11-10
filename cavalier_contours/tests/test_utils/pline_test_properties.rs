@@ -1,4 +1,7 @@
-use cavalier_contours::{core::traits::FuzzyEq, polyline::Polyline};
+use cavalier_contours::{
+    core::traits::FuzzyEq,
+    polyline::{PlineSource, Polyline},
+};
 use static_aabb2d_index::AABB;
 
 /// Fuzzy compare AABB values
@@ -45,7 +48,8 @@ impl PlineProperties {
 
     pub fn from_pline(pline: &Polyline<f64>, invert_area: bool) -> Self {
         // remove redundant vertexes for consistent vertex counts
-        let pline = pline.remove_redundant(PlineProperties::REMOVE_REDUNDANT_EPS);
+        let rr = pline.remove_redundant(PlineProperties::REMOVE_REDUNDANT_EPS);
+        let pline = rr.as_ref().unwrap_or(pline);
         let area = {
             let a = pline.area();
             if invert_area {
@@ -56,7 +60,7 @@ impl PlineProperties {
         };
 
         Self {
-            vertex_count: pline.len(),
+            vertex_count: pline.vertex_count(),
             area,
             path_length: pline.path_length(),
             extents: pline.extents().unwrap(),

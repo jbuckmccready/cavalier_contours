@@ -9,6 +9,7 @@ pub trait Real:
     + std::default::Default
     + std::fmt::Debug
     + IndexableNum
+    + 'static
 {
     #[inline]
     fn pi() -> Self {
