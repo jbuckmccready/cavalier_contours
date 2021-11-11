@@ -107,7 +107,11 @@ pub enum BooleanOp {
 #[cfg_attr(
     feature = "serde",
     derive(Serialize, Deserialize),
-    serde(rename_all = "camelCase")
+    serde(rename_all = "camelCase"),
+    serde(bound(
+        serialize = "P: Serialize, P::Num: Serialize",
+        deserialize = "P: Deserialize<'de>, P::Num: Deserialize<'de>",
+    ))
 )]
 /// Represents one of the polyline results from a boolean operation between two polylines.
 #[derive(Debug, Clone, Default)]

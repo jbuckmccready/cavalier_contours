@@ -19,6 +19,8 @@ flexible views over polyline data to be processed with all the shared behavior/m
 `PlineCreation`).
 * Slices used in offset and boolean operations now all use new `PlineViewData` and `PlineView`
 types.
+* Changed polyline methods that returned `Cow` types to return `Option` types to indicate if changes
+were done on the input polyline or not.
 
 ### Removed 🔥
 * `Polyline::visit_segments` (use `PlineSource::iter_segments` instead).

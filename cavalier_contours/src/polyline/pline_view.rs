@@ -5,6 +5,9 @@ use crate::{
 
 use super::{seg_closest_point, PlineSource, PlineVertex, Polyline};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// A [PlineView] represents a partial selection or subpart of a source polyline without copying.
 /// This structure borrows a source polyline to access vertex data for iteration and operations.
 ///
@@ -65,6 +68,11 @@ where
     }
 }
 
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(rename_all = "camelCase")
+)]
 /// Structure to hold the minimum data required to create view as a partial selection over a source
 /// polyline. This structure is detached from the source polyline unlike [PlineView].
 ///
