@@ -13,6 +13,83 @@ use cavalier_contours::{
 use std::f64::consts::{PI, TAU};
 
 #[test]
+fn iter_vertexes() {
+    fn run_iter_vertexes_tests(is_closed: bool) {
+        let mut polyline = Polyline::with_capacity(0, is_closed);
+        {
+            // empty
+            let mut iter = polyline.iter_vertexes();
+            assert_eq!(iter.size_hint(), (0, Some(0)));
+            assert_eq!(iter.next(), None);
+        }
+
+        polyline.add(1.0, 2.0, 0.3);
+
+        {
+            // one vertex next
+            let mut iter = polyline.iter_vertexes();
+            assert_eq!(iter.size_hint(), (1, Some(1)));
+            assert_eq!(iter.next(), Some(PlineVertex::new(1.0, 2.0, 0.3)));
+            assert_eq!(iter.size_hint(), (0, Some(0)));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next_back(), None);
+        }
+
+        {
+            // one vertex next
+            let mut iter = polyline.iter_vertexes();
+            assert_eq!(iter.size_hint(), (1, Some(1)));
+            assert_eq!(iter.next_back(), Some(PlineVertex::new(1.0, 2.0, 0.3)));
+            assert_eq!(iter.size_hint(), (0, Some(0)));
+            assert_eq!(iter.next_back(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        polyline.add(4.0, 5.0, 0.6);
+
+        {
+            // two vertex next
+            let mut iter = polyline.iter_vertexes();
+            assert_eq!(iter.size_hint(), (2, Some(2)));
+            assert_eq!(iter.next(), Some(PlineVertex::new(1.0, 2.0, 0.3)));
+            assert_eq!(iter.size_hint(), (1, Some(1)));
+            assert_eq!(iter.next(), Some(PlineVertex::new(4.0, 5.0, 0.6)));
+            assert_eq!(iter.size_hint(), (0, Some(0)));
+            assert_eq!(iter.next_back(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        {
+            // two vertex next_back
+            let mut iter = polyline.iter_vertexes();
+            assert_eq!(iter.size_hint(), (2, Some(2)));
+            assert_eq!(iter.next_back(), Some(PlineVertex::new(4.0, 5.0, 0.6)));
+            assert_eq!(iter.size_hint(), (1, Some(1)));
+            assert_eq!(iter.next_back(), Some(PlineVertex::new(1.0, 2.0, 0.3)));
+            assert_eq!(iter.size_hint(), (0, Some(0)));
+            assert_eq!(iter.next_back(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        {
+            // two vertex next and next_back
+            let mut iter = polyline.iter_vertexes();
+            assert_eq!(iter.size_hint(), (2, Some(2)));
+            assert_eq!(iter.next(), Some(PlineVertex::new(1.0, 2.0, 0.3)));
+            assert_eq!(iter.size_hint(), (1, Some(1)));
+            assert_eq!(iter.next_back(), Some(PlineVertex::new(4.0, 5.0, 0.6)));
+            assert_eq!(iter.size_hint(), (0, Some(0)));
+            assert_eq!(iter.next_back(), None);
+            assert_eq!(iter.next(), None);
+        }
+    }
+
+    // should have same results for both open and closed polyline
+    run_iter_vertexes_tests(false);
+    run_iter_vertexes_tests(true);
+}
+
+#[test]
 fn iter_segments() {
     let mut polyline = Polyline::<f64>::new();
     assert_eq!(polyline.iter_segments().size_hint(), (0, Some(0)));

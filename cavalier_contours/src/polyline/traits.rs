@@ -1763,6 +1763,7 @@ where
 {
     pline: &'a P,
     pos: usize,
+    end: usize,
 }
 
 impl<'a, P> VertexIter<'a, P>
@@ -1771,7 +1772,11 @@ where
 {
     #[inline]
     pub fn new(pline: &'a P) -> Self {
-        Self { pline, pos: 0 }
+        Self {
+            pline,
+            pos: 0,
+            end: pline.vertex_count(),
+        }
     }
 }
 
@@ -1784,20 +1789,20 @@ where
         Self {
             pline: self.pline,
             pos: self.pos,
+            end: self.end,
         }
     }
 }
 
-impl<'a, P, T> Iterator for VertexIter<'a, P>
+impl<'a, P> Iterator for VertexIter<'a, P>
 where
-    P: PlineSource<Num = T> + ?Sized,
-    T: Real,
+    P: PlineSource + ?Sized,
 {
-    type Item = PlineVertex<T>;
+    type Item = PlineVertex<P::Num>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos == self.pline.vertex_count() {
+        if self.pos == self.end {
             return None;
         }
         let r = self.pline.get(self.pos);
@@ -1807,7 +1812,7 @@ where
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.pline.vertex_count() - self.pos;
+        let remaining = self.end - self.pos;
         (remaining, Some(remaining))
     }
 }
@@ -1821,6 +1826,21 @@ where
         let (lower, upper) = self.size_hint();
         assert_eq!(upper, Some(lower));
         lower
+    }
+}
+
+impl<'a, P> DoubleEndedIterator for VertexIter<'a, P>
+where
+    P: PlineSource + ?Sized,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.pos == self.end {
+            return None;
+        }
+
+        let r = self.pline.get(self.end - 1);
+        self.end -= 1;
+        r
     }
 }
 
@@ -1863,12 +1883,11 @@ where
     }
 }
 
-impl<'a, P, T> Iterator for SegmentIter<'a, P>
+impl<'a, P> Iterator for SegmentIter<'a, P>
 where
-    P: PlineSource<Num = T> + ?Sized,
-    T: Real,
+    P: PlineSource + ?Sized,
 {
-    type Item = (PlineVertex<T>, PlineVertex<T>);
+    type Item = (PlineVertex<P::Num>, PlineVertex<P::Num>);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
