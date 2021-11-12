@@ -24,4 +24,8 @@ were done on the input polyline or not.
 
 ### Removed 🔥
 * `Polyline::visit_segments` (use `PlineSource::iter_segments` instead).
+* `Polyline::len` method removed (use `PlineSource::vertex_count` instead).
 * `PolylineSlice` trait and `OpenPlineSlice` type (covered by new view types and polyline traits).
+* `PolylineSlice::stitch_onto` and `PolylineSlice::to_polyline` removed, to get same functionality
+construct the view with `PlineData::view` and pass it to `PlineSourceMut::extend_remove_repeat` or
+`PlineCreation::create_from_remove_repeat`.
