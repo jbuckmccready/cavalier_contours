@@ -975,126 +975,6 @@ pub trait PlineSource {
         Some(result)
     }
 
-    /// Helper function for processing a line segment when computing the winding number.
-    fn process_line_winding(
-        v1: PlineVertex<Self::Num>,
-        v2: PlineVertex<Self::Num>,
-        point: Vector2<Self::Num>,
-    ) -> i32 {
-        let mut result = 0;
-        if v1.y <= point.y {
-            if v2.y > point.y && is_left(v1.pos(), v2.pos(), point) {
-                // left and upward crossing
-                result += 1;
-            }
-        } else if v2.y <= point.y && !is_left(v1.pos(), v2.pos(), point) {
-            // right an downward crossing
-            result -= 1;
-        }
-
-        result
-    }
-
-    /// Helper function for processing an arc segment when computing the winding number.
-    fn process_arc_winding(
-        v1: PlineVertex<Self::Num>,
-        v2: PlineVertex<Self::Num>,
-        point: Vector2<Self::Num>,
-    ) -> i32 {
-        let is_ccw = v1.bulge_is_pos();
-        let point_is_left = if is_ccw {
-            is_left(v1.pos(), v2.pos(), point)
-        } else {
-            is_left_or_equal(v1.pos(), v2.pos(), point)
-        };
-
-        let dist_to_arc_center_less_than_radius = || {
-            let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-            let dist2 = dist_squared(arc_center, point);
-            dist2 < arc_radius * arc_radius
-        };
-
-        let mut result = 0;
-
-        if v1.y <= point.y {
-            if v2.y > point.y {
-                // upward crossing of arc chord
-                if is_ccw {
-                    if point_is_left {
-                        // counter clockwise arc left of chord
-                        result += 1;
-                    } else {
-                        // counter clockwise arc right of chord
-                        if dist_to_arc_center_less_than_radius() {
-                            result += 1;
-                        }
-                    }
-                } else if point_is_left {
-                    // clockwise arc left of chord
-                    if !dist_to_arc_center_less_than_radius() {
-                        result += 1;
-                    }
-                    // else clockwise arc right of chord, no crossing
-                }
-            } else {
-                // not crossing arc chord and chord is below, check if point is inside arc sector
-                if is_ccw
-                    && !point_is_left
-                    && v2.x < point.x
-                    && point.x < v1.x
-                    && dist_to_arc_center_less_than_radius()
-                {
-                    result += 1;
-                } else if !is_ccw
-                    && point_is_left
-                    && v1.x < point.x
-                    && point.x < v2.x
-                    && dist_to_arc_center_less_than_radius()
-                {
-                    result -= 1;
-                }
-            }
-        } else if v2.y <= point.y {
-            // downward crossing of arc chord
-            if is_ccw {
-                if !point_is_left {
-                    // counter clockwise arc right of chord
-                    if !dist_to_arc_center_less_than_radius() {
-                        result -= 1;
-                    }
-                }
-            // else counter clockwise arc left of chord, no crossing
-            } else if point_is_left {
-                // clockwise arc left of chord
-                if dist_to_arc_center_less_than_radius() {
-                    result -= 1;
-                }
-            } else {
-                // clockwise arc right of chord
-                result -= 1;
-            }
-        } else {
-            // not crossing arc chord and chord is above, check if point is inside arc sector
-            if is_ccw
-                && !point_is_left
-                && v1.x < point.x
-                && point.x < v2.x
-                && dist_to_arc_center_less_than_radius()
-            {
-                result += 1;
-            } else if !is_ccw
-                && point_is_left
-                && v2.x < point.x
-                && point.x < v1.x
-                && dist_to_arc_center_less_than_radius()
-            {
-                result -= 1;
-            }
-        }
-
-        result
-    }
-
     /// Calculate the winding number for a `point` relative to the polyline.
     ///
     /// The winding number calculates the number of turns/windings around a point that the polyline
@@ -1153,13 +1033,127 @@ pub trait PlineSource {
             return 0;
         }
 
+        // Helper function for processing a line segment when computing the winding number.
+        let process_line_winding =
+            |v1: PlineVertex<Self::Num>, v2: PlineVertex<Self::Num>, point: Vector2<Self::Num>| {
+                let mut result = 0;
+                if v1.y <= point.y {
+                    if v2.y > point.y && is_left(v1.pos(), v2.pos(), point) {
+                        // left and upward crossing
+                        result += 1;
+                    }
+                } else if v2.y <= point.y && !is_left(v1.pos(), v2.pos(), point) {
+                    // right an downward crossing
+                    result -= 1;
+                }
+
+                result
+            };
+
+        // Helper function for processing an arc segment when computing the winding number.
+        let process_arc_winding =
+            |v1: PlineVertex<Self::Num>, v2: PlineVertex<Self::Num>, point: Vector2<Self::Num>| {
+                let is_ccw = v1.bulge_is_pos();
+                let point_is_left = if is_ccw {
+                    is_left(v1.pos(), v2.pos(), point)
+                } else {
+                    is_left_or_equal(v1.pos(), v2.pos(), point)
+                };
+
+                let dist_to_arc_center_less_than_radius = || {
+                    let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
+                    let dist2 = dist_squared(arc_center, point);
+                    dist2 < arc_radius * arc_radius
+                };
+
+                let mut result = 0;
+
+                if v1.y <= point.y {
+                    if v2.y > point.y {
+                        // upward crossing of arc chord
+                        if is_ccw {
+                            if point_is_left {
+                                // counter clockwise arc left of chord
+                                result += 1;
+                            } else {
+                                // counter clockwise arc right of chord
+                                if dist_to_arc_center_less_than_radius() {
+                                    result += 1;
+                                }
+                            }
+                        } else if point_is_left {
+                            // clockwise arc left of chord
+                            if !dist_to_arc_center_less_than_radius() {
+                                result += 1;
+                            }
+                            // else clockwise arc right of chord, no crossing
+                        }
+                    } else {
+                        // not crossing arc chord and chord is below, check if point is inside arc sector
+                        if is_ccw
+                            && !point_is_left
+                            && v2.x < point.x
+                            && point.x < v1.x
+                            && dist_to_arc_center_less_than_radius()
+                        {
+                            result += 1;
+                        } else if !is_ccw
+                            && point_is_left
+                            && v1.x < point.x
+                            && point.x < v2.x
+                            && dist_to_arc_center_less_than_radius()
+                        {
+                            result -= 1;
+                        }
+                    }
+                } else if v2.y <= point.y {
+                    // downward crossing of arc chord
+                    if is_ccw {
+                        if !point_is_left {
+                            // counter clockwise arc right of chord
+                            if !dist_to_arc_center_less_than_radius() {
+                                result -= 1;
+                            }
+                        }
+                    // else counter clockwise arc left of chord, no crossing
+                    } else if point_is_left {
+                        // clockwise arc left of chord
+                        if dist_to_arc_center_less_than_radius() {
+                            result -= 1;
+                        }
+                    } else {
+                        // clockwise arc right of chord
+                        result -= 1;
+                    }
+                } else {
+                    // not crossing arc chord and chord is above, check if point is inside arc sector
+                    if is_ccw
+                        && !point_is_left
+                        && v1.x < point.x
+                        && point.x < v2.x
+                        && dist_to_arc_center_less_than_radius()
+                    {
+                        result += 1;
+                    } else if !is_ccw
+                        && point_is_left
+                        && v2.x < point.x
+                        && point.x < v1.x
+                        && dist_to_arc_center_less_than_radius()
+                    {
+                        result -= 1;
+                    }
+                }
+
+                result
+            };
+
         let mut winding = 0;
 
         for (v1, v2) in self.iter_segments() {
             if v1.bulge_is_zero() {
-                winding += Self::process_line_winding(v1, v2, point);
+                winding += process_line_winding(v1, v2, point);
             } else {
-                winding += Self::process_arc_winding(v1, v2, point);
+                winding += process_arc_winding(v1, v2, point);
             }
         }
 
