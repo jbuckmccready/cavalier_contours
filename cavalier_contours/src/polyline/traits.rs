@@ -82,7 +82,10 @@ pub trait PlineSource {
     /// Fuzzy compare with another polyline using `eps` epsilon value for fuzzy comparison of
     /// vertexes.
     #[inline]
-    fn fuzzy_eq_eps(&self, other: &Self, eps: Self::Num) -> bool {
+    fn fuzzy_eq_eps<P>(&self, other: &P, eps: Self::Num) -> bool
+    where
+        P: PlineSource<Num = Self::Num>,
+    {
         self.vertex_count() == other.vertex_count()
             && self.vertex_count() == other.vertex_count()
             && self
@@ -93,7 +96,10 @@ pub trait PlineSource {
 
     /// Same as [PlineSource::fuzzy_eq_eps] but uses default `Self::Num::fuzzy_epsilon()`.
     #[inline]
-    fn fuzzy_eq(&self, other: &Self) -> bool {
+    fn fuzzy_eq<P>(&self, other: &P) -> bool
+    where
+        P: PlineSource<Num = Self::Num>,
+    {
         self.fuzzy_eq_eps(other, Self::Num::fuzzy_epsilon())
     }
 
