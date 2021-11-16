@@ -3,6 +3,7 @@
 #[macro_export]
 macro_rules! assert_fuzzy_eq {
     ($left:expr, $right:expr) => {{
+        #[allow(unused_imports)]
         use $crate::core::traits::*;
         match (&$left, &$right) {
             (left_val, right_val) => {
@@ -18,6 +19,7 @@ macro_rules! assert_fuzzy_eq {
         }
     }};
     ($left:expr, $right:expr, $eps:expr) => {{
+        #[allow(unused_imports)]
         use $crate::core::traits::*;
         match (&$left, &$right, &$eps) {
             (left_val, right_val, eps_val) => {
@@ -61,6 +63,7 @@ macro_rules! replace_expr {
 macro_rules! pline_open {
     ($( $x:expr ),* $(,)?) => {
         {
+            #[allow(unused_imports)]
             use $crate::polyline::*;
             let size = <[()]>::len(&[$(cavalier_contours::replace_expr!(($x) ())),*]);
             let mut pl = Polyline::with_capacity(size, false);
@@ -88,6 +91,7 @@ macro_rules! pline_open {
 macro_rules! pline_closed {
     ($( $x:expr ),* $(,)?) => {
         {
+            #[allow(unused_imports)]
             use $crate::polyline::*;
             let size = <[()]>::len(&[$(cavalier_contours::replace_expr!(($x) ())),*]);
             let mut pl = Polyline::with_capacity(size, true);
