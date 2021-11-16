@@ -3,6 +3,7 @@
 #[macro_export]
 macro_rules! assert_fuzzy_eq {
     ($left:expr, $right:expr) => {{
+        use $crate::core::traits::*;
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(left_val.fuzzy_eq(*right_val)) {
@@ -17,6 +18,7 @@ macro_rules! assert_fuzzy_eq {
         }
     }};
     ($left:expr, $right:expr, $eps:expr) => {{
+        use $crate::core::traits::*;
         match (&$left, &$right, &$eps) {
             (left_val, right_val, eps_val) => {
                 if !(left_val.fuzzy_eq_eps(*right_val, *eps_val)) {
