@@ -26,7 +26,7 @@ pub enum PlineOrientation {
 
 /// Result from calling [PlineSource::closest_point].
 #[derive(Debug, Copy, Clone)]
-pub struct ClosestPointResult<T>
+pub struct ClosestPointResult<T = f64>
 where
     T: Real,
 {
@@ -40,7 +40,7 @@ where
 
 /// Struct to hold options parameters when performing polyline offset.
 #[derive(Debug, Clone)]
-pub struct PlineOffsetOptions<'a, T>
+pub struct PlineOffsetOptions<'a, T = f64>
 where
     T: Real,
 {
@@ -186,7 +186,7 @@ where
 }
 
 #[derive(Debug)]
-pub struct PlineBooleanOptions<'a, T>
+pub struct PlineBooleanOptions<'a, T = f64>
 where
     T: Real,
 {
@@ -237,7 +237,7 @@ pub enum SelfIntersectsInclude {
 }
 
 #[derive(Debug)]
-pub struct PlineSelfIntersectOptions<'a, T>
+pub struct PlineSelfIntersectOptions<'a, T = f64>
 where
     T: Real,
 {
@@ -276,7 +276,7 @@ where
 }
 
 #[derive(Debug)]
-pub struct FindIntersectsOptions<'a, T>
+pub struct FindIntersectsOptions<'a, T = f64>
 where
     T: Real,
 {
@@ -311,7 +311,7 @@ where
 
 /// Represents a polyline intersect at a single point.
 #[derive(Debug, Clone, Copy)]
-pub struct PlineBasicIntersect<T> {
+pub struct PlineBasicIntersect<T = f64> {
     /// Starting vertex index of the first polyline segment involved in the intersect.
     pub start_index1: usize,
     /// Starting vertex index of the second polyline segment involved in the intersect.
@@ -333,7 +333,7 @@ impl<T> PlineBasicIntersect<T> {
 
 /// Represents an overlapping polyline intersect segment.
 #[derive(Debug, Clone, Copy)]
-pub struct PlineOverlappingIntersect<T> {
+pub struct PlineOverlappingIntersect<T = f64> {
     /// Starting vertex index of the first polyline segment involved in the overlapping intersect.
     pub start_index1: usize,
     /// Starting vertex index of the second polyline segment involved in the intersect.
@@ -364,7 +364,7 @@ impl<T> PlineOverlappingIntersect<T> {
 /// Represents a polyline intersect that may be either a [PlineBasicIntersect] or
 /// [PlineOverlappingIntersect].
 #[derive(Debug, Clone, Copy)]
-pub enum PlineIntersect<T> {
+pub enum PlineIntersect<T = f64> {
     Basic(PlineBasicIntersect<T>),
     Overlapping(PlineOverlappingIntersect<T>),
 }
@@ -462,7 +462,7 @@ where
 
 /// Represents a collection of basic and overlapping polyline intersects.
 #[derive(Debug, Clone)]
-pub struct PlineIntersectsCollection<T> {
+pub struct PlineIntersectsCollection<T = f64> {
     pub basic_intersects: Vec<PlineBasicIntersect<T>>,
     pub overlapping_intersects: Vec<PlineOverlappingIntersect<T>>,
 }
@@ -556,7 +556,7 @@ where
     }
 
     #[inline]
-    pub fn view<'a, P>(&self, source: &'a P) -> PlineView<'a, P, T>
+    pub fn view<'a, P>(&self, source: &'a P) -> PlineView<'a, P>
     where
         P: PlineSource<Num = T> + ?Sized,
     {

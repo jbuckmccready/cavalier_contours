@@ -634,9 +634,9 @@ where
     }
 
     #[inline]
-    pub fn view<'a, P>(&self, source: &'a P) -> PlineView<'a, P, T>
+    pub fn view<'a, P>(&self, source: &'a P) -> PlineView<'a, P>
     where
-        P: ?Sized,
+        P: PlineSource<Num = T> + ?Sized,
     {
         PlineView {
             source,
@@ -1139,7 +1139,6 @@ mod find_intersects_tests {
 mod sort_and_join_overlapping_intersects_tests {
     use super::*;
     use crate::core::math::bulge_from_angle;
-    use crate::core::traits::FuzzyEq;
     use crate::polyline::{PlineCreation, PlineSourceMut, PlineVertex, Polyline};
 
     #[test]

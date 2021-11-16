@@ -13,39 +13,41 @@ use serde::{Deserialize, Serialize};
 ///
 /// See [PlineViewData] for how to create different types of views/selections.
 #[derive(Debug, Clone, Copy)]
-pub struct PlineView<'a, P, T>
+pub struct PlineView<'a, P>
 where
-    P: ?Sized,
+    P: PlineSource + ?Sized,
 {
     /// Reference to the source polyline for this view.
     pub source: &'a P,
     /// View data used for indexing into the `source` polyline.
-    pub data: PlineViewData<T>,
+    pub data: PlineViewData<P::Num>,
 }
 
-impl<'a, P, T> PlineView<'a, P, T> {
+impl<'a, P> PlineView<'a, P>
+where
+    P: PlineSource + ?Sized,
+{
     /// Create a new view with the given source and data.
     #[inline]
-    pub fn new(source: &'a P, data: PlineViewData<T>) -> Self {
+    pub fn new(source: &'a P, data: PlineViewData<P::Num>) -> Self {
         Self { source, data }
     }
 
     /// Consume the view (releasing the borrow on the source polyline) and returning the associated
     /// view data.
     #[inline]
-    pub fn detach(self) -> PlineViewData<T> {
+    pub fn detach(self) -> PlineViewData<P::Num> {
         self.data
     }
 }
 
-impl<'a, P, T> PlineSource for PlineView<'a, P, T>
+impl<'a, P> PlineSource for PlineView<'a, P>
 where
-    P: PlineSource<Num = T> + ?Sized,
-    T: Real,
+    P: PlineSource + ?Sized,
 {
-    type Num = T;
+    type Num = P::Num;
 
-    type OutputPolyline = Polyline<T>;
+    type OutputPolyline = Polyline<P::Num>;
 
     #[inline]
     fn vertex_count(&self) -> usize {
@@ -82,7 +84,7 @@ where
 /// [PlineViewData::view] is called to form an active view (using a reference to the source polyline
 /// to then iterate over or perform operations on).
 #[derive(Debug, Clone, Copy)]
-pub struct PlineViewData<T> {
+pub struct PlineViewData<T = f64> {
     /// Source polyline start segment index.
     pub start_index: usize,
     /// Wrapping offset from `start_index` to reach the last segment index in the source polyline.
@@ -105,7 +107,7 @@ where
 {
     /// Create a [PlineView] by giving a reference to be borrowed as the source polyline.
     #[inline]
-    pub fn view<'a, P>(&self, source: &'a P) -> PlineView<'a, P, T>
+    pub fn view<'a, P>(&self, source: &'a P) -> PlineView<'a, P>
     where
         P: PlineSource<Num = T> + ?Sized,
     {
