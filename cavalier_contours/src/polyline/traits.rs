@@ -84,9 +84,9 @@ pub trait PlineSource {
     #[inline]
     fn fuzzy_eq_eps<P>(&self, other: &P, eps: Self::Num) -> bool
     where
-        P: PlineSource<Num = Self::Num>,
+        P: PlineSource<Num = Self::Num> + ?Sized,
     {
-        self.vertex_count() == other.vertex_count()
+        self.is_closed() == other.is_closed()
             && self.vertex_count() == other.vertex_count()
             && self
                 .iter_vertexes()
@@ -98,7 +98,7 @@ pub trait PlineSource {
     #[inline]
     fn fuzzy_eq<P>(&self, other: &P) -> bool
     where
-        P: PlineSource<Num = Self::Num>,
+        P: PlineSource<Num = Self::Num> + ?Sized,
     {
         self.fuzzy_eq_eps(other, Self::Num::fuzzy_epsilon())
     }
@@ -1285,7 +1285,7 @@ pub trait PlineSource {
     #[inline]
     fn find_intersects<P>(&self, other: &P) -> PlineIntersectsCollection<Self::Num>
     where
-        P: PlineSource<Num = Self::Num>,
+        P: PlineSource<Num = Self::Num> + ?Sized,
     {
         self.find_intersects_opt(other, &Default::default())
     }
@@ -1298,7 +1298,7 @@ pub trait PlineSource {
         options: &FindIntersectsOptions<Self::Num>,
     ) -> PlineIntersectsCollection<Self::Num>
     where
-        P: PlineSource<Num = Self::Num>,
+        P: PlineSource<Num = Self::Num> + ?Sized,
     {
         find_intersects(self, other, options)
     }
@@ -1388,7 +1388,7 @@ pub trait PlineSource {
     /// ```
     fn boolean<P>(&self, other: &P, operation: BooleanOp) -> BooleanResult<Self::OutputPolyline>
     where
-        P: PlineSource<Num = Self::Num>,
+        P: PlineSource<Num = Self::Num> + ?Sized,
     {
         self.boolean_opt(other, operation, &Default::default())
     }
@@ -1432,7 +1432,7 @@ pub trait PlineSource {
         options: &PlineBooleanOptions<Self::Num>,
     ) -> BooleanResult<Self::OutputPolyline>
     where
-        P: PlineSource<Num = Self::Num>,
+        P: PlineSource<Num = Self::Num> + ?Sized,
     {
         polyline_boolean(self, other, operation, options)
     }
@@ -1564,7 +1564,7 @@ pub trait PlineSourceMut: PlineSource {
     #[inline]
     fn extend<P>(&mut self, other: &P)
     where
-        P: PlineSource<Num = Self::Num>,
+        P: PlineSource<Num = Self::Num> + ?Sized,
     {
         self.extend_vertexes(other.iter_vertexes());
     }
@@ -1574,7 +1574,7 @@ pub trait PlineSourceMut: PlineSource {
     #[inline]
     fn extend_remove_repeat<P>(&mut self, other: &P, pos_equal_eps: Self::Num)
     where
-        P: PlineSource<Num = Self::Num>,
+        P: PlineSource<Num = Self::Num> + ?Sized,
     {
         self.reserve(other.vertex_count());
         for v in other.iter_vertexes() {

@@ -164,7 +164,12 @@ fn from_slice_points_multi_seg() {
         .unwrap();
 
         let pline_from_slice = Polyline::create_from(&slice.view(&pline));
-        assert_fuzzy_eq!(&pline_from_slice, &pline);
+        let expected_result = {
+            let mut pl = pline.clone();
+            pl.set_is_closed(false);
+            pl
+        };
+        assert_fuzzy_eq!(&pline_from_slice, &expected_result);
     }
 
     // complete polyline (end segment index on top of last vertex)
@@ -180,7 +185,12 @@ fn from_slice_points_multi_seg() {
         .unwrap();
 
         let pline_from_slice = Polyline::create_from(&slice.view(&pline));
-        assert_fuzzy_eq!(&pline_from_slice, &pline);
+        let expected_result = {
+            let mut pl = pline.clone();
+            pl.set_is_closed(false);
+            pl
+        };
+        assert_fuzzy_eq!(&pline_from_slice, &expected_result);
     }
 
     // slice from start to middle of first segment
