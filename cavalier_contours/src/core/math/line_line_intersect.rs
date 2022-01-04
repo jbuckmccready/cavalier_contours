@@ -34,6 +34,47 @@ where
 
 /// Finds the intersects between two lines segments.
 ///
+/// This function returns the parametric solution(s) using the general line segment equation `P(t) = p0 + t * (p1 - p0)`.
+/// Note that this equation holds for both line segments.
+///
+/// # Explanation on result cases `LineLineIntr`
+/// ## `NoIntersect`
+/// Either of the following cases:
+/// * Lines are (almost) parallel
+/// * Both line segments are points and distinct from each other
+/// * One line segment is a point and distinct from the other line segment
+/// * Line segments are parallel and atleast one must be extended to intersect
+///
+/// ## `TrueIntersect`
+/// Either of the following cases:
+/// * Line segments are not parallel and intersect at one point
+/// * Both line segments are points and lie over each other
+/// * One line segment is a point and lies in other line segment
+///
+/// ## `FalseIntersect`
+/// Either of the following cases:
+/// * Line segments are not parallel and atleast one must be extended to intersect
+///
+/// ## `Overlapping`
+/// Either of the following cases:
+/// * Line segments are collinear and overlap
+///
+/// # Examples
+///
+/// ```
+/// # use cavalier_contours::core::traits::*;
+/// # use cavalier_contours::core::math::*;
+/// # use cavalier_contours::core::math::LineLineIntr::TrueIntersect;
+/// // A line segment tangent-intersecting a circle with one of the line segments end points.
+/// let v1 = Vector2::new(0.0, 0.0);
+/// let v2 = Vector2::new(1.0, 0.0);
+/// let u1 = Vector2::new(0.5, -1.0);
+/// let u2 = Vector2::new(0.5, 1.0);
+/// if let LineLineIntr::TrueIntersect{seg1_t: t1, seg2_t: t2} = line_line_intr(v1, v2, u1, u2) {
+///    assert_eq!(t1, 0.5);
+///    assert_eq!(t2, 0.5);
+/// }
+///```
 /// Line segments are defined by `v1->v2` and `u1->u2`.
 /// Handles the cases where the lines may be parallel, collinear, or single points.
 pub fn line_line_intr<T>(
