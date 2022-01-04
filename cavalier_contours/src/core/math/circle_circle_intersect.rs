@@ -1,7 +1,7 @@
 use super::Vector2;
 use crate::core::traits::Real;
 
-/// Holds the result of finding the intersect between a line segment and a circle.
+/// Holds the result of finding the intersect between two circles.
 #[derive(Debug, Copy, Clone)]
 pub enum CircleCircleIntr<T>
 where
@@ -25,7 +25,29 @@ where
     Overlapping,
 }
 
-/// Finds the intersects between two circles.
+/// Finds the intersects between two circles defined by the radius and center.
+///
+/// This function returns the geometric solution(s) for the intersection of two circles.
+/// The result will hold `NoIntersect`, if the circles are too far apart, `Overlapping`
+/// if the circles are similar in radii and center. In the other cases, the result will
+/// hold either a `TangentIntersect` with a single intersection point or `TwoIntersects`
+/// with two intersection points.
+///
+/// # Examples
+///
+/// ```
+/// # use cavalier_contours::core::traits::*;
+/// # use cavalier_contours::core::math::*;
+/// # use cavalier_contours::core::math::CircleCircleIntr::TangentIntersect;
+/// // Two tangent-intersecting circles of radius `1.0` with euclidean distance of `2.0`
+/// let r1 = 1.0;
+/// let c1 = Vector2::new(0.0, 0.0);
+/// let r2 = 1.0;
+/// let c2 = Vector2::new(0.0, 2.0);
+/// if let CircleCircleIntr::TangentIntersect{point:p} = circle_circle_intr(r1, c1, r2, c2) {
+///    assert_eq!(p, Vector2::new(0.0, 1.0));
+/// }
+///```
 pub fn circle_circle_intr<T>(
     radius1: T,
     center1: Vector2<T>,
