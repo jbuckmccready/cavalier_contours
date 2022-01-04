@@ -28,9 +28,25 @@ where
 ///
 /// This function returns the parametric solution(s) for the line segment equation `P(t) = p0 + t * (p1 - p0)`
 /// for `t = 0` to `t = 1`. If `t < 0` or `t > 1` then intersect occurs only when extending the segment out past the
-/// points `p0` and `p1` given. If `t < 0` then the intersect is nearest to `p0`, if `t > 1.0` then the intersect is nearest to `p1`).
+/// points `p0` and `p1` given. If `t < 0` then the intersect is nearest to `p0`, if `t > 1.0` then the intersect is nearest to `p1`.
 /// Intersects are "sticky" and "snap" to tangent points using fuzzy comparisons, e.g. a segment very close to being tangent line
 /// will return a single intersect point.
+///
+/// # Examples
+///
+/// ```
+/// # use cavalier_contours::core::traits::*;
+/// # use cavalier_contours::core::math::*;
+/// # use cavalier_contours::core::math::LineCircleIntr::TangentIntersect;
+/// // A line segment tangent-intersecting a circle with one of the line segments end points.
+/// let p0 = Vector2::new(0.0, 0.0);
+/// let p1 = Vector2::new(1.0, 0.0);
+/// let r = 1.0;
+/// let c = Vector2::new(2.0, 0.0);
+/// if let LineCircleIntr::TangentIntersect{t0: t} = line_circle_intr(p0, p1, r, c) {
+///    assert_eq!(t, 1.0);
+/// }
+///```
 pub fn line_circle_intr<T>(
     p0: Vector2<T>,
     p1: Vector2<T>,
