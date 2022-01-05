@@ -26,11 +26,12 @@ where
 
 /// Finds the intersects between a line segment and a circle.
 ///
-/// This function returns the parametric solution(s) for the line segment equation `P(t) = p0 + t * (p1 - p0)`
-/// for `t = 0` to `t = 1`. If `t < 0` or `t > 1` then intersect occurs only when extending the segment out past the
-/// points `p0` and `p1` given. If `t < 0` then the intersect is nearest to `p0`, if `t > 1.0` then the intersect is nearest to `p1`.
-/// Intersects are "sticky" and "snap" to tangent points using fuzzy comparisons, e.g. a segment very close to being tangent line
-/// will return a single intersect point.
+/// This function returns the parametric solution(s) for the line segment equation
+/// `P(t) = p0 + t * (p1 - p0)` for `t = 0` to `t = 1`. If `t < 0` or `t > 1` then intersect occurs
+/// only when extending the segment out past the points `p0` and `p1` given.
+/// If `t < 0` then the intersect is nearest to `p0`, if `t > 1.0` then the intersect is
+/// nearest to `p1`. Intersects are "sticky" and "snap" to tangent points using fuzzy comparisons,
+/// e.g. a segment very close to being tangent line will return a single intersect point.
 ///
 /// # Examples
 ///
@@ -56,10 +57,10 @@ pub fn line_circle_intr<T>(
 where
     T: Real,
 {
-    // This function solves for t by substituting the parametric equations for the segment x = v1.X +
-    // t * (v2.X - v1.X) and y = v1.Y + t * (v2.Y - v1.Y) for t = 0 to t = 1 into the circle equation
-    // (x-h)^2 + (y-k)^2 = r^2 and then solving the resulting equation in the form a*t^2 + b*t + c = 0
-    // using the quadratic formula
+    // This function solves for t by substituting the parametric equations for
+    // the segment x = v1.X + t * (v2.X - v1.X) and y = v1.Y + t * (v2.Y - v1.Y) for t = 0 to t = 1
+    // into the circle equation (x-h)^2 + (y-k)^2 = r^2 and then solving the resulting equation
+    // in the form a*t^2 + b*t + c = 0 using the quadratic formula.
 
     use LineCircleIntr::*;
 

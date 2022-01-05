@@ -34,7 +34,8 @@ where
 
 /// Finds the intersects between two lines segments.
 ///
-/// This function returns the parametric solution(s) using the general line segment equation `P(t) = p0 + t * (p1 - p0)`.
+/// This function returns the parametric solution(s) using the general
+/// line segment equation `P(t) = p0 + t * (p1 - p0)`.
 /// Note that this equation holds for both line segments.
 ///
 /// # Explanation on result cases `LineLineIntr`
