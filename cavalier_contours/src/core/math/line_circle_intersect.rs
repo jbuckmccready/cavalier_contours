@@ -43,9 +43,12 @@ where
 /// let p0 = Vector2::new(0.0, 0.0);
 /// let p1 = Vector2::new(1.0, 0.0);
 /// let r = 1.0;
-/// let c = Vector2::new(2.0, 0.0);
+/// let c = Vector2::new(0.0, 1.0);
+///
 /// if let LineCircleIntr::TangentIntersect{t0: t} = line_circle_intr(p0, p1, r, c) {
-///    assert_eq!(t, 1.0);
+///     assert_eq!(t, 0.0);
+/// } else {
+///     unreachable!("expected tangent intersect");
 /// }
 ///```
 pub fn line_circle_intr<T>(

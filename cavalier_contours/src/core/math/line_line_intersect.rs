@@ -74,6 +74,8 @@ where
 /// if let LineLineIntr::TrueIntersect{seg1_t: t1, seg2_t: t2} = line_line_intr(v1, v2, u1, u2) {
 ///    assert_eq!(t1, 0.5);
 ///    assert_eq!(t2, 0.5);
+/// } else {
+///     unreachable!("expected true intersection between line segments");
 /// }
 ///```
 /// Line segments are defined by `v1->v2` and `u1->u2`.

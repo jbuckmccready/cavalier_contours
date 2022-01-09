@@ -46,6 +46,8 @@ where
 /// let c2 = Vector2::new(0.0, 2.0);
 /// if let CircleCircleIntr::TangentIntersect{point:p} = circle_circle_intr(r1, c1, r2, c2) {
 ///    assert_eq!(p, Vector2::new(0.0, 1.0));
+/// } else {
+///     unreachable!("expected a tangent intersection");
 /// }
 ///```
 pub fn circle_circle_intr<T>(
