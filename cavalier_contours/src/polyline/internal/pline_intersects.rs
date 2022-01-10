@@ -62,7 +62,7 @@ where
                 ))
             );
         } else {
-            match pline_seg_intr(v1, v2, v2, v3) {
+            match pline_seg_intr(v1, v2, v2, v3, pos_equal_eps) {
                 PlineSegIntr::NoIntersect => {}
                 PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
                     if !point.fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
@@ -75,7 +75,7 @@ where
                     }
 
                     if !point2.fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
-                        pline_seg_intr(v1, v2, v2, v3);
+                        pline_seg_intr(v1, v2, v2, v3, pos_equal_eps);
                         try_cf!(visitor.visit_basic_intr(PlineBasicIntersect::new(i, j, point2)));
                     }
                 }
@@ -173,7 +173,7 @@ where
                     && u2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
             };
 
-            match pline_seg_intr(v1, v2, u1, u2) {
+            match pline_seg_intr(v1, v2, u1, u2, pos_equal_eps) {
                 PlineSegIntr::NoIntersect => {}
                 PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
                     if !skip_intr_at_end(point) {
@@ -345,7 +345,7 @@ where
                         && (pline2.is_closed() || i2 != open2_last_idx))
             };
 
-            match pline_seg_intr(p1v1, p1v2, p2v1, p2v2) {
+            match pline_seg_intr(p1v1, p1v2, p2v1, p2v2, pos_equal_eps) {
                 PlineSegIntr::NoIntersect => {}
                 PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
                     if !skip_intr_at_end(point) {

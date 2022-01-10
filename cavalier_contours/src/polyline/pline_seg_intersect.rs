@@ -59,6 +59,7 @@ pub fn pline_seg_intr<T>(
     v2: PlineVertex<T>,
     u1: PlineVertex<T>,
     u2: PlineVertex<T>,
+    pos_equal_eps: T,
 ) -> PlineSegIntr<T>
 where
     T: Real,
@@ -68,7 +69,7 @@ where
     let u_is_line = u1.bulge_is_zero();
 
     if v_is_line && u_is_line {
-        let intr_result = line_line_intr(v1.pos(), v2.pos(), u1.pos(), u2.pos());
+        let intr_result = line_line_intr(v1.pos(), v2.pos(), u1.pos(), u2.pos(), pos_equal_eps);
         match intr_result {
             LineLineIntr::NoIntersect | LineLineIntr::FalseIntersect { .. } => {
                 return NoIntersect;
@@ -94,6 +95,13 @@ where
      -> PlineSegIntr<T> {
         let (arc_radius, arc_center) = seg_arc_radius_and_center(a1, a2);
 
+        let point_lies_on_arc = |pt: Vector2<T>| -> bool {
+            point_within_arc_sweep(arc_center, a1.pos(), a2.pos(), a1.bulge_is_neg(), pt)
+                && dist_squared(pt, arc_center)
+                    .sqrt()
+                    .fuzzy_eq_eps(arc_radius, pos_equal_eps)
+        };
+
         let point_in_sweep = |t: T| -> Option<Vector2<T>> {
             if !t.fuzzy_in_range(T::zero(), T::one()) {
                 return None;
@@ -109,7 +117,26 @@ where
             }
         };
 
-        let intr_result = line_circle_intr(p0, p1, arc_radius, arc_center);
+        // Check if the line segment starts or ends on the arc segment and if so then just return
+        // that end point.
+        // Why: this avoids inconsistencies between segment intersects where a line may "overlap" an
+        // arc according to the fuzzy epsilon values (e.g., imagine the arc has a large radius and
+        // the line has two intersects but is almost tangent to the arc), in such a case the
+        // line-circle intersect function will return two solutions, one on either side of the end
+        // point, but the end point is an equally valid solution according to the fuzzy epsilon and
+        // ensures consistency with other intersects. E.g., if the end of the line segment is the
+        // start of an arc that overlaps with another arc then we want the overlap intersect end
+        // points to agree with the intersect returned from this function, to ensure this
+        // consistency we use the end point when valid to do so.
+        if point_lies_on_arc(p0) {
+            return OneIntersect { point: p0 };
+        }
+
+        if point_lies_on_arc(p1) {
+            return OneIntersect { point: p1 };
+        }
+
+        let intr_result = line_circle_intr(p0, p1, arc_radius, arc_center, pos_equal_eps);
         match intr_result {
             LineCircleIntr::NoIntersect => NoIntersect,
             LineCircleIntr::TangentIntersect { t0 } => {
@@ -168,7 +195,13 @@ where
             && point_within_arc_sweep(arc2_center, u1.pos(), u2.pos(), u1.bulge_is_neg(), pt)
     };
 
-    let intr_result = circle_circle_intr(arc1_radius, arc1_center, arc2_radius, arc2_center);
+    let intr_result = circle_circle_intr(
+        arc1_radius,
+        arc1_center,
+        arc2_radius,
+        arc2_center,
+        pos_equal_eps,
+    );
 
     match intr_result {
         CircleCircleIntr::NoIntersect => NoIntersect,

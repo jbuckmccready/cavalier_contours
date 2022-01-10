@@ -171,7 +171,7 @@ fn line_line_join<T, O>(
         // connecting to/from collapsed arc, always connect using arc
         connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
     } else {
-        match line_line_intr(v1.pos(), v2.pos(), u1.pos(), u2.pos()) {
+        match line_line_intr(v1.pos(), v2.pos(), u1.pos(), u2.pos(), pos_equal_eps) {
             LineLineIntr::NoIntersect => {
                 // parallel lines, join with half circle
                 let sp = s1.v2.pos();
@@ -268,7 +268,7 @@ fn line_arc_join<T, O>(
         result.add_or_replace_vertex(*u1, pos_equal_eps);
     };
 
-    match line_circle_intr(v1.pos(), v2.pos(), arc_radius, arc_center) {
+    match line_circle_intr(v1.pos(), v2.pos(), arc_radius, arc_center, pos_equal_eps) {
         LineCircleIntr::NoIntersect => {
             connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
         }
@@ -345,7 +345,7 @@ fn arc_line_join<T, O>(
         connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
     };
 
-    match line_circle_intr(u1.pos(), u2.pos(), arc_radius, arc_center) {
+    match line_circle_intr(u1.pos(), u2.pos(), arc_radius, arc_center, pos_equal_eps) {
         LineCircleIntr::NoIntersect => {
             connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
         }
@@ -444,7 +444,13 @@ fn arc_arc_join<T, O>(
         }
     };
 
-    match circle_circle_intr(arc1_radius, arc1_center, arc2_radius, arc2_center) {
+    match circle_circle_intr(
+        arc1_radius,
+        arc1_center,
+        arc2_radius,
+        arc2_center,
+        pos_equal_eps,
+    ) {
         CircleCircleIntr::NoIntersect => {
             connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
         }
@@ -736,7 +742,13 @@ where
             let mut visitor = |i: usize| {
                 let j = original_polyline.next_wrapping_index(i);
                 has_intersect = !matches!(
-                    pline_seg_intr(v1, v2, original_polyline.at(i), original_polyline.at(j)),
+                    pline_seg_intr(
+                        v1,
+                        v2,
+                        original_polyline.at(i),
+                        original_polyline.at(j),
+                        pos_equal_eps
+                    ),
                     PlineSegIntr::NoIntersect
                 );
                 if has_intersect {
@@ -920,7 +932,13 @@ fn visit_circle_intersects<P, T, F>(
         let v1 = pline.at(start_index);
         let v2 = pline.at(pline.next_wrapping_index(start_index));
         if v1.bulge_is_zero() {
-            match line_circle_intr(v1.pos(), v2.pos(), circle_radius, circle_center) {
+            match line_circle_intr(
+                v1.pos(),
+                v2.pos(),
+                circle_radius,
+                circle_center,
+                pos_equal_eps,
+            ) {
                 LineCircleIntr::NoIntersect => {}
                 LineCircleIntr::TangentIntersect { t0 } => {
                     if is_valid_line_intr(t0) {
@@ -938,7 +956,13 @@ fn visit_circle_intersects<P, T, F>(
             }
         } else {
             let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-            match circle_circle_intr(arc_radius, arc_center, circle_radius, circle_center) {
+            match circle_circle_intr(
+                arc_radius,
+                arc_center,
+                circle_radius,
+                circle_center,
+                pos_equal_eps,
+            ) {
                 CircleCircleIntr::NoIntersect => {}
                 CircleCircleIntr::TangentIntersect { point } => {
                     if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, point) {
@@ -1078,7 +1102,13 @@ where
             let mut visitor = |i: usize| {
                 let j = original_polyline.next_wrapping_index(i);
                 has_intersect = !matches!(
-                    pline_seg_intr(v1, v2, original_polyline.at(i), original_polyline.at(j)),
+                    pline_seg_intr(
+                        v1,
+                        v2,
+                        original_polyline.at(i),
+                        original_polyline.at(j),
+                        pos_equal_eps
+                    ),
                     PlineSegIntr::NoIntersect
                 );
                 if has_intersect {

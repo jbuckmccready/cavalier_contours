@@ -368,6 +368,9 @@ fn run_pline_boolean_tests(
     test_set1.accept_closure(&mut |modified_pline1, state1| {
         test_set2.accept_closure(&mut |modified_pline2, state2| {
             for &(op, pos_set_expected, neg_set_expected) in cases {
+                if state2.inverted_direction {
+                    let test = true;
+                }
                 let result = modified_pline1.boolean(&modified_pline2, op);
                 let pos_set_result = create_boolean_property_set(&result.pos_plines);
                 let neg_set_result = create_boolean_property_set(&result.neg_plines);
@@ -513,6 +516,32 @@ mod test_specific {
                 (BooleanOp::And, &[PlineProperties::new(8, 44035.3323189534, 1026.5255074451134, 81.20071955870648, -45.0, 404.41586988912127, 210.0)], &[]),
                 (BooleanOp::Not, &[PlineProperties::new(3, -3403.377703804679, 449.8260354415685, 29.99999999999998, -3.4440267329434846, 210.0, 99.99999999999999)], &[]),
                 (BooleanOp::Xor, &[PlineProperties::new(3, -3403.377703804679, 449.8260354415685, 29.99999999999998, -3.4440267329434846, 210.0, 99.99999999999999), PlineProperties::new(5, 5930.749155202231, 588.2593437968856, 29.99999999999998, 85.61012812790688, 280.0, 172.99920254980566)], &[])
+            ]
+        }
+        pill_shapes_overlapping_at_ends_90_deg {
+            (
+                pline_closed![(3.0, 7.0, 0.0), (3.0, 4.0, 1.0), (5.0, 4.0, 0.0), (5.0, 7.0, 1.0)],
+                pline_closed![(4.0, 3.0, 0.0), (9.0, 3.0, 1.0), (9.0, 5.0, 0.0), (4.0, 5.0, 1.0)]
+            )
+            =>
+            [
+                (BooleanOp::Or, &[PlineProperties::new(7, 18.926990816987242, 21.853981633974485, 3.0, 3.0, 10.0, 8.0)], &[]),
+                (BooleanOp::And, &[PlineProperties::new(4, 3.3561944901923457, 6.71238898038469, 3.0, 3.0, 5.0, 5.0)], &[]),
+                (BooleanOp::Not, &[PlineProperties::new(5, -5.785398163397448, 10.71238898038469, 3.0, 4.0, 5.0, 8.0)], &[]),
+                (BooleanOp::Xor, &[PlineProperties::new(5, -5.785398163397448, 10.71238898038469, 3.0, 4.0, 5.0, 8.0), PlineProperties::new(5, 9.785398163397446, 14.71238898038469, 4.0, 3.0, 10.0, 5.0)], &[])
+            ]
+        }
+        pill_shapes_overlapping_at_ends_at_acute_angle {
+            (
+                pline_closed![(3.0, 7.0, 0.0), (3.0, 4.0, 1.0), (5.0, 4.0, 0.0), (5.0, 7.0, 1.0)],
+                pline_closed![(4.31623, 3.05132, 0.0), (10.3162, 5.05132, 1.0), (9.68377, 6.94868, 0.0), (3.68377, 4.94868, 1.0)]
+            )
+            =>
+            [
+                (BooleanOp::Or, &[PlineProperties::new(7, 21.349440304029333, 24.049941151993778, 3.0, 3.000002084139782, 10.999977834286828, 8.0)], &[]),
+                (BooleanOp::And, &[PlineProperties::new(5, 3.5827364210362647, 7.165481520754011, 3.0, 3.000002084139782, 5.0, 5.3874233333333335)], &[]),
+                (BooleanOp::Not, &[PlineProperties::new(5, -5.558852427532134, 10.39063865910795, 3.0, 4.0, 5.0, 8.0)], &[]),
+                (BooleanOp::Xor, &[PlineProperties::new(5, -5.558852427532134, 10.39063865910795, 3.0, 4.0, 5.0, 8.0), PlineProperties::new(5, 12.207851455460933, 17.039688511108828, 4.31623, 3.05132, 10.999977834286828, 6.999992834286827)], &[])
             ]
         }
     }

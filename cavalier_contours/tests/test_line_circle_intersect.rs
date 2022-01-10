@@ -24,7 +24,7 @@ fn no_intersect() {
     let p1 = Vector2::new(1.0, 1.0);
     let circle_center = Vector2::new(0.0, 5.0);
     let radius = 0.5;
-    let result = line_circle_intr(p0, p1, radius, circle_center);
+    let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(result, NoIntersect::<f64>);
 }
 
@@ -34,7 +34,7 @@ fn no_intersect_vertical() {
     let p1 = Vector2::new(0.0, 1.0);
     let circle_center = Vector2::new(2.0, 0.0);
     let radius = 0.5;
-    let result = line_circle_intr(p0, p1, radius, circle_center);
+    let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(result, NoIntersect::<f64>);
 }
 
@@ -44,7 +44,7 @@ fn no_intersect_horizontal() {
     let p1 = Vector2::new(3.0, 1.0);
     let circle_center = Vector2::new(2.0, -2.0);
     let radius = 0.5;
-    let result = line_circle_intr(p0, p1, radius, circle_center);
+    let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(result, NoIntersect::<f64>);
 }
 
@@ -58,7 +58,7 @@ fn two_intersects_true() {
     let circle_center = Vector2::new(offset, offset);
     let expected_t1_intr_point_x = 2.0 * offset;
     let expected_t1 = (expected_t1_intr_point_x - p0.x) / (p1.x - p0.x);
-    let result = line_circle_intr(p0, p1, radius, circle_center);
+    let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(
         result,
         TwoIntersects {
@@ -74,7 +74,7 @@ fn two_intersects_seg_inside_vertical() {
     let p1 = Vector2::new(0.0, 1.0);
     let circle_center = Vector2::new(0.0, 0.0);
     let radius = 1.0;
-    let result = line_circle_intr(p0, p1, radius, circle_center);
+    let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(result, TwoIntersects { t0: 0.0, t1: 1.0 });
 }
 
@@ -84,7 +84,7 @@ fn two_intersects_seg_inside_horizontal() {
     let p1 = Vector2::new(1.0, 0.0);
     let circle_center = Vector2::new(0.0, 0.0);
     let radius = 1.0;
-    let result = line_circle_intr(p0, p1, radius, circle_center);
+    let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(result, TwoIntersects { t0: 0.0, t1: 1.0 });
 }
 
@@ -94,7 +94,7 @@ fn two_intersects_seg_touching() {
     let p1 = Vector2::new(0.0, 1.0);
     let circle_center = Vector2::new(0.0, 0.0);
     let radius = 1.0;
-    let result = line_circle_intr(p0, p1, radius, circle_center);
+    let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(result, TwoIntersects { t0: 0.0, t1: 1.0 });
 }
 
@@ -104,7 +104,7 @@ fn tangent_intersect_vertical() {
     let p1 = Vector2::new(0.0, 1.0);
     let circle_center = Vector2::new(1.0, 0.0);
     let radius = 1.0;
-    let result = line_circle_intr(p0, p1, radius, circle_center);
+    let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(result, TangentIntersect { t0: 0.5 });
 }
 
@@ -114,6 +114,6 @@ fn tangent_intersect_horizontal() {
     let p1 = Vector2::new(1.0, 0.0);
     let circle_center = Vector2::new(0.0, -1.0);
     let radius = 1.0;
-    let result = line_circle_intr(p0, p1, radius, circle_center);
+    let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(result, TangentIntersect { t0: 0.5 });
 }

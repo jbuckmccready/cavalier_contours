@@ -36,6 +36,7 @@ pub fn line_circle_intr<T>(
     p1: Vector2<T>,
     radius: T,
     circle_center: Vector2<T>,
+    epsilon: T,
 ) -> LineCircleIntr<T>
 where
     T: Real,
@@ -53,11 +54,14 @@ where
     let k = circle_center.y;
 
     let a_quad = dx * dx + dy * dy;
-    if a_quad.fuzzy_eq_zero() {
+
+    let eps = epsilon;
+
+    if a_quad.fuzzy_eq_zero_eps(eps) {
         // p0 == p1, test if point is on the circle
         let xh = p0.x - h;
         let yk = p0.y - k;
-        if (xh * xh + yk * yk).fuzzy_eq(radius * radius) {
+        if (xh * xh + yk * yk).fuzzy_eq_eps(radius * radius, eps) {
             return TangentIntersect { t0: T::zero() };
         }
 
@@ -72,7 +76,7 @@ where
 
     let discriminant = b_quad * b_quad - T::four() * a_quad * c_quad;
 
-    if discriminant.fuzzy_eq_zero() {
+    if discriminant.fuzzy_eq_zero_eps(eps) {
         // 1 solution (tangent line)
         return TangentIntersect {
             t0: -b_quad / (T::two() * a_quad),
