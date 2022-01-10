@@ -368,9 +368,6 @@ fn run_pline_boolean_tests(
     test_set1.accept_closure(&mut |modified_pline1, state1| {
         test_set2.accept_closure(&mut |modified_pline2, state2| {
             for &(op, pos_set_expected, neg_set_expected) in cases {
-                if state2.inverted_direction {
-                    let test = true;
-                }
                 let result = modified_pline1.boolean(&modified_pline2, op);
                 let pos_set_result = create_boolean_property_set(&result.pos_plines);
                 let neg_set_result = create_boolean_property_set(&result.neg_plines);
