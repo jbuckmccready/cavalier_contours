@@ -117,8 +117,8 @@ where
             }
         };
 
-        // Check if the line segment starts or ends on the arc segment and if so then just return
-        // that end point.
+        // Note if intersect is detected we check if the line segment starts or ends on the arc
+        // segment and if so then use that end point as the intersect point.
         // Why: this avoids inconsistencies between segment intersects where a line may "overlap" an
         // arc according to the fuzzy epsilon values (e.g., imagine the arc has a large radius and
         // the line has two intersects but is almost tangent to the arc), in such a case the
@@ -127,20 +127,18 @@ where
         // ensures consistency with other intersects. E.g., if the end of the line segment is the
         // start of an arc that overlaps with another arc then we want the overlap intersect end
         // points to agree with the intersect returned from this function, to ensure this
-        // consistency we use the end point when valid to do so.
-        if point_lies_on_arc(p0) {
-            return OneIntersect { point: p0 };
-        }
-
-        if point_lies_on_arc(p1) {
-            return OneIntersect { point: p1 };
-        }
-
+        // consistency we use the end point when valid to do so (end points are "sticky").
         let intr_result = line_circle_intr(p0, p1, arc_radius, arc_center, pos_equal_eps);
         match intr_result {
             LineCircleIntr::NoIntersect => NoIntersect,
             LineCircleIntr::TangentIntersect { t0 } => {
-                if let Some(point) = point_in_sweep(t0) {
+                // check if either end point lies on the arc and substitute intersect point with end
+                // point if so
+                if point_lies_on_arc(p0) {
+                    TangentIntersect { point: p0 }
+                } else if point_lies_on_arc(p1) {
+                    TangentIntersect { point: p1 }
+                } else if let Some(point) = point_in_sweep(t0) {
                     TangentIntersect { point }
                 } else {
                     NoIntersect
@@ -151,8 +149,55 @@ where
                 let t1_point = point_in_sweep(t1);
                 match (t0_point, t1_point) {
                     (None, None) => NoIntersect,
-                    (None, Some(point)) | (Some(point), None) => OneIntersect { point },
+                    (None, Some(point)) | (Some(point), None) => {
+                        // check if either end point lies on arc and substitute intersect point with
+                        // end point if so
+                        if point_lies_on_arc(p0) {
+                            OneIntersect { point: p0 }
+                        } else if point_lies_on_arc(p1) {
+                            OneIntersect { point: p1 }
+                        } else {
+                            OneIntersect { point }
+                        }
+                    }
                     (Some(point1), Some(point2)) => {
+                        // check if either end point lies on arc and substitute intersect point with
+                        // end point if so (using distance check to determine which to substitute)
+                        let (point1, point2) = match (point_lies_on_arc(p0), point_lies_on_arc(p1))
+                        {
+                            (true, true) => {
+                                if dist_squared(p0, point1) < dist_squared(p0, point2) {
+                                    // substitute point1 with p0, point2 with p1
+                                    (p0, p1)
+                                } else {
+                                    // substitute point1 with p1, point2 with p0
+                                    (p1, p0)
+                                }
+                            }
+                            (true, false) => {
+                                if dist_squared(p0, point1) < dist_squared(p0, point2) {
+                                    // substitute point1 with p0
+                                    (p0, point2)
+                                } else {
+                                    // substitute point2 with p0
+                                    (point1, p0)
+                                }
+                            }
+                            (false, true) => {
+                                if dist_squared(p1, point1) < dist_squared(p1, point2) {
+                                    // substitute point1 with p1
+                                    (p1, point2)
+                                } else {
+                                    // substitute point2 with p1
+                                    (point1, p1)
+                                }
+                            }
+                            (false, false) => {
+                                // no substitutions
+                                (point1, point2)
+                            }
+                        };
+
                         // return points ordered according to second segment direction
                         if u_is_line
                             || (dist_squared(point1, a1.pos()) < dist_squared(point2, a1.pos()))

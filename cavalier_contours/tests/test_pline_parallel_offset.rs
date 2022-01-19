@@ -573,6 +573,14 @@ mod test_past_failures {
                            (0.0, -18.0, 0.0)], -9.0) =>
             [PlineProperties::new(5, -17.38274876480773, 2030.0155026470434, 9.0, -611.7191231042452, 423.22004474869937, -9.0)]
         }
+        closed_pline8 {
+            // failed due to a bug introduced when making line-arc intersects "sticky" to line end
+            // points for consistency across segment intersects
+            (pline_closed![(290.0, -4.0, 0.5),
+                           (390.0, 210.0, 0.0),
+                           (255.0, 23.0, 0.5)], 26.0) =>
+                    [PlineProperties::new(2, 3401.4557886082257, 338.29794704218466, 286.1826241465677, 21.774491471132933, 381.38235587092686, 152.78252663170932)]
+        }
     );
 }
 
