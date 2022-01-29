@@ -76,7 +76,9 @@ where
 
     let discriminant = b_quad * b_quad - T::four() * a_quad * c_quad;
 
-    if discriminant.fuzzy_eq_zero_eps(eps) {
+    let sqrt_discriminant = discriminant.abs().sqrt();
+
+    if sqrt_discriminant.fuzzy_eq_zero_eps(eps) {
         // 1 solution (tangent line)
         return TangentIntersect {
             t0: -b_quad / (T::two() * a_quad),
@@ -87,7 +89,7 @@ where
         return NoIntersect;
     }
 
-    let (sol1, sol2) = quadratic_solutions(a_quad, b_quad, c_quad, discriminant);
+    let (sol1, sol2) = quadratic_solutions(a_quad, b_quad, c_quad, sqrt_discriminant);
 
     let (t0, t1) = min_max(sol1, sol2);
     TwoIntersects { t0, t1 }

@@ -171,28 +171,29 @@ where
 
 /// Returns the solutions to the quadratic equation.
 ///
-/// Quadratic equation is `-b +/- sqrt (b * b - 4 * a * c) / (2 * a)`.
-/// With the `discriminant` defined as `(b * b - 4 * a * c)`.
+/// Quadratic equation is `-b +/- sqrt(b * b - 4 * a * c) / (2 * a)`.
+/// With the `sqrt_discriminant` defined as `sqrt(b * b - 4 * a * c)`.
 ///
 /// The purpose of this function is to minimize error in the process of finding solutions
 /// to the quadratic equation.
-pub fn quadratic_solutions<T>(a: T, b: T, c: T, discriminant: T) -> (T, T)
+pub fn quadratic_solutions<T>(a: T, b: T, c: T, sqrt_discriminant: T) -> (T, T)
 where
     T: Real,
 {
     debug_assert!(
-        (b * b - T::four() * a * c).fuzzy_eq(discriminant),
+        (b * b - T::four() * a * c)
+            .sqrt()
+            .fuzzy_eq(sqrt_discriminant),
         "discriminant is not valid"
     );
     // Avoids loss in precision due to taking the difference of two floating point values that are
     // very near each other in value.
     // https://math.stackexchange.com/questions/311382/solving-a-quadratic-equation-with-precision-when-using-floating-point-variables
-    let sqrt_discr = discriminant.sqrt();
     let denom = T::two() * a;
     let sol1 = if b < T::zero() {
-        (-b + sqrt_discr) / denom
+        (-b + sqrt_discriminant) / denom
     } else {
-        (-b - sqrt_discr) / denom
+        (-b - sqrt_discriminant) / denom
     };
 
     let sol2 = (c / a) / sol1;
