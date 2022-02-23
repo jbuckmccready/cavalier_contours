@@ -827,10 +827,6 @@ pub trait PlineSource {
                 .skip(start)
                 .take(vc - start)
                 .chain(self.iter_vertexes().take(start))
-            // self.vertex_data[start..self.len()]
-            //     .iter()
-            //     .chain(self.vertex_data[0..start].iter())
-            //     .copied()
         };
 
         let mut result = Self::OutputPolyline::with_capacity(0, true);
