@@ -687,7 +687,7 @@ where
 
     let raw_offset_index = raw_offset_polyline.create_approx_aabb_index().unwrap();
     let self_intrs =
-        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, pos_equal_eps);
+        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, false, pos_equal_eps);
 
     let mut query_stack = Vec::new();
     if self_intrs.is_empty() {
@@ -1007,7 +1007,7 @@ where
     let raw_offset_index = raw_offset_polyline.create_approx_aabb_index().unwrap();
 
     let self_intrs =
-        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, pos_equal_eps);
+        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, false, pos_equal_eps);
 
     let dual_intrs = find_intersects(
         raw_offset_polyline,

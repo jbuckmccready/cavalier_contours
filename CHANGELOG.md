@@ -28,11 +28,15 @@ functions.
 * Changed `pline_seg_intr` function to avoid inconsistencies between intersect functions in some
 cases involving line-arc intersects due to fuzzy comparing - this fixes problems that can arise in
 operations that depend on finding intersects.
+* Added `include_overlapping` parameter to `all_self_intersects_as_basic` function.
 
 ### Fixed 🐛
 * Fixed arc overlap intersects not being found in some cases and segment intersects disagreeing due
 to fuzzy comparing causing incorrect output for polyline boolean operations and added test cases
 that found the issue.
+* Fixed bug in parallel offset caused when raw offset polyline produced an overlapping self
+intersect. Parallel offset algorithm no longer includes overlapping intersects when finding self
+intersects of raw offset polyline for creating slices.
 
 ### Removed 🔥
 * `Polyline::visit_segments` (use `PlineSource::iter_segments` instead).

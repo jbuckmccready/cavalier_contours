@@ -231,11 +231,13 @@ where
     cf
 }
 
-/// Find all self intersects of a polyline, returning any overlapping intersects as basic intersects
-/// at each end point of overlap segment.
+/// Find all self intersects of a polyline. If `include_overlapping` is `true` then overlapping
+/// intersects are returned as two basic intersects, one at each end of the overlap. If
+/// `include_overlapping` is `false` then overlapping intersects are not returned.
 pub fn all_self_intersects_as_basic<P, T>(
     polyline: &P,
     aabb_index: &StaticAABB2DIndex<T>,
+    include_overlapping: bool,
     pos_equal_eps: T,
 ) -> Vec<PlineBasicIntersect<T>>
 where
@@ -244,6 +246,7 @@ where
 {
     struct Visitor<U> {
         intrs: Vec<PlineBasicIntersect<U>>,
+        include_overlapping: bool,
     }
 
     impl<U> PlineIntersectVisitor<U, Control> for Visitor<U>
@@ -256,23 +259,28 @@ where
         }
 
         fn visit_overlapping_intr(&mut self, intr: PlineOverlappingIntersect<U>) -> Control {
-            self.intrs.push(PlineBasicIntersect::new(
-                intr.start_index1,
-                intr.start_index2,
-                intr.point1,
-            ));
+            if self.include_overlapping {
+                self.intrs.push(PlineBasicIntersect::new(
+                    intr.start_index1,
+                    intr.start_index2,
+                    intr.point1,
+                ));
 
-            self.intrs.push(PlineBasicIntersect::new(
-                intr.start_index1,
-                intr.start_index2,
-                intr.point2,
-            ));
+                self.intrs.push(PlineBasicIntersect::new(
+                    intr.start_index1,
+                    intr.start_index2,
+                    intr.point2,
+                ));
+            }
 
             ControlFlow::continuing()
         }
     }
 
-    let mut visitor = Visitor { intrs: Vec::new() };
+    let mut visitor = Visitor {
+        intrs: Vec::new(),
+        include_overlapping,
+    };
 
     visit_local_self_intersects(polyline, &mut visitor, pos_equal_eps);
     visit_global_self_intersects(polyline, aabb_index, &mut visitor, pos_equal_eps);
