@@ -83,6 +83,54 @@ where
 ///
 /// [PlineViewData::view] is called to form an active view (using a reference to the source polyline
 /// to then iterate over or perform operations on).
+///
+/// # Examples
+///
+/// ## Creating view over polyline from slice points
+///
+/// ```
+/// # use cavalier_contours::core::math::Vector2;
+/// # use cavalier_contours::polyline::{PlineCreation, PlineSource, PlineSourceMut, PlineVertex, PlineViewData, Polyline};
+/// # use cavalier_contours::assert_fuzzy_eq;
+///
+/// let mut polyline = Polyline::new_closed();
+/// polyline.add(0.0, 0.0, 0.0);
+/// polyline.add(5.0, 0.0, 0.0);
+/// polyline.add(5.0, 5.0, 0.0);
+/// polyline.add(0.0, 5.0, 0.0);
+/// // construction view data from slice points, view data represents a slice of the source polyline
+/// // starting at (2.5, 0.0) on the first segment (index 0) and ending at (2.5, 5.0) on the third
+/// // segment (index 2)
+/// let view_data =
+///     PlineViewData::from_slice_points(
+///         // source polyline
+///         &polyline,
+///         // start point
+///         Vector2::new(2.5, 0.0),
+///         // segment index start point lies on
+///         0,
+///         // end point
+///         Vector2::new(2.5, 5.0),
+///         // segment index end point lies on
+///         2,
+///         // position equal epsilon
+///         1e-5).expect("slice not collapsed");
+///
+/// // construct the view (which implements polyline traits) from the view data and source
+/// let view = view_data.view(&polyline);
+///
+/// // we can now use common trait methods on the slice
+/// // note we never had to copy the source polyline
+/// let slice_length = view.path_length();
+/// assert_fuzzy_eq!(view.path_length(), 10.0);
+/// let slice_vertex_count = view.vertex_count();
+/// assert_eq!(slice_vertex_count, 4);
+/// let slice_extents = view.extents().unwrap();
+/// assert_fuzzy_eq!(slice_extents.min_x, 2.5);
+/// assert_fuzzy_eq!(slice_extents.min_y, 0.0);
+/// assert_fuzzy_eq!(slice_extents.max_x, 5.0);
+/// assert_fuzzy_eq!(slice_extents.max_y, 5.0);
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct PlineViewData<T = f64> {
     /// Source polyline start segment index.
@@ -238,7 +286,7 @@ where
     ///
     /// # Panics
     ///
-    /// This function panics if `traverse_count == 0`. Use
+    /// This function panics if `traverse_count == 0` or indexes out of range for `source`. Use
     /// [PlineViewData::create_on_single_segment] if view selects over only a single segment.
     pub fn create<P>(
         source: &P,
@@ -302,7 +350,8 @@ where
     ///
     /// # Panics
     ///
-    /// This function panics if `source` has less than 2 vertexes.
+    /// This function panics if `source` has less than 2 vertexes or indexes out of range for
+    /// `source`.
     pub fn from_entire_pline<P>(source: &P) -> Self
     where
         P: PlineSource<Num = T> + ?Sized,
@@ -310,7 +359,7 @@ where
         let vc = source.vertex_count();
         assert!(
             vc >= 2,
-            "source must have at least 2 vertexes to form slice"
+            "source must have at least 2 vertexes to form view data"
         );
 
         let view_data = if source.is_closed() {
@@ -341,8 +390,90 @@ where
         view_data
     }
 
+    /// Construct view which changes the start point of a polyline. If the polyline is open this
+    /// will trim the polyline up to the start point. If the polyline is closed then the entire
+    /// polyline path is retained with just the start point changed. Returns `None` if polyline is
+    /// open and start point equals the final vertex position for the polyline.
+    ///
+    /// # Panics
+    ///
+    /// This function panics if `source` has less than 2 vertexes or `start_index` out of range for
+    /// `source`.
+    pub fn from_new_start<P>(
+        source: &P,
+        start_point: Vector2<T>,
+        start_index: usize,
+        pos_equal_eps: T,
+    ) -> Option<Self>
+    where
+        P: PlineSource<Num = T> + ?Sized,
+    {
+        // check if open polyline then just delegate to slice points method
+        if !source.is_closed() {
+            return Self::from_slice_points(
+                source,
+                start_point,
+                start_index,
+                source.last()?.pos(),
+                source.vertex_count() - 1,
+                pos_equal_eps,
+            );
+        }
+
+        let vc = source.vertex_count();
+        assert!(
+            vc >= 2,
+            "source must have at least 2 vertexes to form view data"
+        );
+
+        // catch where start point is at very end of start index segment (and adjust forward)
+        let start_index = {
+            let next_index = source.next_wrapping_index(start_index);
+            if source
+                .at(next_index)
+                .pos()
+                .fuzzy_eq_eps(start_point, pos_equal_eps)
+            {
+                next_index
+            } else {
+                start_index
+            }
+        };
+
+        let start_v1 = source.at(start_index);
+        let start_v2 = source.at(source.next_wrapping_index(start_index));
+        let split = seg_split_at_point(start_v1, start_v2, start_point, pos_equal_eps);
+
+        let end_index_offset = if start_v1.pos().fuzzy_eq_eps(start_point, pos_equal_eps) {
+            vc - 1
+        } else {
+            vc
+        };
+
+        let view_data = Self {
+            start_index,
+            end_index_offset,
+            updated_start: split.split_vertex,
+            updated_end_bulge: split.updated_start.bulge,
+            end_point: start_point,
+            inverted_direction: false,
+        };
+
+        debug_assert_eq!(
+            view_data.validate_for_source(source),
+            ViewDataValidation::IsValid
+        );
+
+        Some(view_data)
+    }
+
     /// Construct view that is contiguous between two points on a source polyline (start and end of
     /// source polyline are trimmed).
+    ///
+    /// # Panics
+    ///
+    /// This function panics if `source` has less than 2 vertexes or indexes out of range for
+    /// `source`.
     pub fn from_slice_points<P>(
         source: &P,
         start_point: Vector2<T>,
