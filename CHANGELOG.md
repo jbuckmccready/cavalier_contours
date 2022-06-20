@@ -2,6 +2,12 @@
 
 All notable changes to the cavalier_contours crate will be documented in this file.
 
+## Unreleased
+
+### Changed 🔧
+
+- Added `#[inline]` attribute to all of the small Vector2 and base math functions.
+
 ## 0.2.0
 
 ### Added ⭐
