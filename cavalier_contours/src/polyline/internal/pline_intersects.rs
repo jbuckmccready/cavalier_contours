@@ -137,7 +137,6 @@ where
 
     let mut visited_pairs = HashSet::with_capacity(vc);
     let mut query_stack = Vec::with_capacity(8);
-    let fuzz = T::fuzzy_epsilon();
 
     // iterate all segment bounding boxes in the spatial index querying itself to test for self
     // intersects
@@ -215,10 +214,10 @@ where
         };
 
         aabb_index.visit_query_with_stack(
-            aabb.min_x - fuzz,
-            aabb.min_y - fuzz,
-            aabb.max_x + fuzz,
-            aabb.max_y + fuzz,
+            aabb.min_x - pos_equal_eps,
+            aabb.min_y - pos_equal_eps,
+            aabb.max_x + pos_equal_eps,
+            aabb.max_y + pos_equal_eps,
             &mut query_visitor,
             &mut query_stack,
         );
@@ -395,14 +394,13 @@ where
         };
 
         let bb = seg_fast_approx_bounding_box(p2v1, p2v2);
-        let fuzz = T::fuzzy_epsilon();
 
         let mut query_stack = Vec::with_capacity(8);
         pline1_aabb_index.visit_query_with_stack(
-            bb.min_x - fuzz,
-            bb.min_y - fuzz,
-            bb.max_x + fuzz,
-            bb.max_y + fuzz,
+            bb.min_x - pos_equal_eps,
+            bb.min_y - pos_equal_eps,
+            bb.max_x + pos_equal_eps,
+            bb.max_y + pos_equal_eps,
             &mut query_visitor,
             &mut query_stack,
         );
