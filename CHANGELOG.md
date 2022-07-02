@@ -13,7 +13,7 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - Fixed polyline find_intersects to use pos_equal_eps passed in options for querying bounding boxes
   ([#22](https://github.com/jbuckmccready/cavalier_contours/pull/22)).
 
-## 0.2.0
+## 0.2.0 - 2022-05-12
 
 ### Added ⭐
 
