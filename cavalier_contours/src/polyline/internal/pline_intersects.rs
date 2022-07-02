@@ -137,7 +137,6 @@ where
 
     let mut visited_pairs = HashSet::with_capacity(vc);
     let mut query_stack = Vec::with_capacity(8);
-    let fuzz = T::fuzzy_epsilon();
 
     // iterate all segment bounding boxes in the spatial index querying itself to test for self
     // intersects
@@ -215,10 +214,10 @@ where
         };
 
         aabb_index.visit_query_with_stack(
-            aabb.min_x - fuzz,
-            aabb.min_y - fuzz,
-            aabb.max_x + fuzz,
-            aabb.max_y + fuzz,
+            aabb.min_x - pos_equal_eps,
+            aabb.min_y - pos_equal_eps,
+            aabb.max_x + pos_equal_eps,
+            aabb.max_y + pos_equal_eps,
             &mut query_visitor,
             &mut query_stack,
         );
@@ -395,14 +394,13 @@ where
         };
 
         let bb = seg_fast_approx_bounding_box(p2v1, p2v2);
-        let fuzz = T::fuzzy_epsilon();
 
         let mut query_stack = Vec::with_capacity(8);
         pline1_aabb_index.visit_query_with_stack(
-            bb.min_x - fuzz,
-            bb.min_y - fuzz,
-            bb.max_x + fuzz,
-            bb.max_y + fuzz,
+            bb.min_x - pos_equal_eps,
+            bb.min_y - pos_equal_eps,
+            bb.max_x + pos_equal_eps,
+            bb.max_y + pos_equal_eps,
             &mut query_visitor,
             &mut query_stack,
         );
@@ -1140,6 +1138,30 @@ mod find_intersects_tests {
         assert_eq!(intr2.start_index2, 1);
         assert_fuzzy_eq!(intr2.point1, pline2[1].pos());
         assert_fuzzy_eq!(intr2.point2, pline2[0].pos());
+    }
+
+    #[test]
+    fn uses_pos_equal_eps() {
+        // test that pos_equal_eps passed in options is used
+        let eps = 1e-5;
+        let mut pline1 = Polyline::new();
+        pline1.add(0.5, 0.0, 0.0);
+        pline1.add(0.5, 1.0 - 0.99 * eps, 0.0);
+
+        let mut pline2 = Polyline::new();
+        pline2.add(0.0, 1.0, 0.0);
+        pline2.add(1.0, 1.0, 0.0);
+
+        let opts = FindIntersectsOptions {
+            pos_equal_eps: eps,
+            ..Default::default()
+        };
+
+        let intrs = find_intersects(&pline1, &pline2, &opts);
+        assert_eq!(intrs.basic_intersects.len(), 1);
+        assert!(intrs.overlapping_intersects.is_empty());
+        let intr = intrs.basic_intersects[0];
+        assert_fuzzy_eq!(intr.point, Vector2::new(0.5, 1.0));
     }
 }
 
