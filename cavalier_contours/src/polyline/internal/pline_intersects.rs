@@ -1139,6 +1139,30 @@ mod find_intersects_tests {
         assert_fuzzy_eq!(intr2.point1, pline2[1].pos());
         assert_fuzzy_eq!(intr2.point2, pline2[0].pos());
     }
+
+    #[test]
+    fn uses_pos_equal_eps() {
+        // test that pos_equal_eps passed in options is used
+        let eps = 1e-5;
+        let mut pline1 = Polyline::new();
+        pline1.add(0.5, 0.0, 0.0);
+        pline1.add(0.5, 1.0 - 0.99 * eps, 0.0);
+
+        let mut pline2 = Polyline::new();
+        pline2.add(0.0, 1.0, 0.0);
+        pline2.add(1.0, 1.0, 0.0);
+
+        let opts = FindIntersectsOptions {
+            pos_equal_eps: eps,
+            ..Default::default()
+        };
+
+        let intrs = find_intersects(&pline1, &pline2, &opts);
+        assert_eq!(intrs.basic_intersects.len(), 1);
+        assert!(intrs.overlapping_intersects.is_empty());
+        let intr = intrs.basic_intersects[0];
+        assert_fuzzy_eq!(intr.point, Vector2::new(0.5, 1.0));
+    }
 }
 
 #[cfg(test)]
