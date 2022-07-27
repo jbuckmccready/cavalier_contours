@@ -444,17 +444,22 @@ where
         let start_v2 = source.at(source.next_wrapping_index(start_index));
         let split = seg_split_at_point(start_v1, start_v2, start_point, pos_equal_eps);
 
-        let end_index_offset = if start_v1.pos().fuzzy_eq_eps(start_point, pos_equal_eps) {
-            vc - 1
-        } else {
-            vc
-        };
+        let (end_index_offset, updated_end_bulge) =
+            if start_v1.pos().fuzzy_eq_eps(start_point, pos_equal_eps) {
+                // start point on top of vertex, adjust index offset and do not use split bulge
+                (
+                    vc - 1,
+                    source.at(source.prev_wrapping_index(start_index)).bulge,
+                )
+            } else {
+                (vc, split.updated_start.bulge)
+            };
 
         let view_data = Self {
             start_index,
             end_index_offset,
             updated_start: split.split_vertex,
-            updated_end_bulge: split.updated_start.bulge,
+            updated_end_bulge,
             end_point: start_point,
             inverted_direction: false,
         };

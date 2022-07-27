@@ -416,6 +416,13 @@ fn from_new_start() {
         (0.0, 5.0, 0.0)
     ];
 
+    let closed_pline_with_bulges = pline_closed![
+        (0.0, 0.0, 0.1),
+        (5.0, 0.0, 0.2),
+        (5.0, 5.0, 0.3),
+        (0.0, 5.0, 0.4)
+    ];
+
     // change start on first segment of closed polyline
     {
         let view_data =
@@ -436,7 +443,7 @@ fn from_new_start() {
 
         for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
             assert_fuzzy_eq!(v1, u1);
-            assert_fuzzy_eq!(v2, u2);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
         }
     }
 
@@ -452,7 +459,33 @@ fn from_new_start() {
 
         for ((v1, v2), (u1, u2)) in closed_pline.iter_segments().zip(view.iter_segments()) {
             assert_fuzzy_eq!(v1, u1);
-            assert_fuzzy_eq!(v2, u2);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
+    }
+
+    // change start on top of first vertex of closed polyline with bulge values (no change)
+    {
+        let view_data = PlineViewData::from_new_start(
+            &closed_pline_with_bulges,
+            Vector2::new(0.0, 0.0),
+            0,
+            POS_EQ_EPS,
+        )
+        .unwrap();
+
+        let view = view_data.view(&closed_pline_with_bulges);
+
+        assert_eq!(
+            closed_pline_with_bulges.segment_count(),
+            view.segment_count()
+        );
+
+        for ((v1, v2), (u1, u2)) in closed_pline_with_bulges
+            .iter_segments()
+            .zip(view.iter_segments())
+        {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
         }
     }
 
@@ -469,7 +502,7 @@ fn from_new_start() {
 
         for ((v1, v2), (u1, u2)) in closed_pline.iter_segments().zip(view.iter_segments()) {
             assert_fuzzy_eq!(v1, u1);
-            assert_fuzzy_eq!(v2, u2);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
         }
     }
 
@@ -492,7 +525,34 @@ fn from_new_start() {
 
         for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
             assert_fuzzy_eq!(v1, u1);
-            assert_fuzzy_eq!(v2, u2);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
+    }
+
+    // change start on top of first vertex of closed polyline with bulge values (no change)
+    {
+        let view_data = PlineViewData::from_new_start(
+            &closed_pline_with_bulges,
+            Vector2::new(5.0, 0.0),
+            1,
+            POS_EQ_EPS,
+        )
+        .unwrap();
+
+        let expected = pline_closed![
+            (5.0, 0.0, 0.2),
+            (5.0, 5.0, 0.3),
+            (0.0, 5.0, 0.4),
+            (0.0, 0.0, 0.1),
+        ];
+
+        let view = view_data.view(&closed_pline_with_bulges);
+
+        assert_eq!(expected.segment_count(), view.segment_count());
+
+        for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
         }
     }
 
@@ -516,7 +576,7 @@ fn from_new_start() {
 
         for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
             assert_fuzzy_eq!(v1, u1);
-            assert_fuzzy_eq!(v2, u2);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
         }
     }
 
@@ -540,7 +600,7 @@ fn from_new_start() {
 
         for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
             assert_fuzzy_eq!(v1, u1);
-            assert_fuzzy_eq!(v2, u2);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
         }
     }
 
@@ -564,7 +624,7 @@ fn from_new_start() {
 
         for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
             assert_fuzzy_eq!(v1, u1);
-            assert_fuzzy_eq!(v2, u2);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
         }
     }
 }

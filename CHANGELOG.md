@@ -12,6 +12,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 - Fixed polyline find_intersects to use pos_equal_eps passed in options for querying bounding boxes
   ([#22](https://github.com/jbuckmccready/cavalier_contours/pull/22)).
+- Fixed `PlineViewData::from_new_start` to not discard bulge value if start point lies on top of the
+  first vertex of a closed polyline, and added tests to cover case.
 
 ## 0.2.0 - 2022-05-12
 
