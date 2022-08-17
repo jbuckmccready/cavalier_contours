@@ -121,7 +121,8 @@ where
 {
     /// Resultant polyline.
     pub pline: P,
-    /// Indexes of the slices that were stitched together to form the `pline`.
+    /// Slices that were stitched together to form the `pline` result. If boolean result info is not
+    /// [BooleanResultInfo::Intersected] this collection may be empty.
     pub subslices: Vec<BooleanPlineSlice<P::Num>>,
 }
 
@@ -135,16 +136,35 @@ where
     }
 }
 
+/// Information about what happened during the boolean operation.
+#[derive(Debug, Clone)]
+pub enum BooleanResultInfo {
+    /// Input was not valid to perform boolean operation.
+    InvalidInput,
+    /// Pline1 entirely inside of pline2 with no intersects.
+    Pline1InsidePline2,
+    /// Pline2 entirely inside of pline1 with no intersects.
+    Pline2InsidePline1,
+    /// Pline1 is disjoint from pline2 (no intersects and neither polyline is inside of the other).
+    Disjoint,
+    /// Pline1 exactly overlaps pline2 (same geometric path).
+    Overlapping,
+    /// Pline1 intersects with pline2 but is not exactly overlapping with the same geometric path.
+    Intersected,
+}
+
 #[derive(Debug, Clone)]
 /// Result of performing a boolean operation between two polylines.
 pub struct BooleanResult<P>
 where
     P: PlineCreation,
 {
-    /// Positive remaining space polylines and associated slice indexes.
+    /// Positive remaining space polylines.
     pub pos_plines: Vec<BooleanResultPline<P>>,
-    /// Negative subtracted space polylines and associated slice indexes.
+    /// Negative subtracted space polylines.
     pub neg_plines: Vec<BooleanResultPline<P>>,
+    /// Information about what happened during the boolean operation.
+    pub result_info: BooleanResultInfo,
 }
 
 impl<P> BooleanResult<P>
@@ -155,20 +175,26 @@ where
     pub fn new(
         pos_plines: Vec<BooleanResultPline<P>>,
         neg_plines: Vec<BooleanResultPline<P>>,
+        result_info: BooleanResultInfo,
     ) -> Self {
         Self {
             pos_plines,
             neg_plines,
+            result_info,
         }
     }
 
     #[inline]
-    pub fn empty() -> Self {
-        Self::new(Vec::new(), Vec::new())
+    pub fn empty(result_info: BooleanResultInfo) -> Self {
+        Self::new(Vec::new(), Vec::new(), result_info)
     }
 
     #[inline]
-    pub fn from_whole_plines<I>(pos_plines: I, neg_plines: I) -> Self
+    pub fn from_whole_plines<I>(
+        pos_plines: I,
+        neg_plines: I,
+        result_info: BooleanResultInfo,
+    ) -> Self
     where
         I: IntoIterator<Item = P>,
     {
@@ -181,6 +207,7 @@ where
                 .into_iter()
                 .map(|p| BooleanResultPline::new(p, Vec::new()))
                 .collect(),
+            result_info,
         }
     }
 }
@@ -493,7 +520,8 @@ impl<T> PlineIntersectsCollection<T> {
 /// Open polyline slice created in the process of performing a polyline boolean operation.
 #[derive(Debug, Copy, Clone)]
 pub struct BooleanPlineSlice<T = f64> {
-    /// View data for the slice (source polyline is always pline2 in boolean operation).
+    /// View data for the slice, can be used with source polyline to form a view of the vertexes for
+    /// the slice.
     pub view_data: PlineViewData<T>,
     /// If true then the source polyline for this slice is pline1 from the boolean operation
     /// otherwise it is pline2.

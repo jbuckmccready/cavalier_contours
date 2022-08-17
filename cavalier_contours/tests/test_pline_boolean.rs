@@ -1,8 +1,8 @@
 mod test_utils;
 
 use cavalier_contours::polyline::{
-    BooleanOp, BooleanPlineSlice, BooleanResult, BooleanResultPline, PlineCreation, PlineSource,
-    PlineSourceMut, Polyline,
+    BooleanOp, BooleanPlineSlice, BooleanResult, BooleanResultInfo, BooleanResultPline,
+    PlineCreation, PlineSource, PlineSourceMut, Polyline,
 };
 use test_utils::{
     create_property_set, property_sets_match, property_sets_match_abs_a, ModifiedPlineSet,
@@ -32,6 +32,7 @@ fn run_same_boolean_test(
     // test same polyline
     for &op in [Or, And].iter() {
         let result = self1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Overlapping));
         let mut passed = result.pos_plines.len() == 1 && result.neg_plines.is_empty();
         if passed {
             let result_properties = PlineProperties::from_pline(
@@ -50,6 +51,7 @@ fn run_same_boolean_test(
 
     for &op in [Not, Xor].iter() {
         let result = self1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Overlapping));
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
@@ -73,6 +75,7 @@ fn run_same_boolean_test(
         let op = Or;
         let expected = &[disjoint1_properties, *input_properties];
         let result = disjoint1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Disjoint));
         let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -87,6 +90,7 @@ fn run_same_boolean_test(
     {
         let op = And;
         let result = disjoint1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Disjoint));
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
@@ -100,6 +104,7 @@ fn run_same_boolean_test(
         let op = Not;
         let expected = &[disjoint1_properties];
         let result = disjoint1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Disjoint));
         let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -115,6 +120,7 @@ fn run_same_boolean_test(
         let op = Xor;
         let expected = &[disjoint1_properties, *input_properties];
         let result = disjoint1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Disjoint));
         let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -136,6 +142,10 @@ fn run_same_boolean_test(
         let op = Or;
         let expected = &[*input_properties];
         let result = self2.boolean(&self1_inward_offset, op);
+        assert!(matches!(
+            result.result_info,
+            BooleanResultInfo::Pline2InsidePline1
+        ));
         let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -151,6 +161,10 @@ fn run_same_boolean_test(
         let op = And;
         let expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
+        assert!(matches!(
+            result.result_info,
+            BooleanResultInfo::Pline2InsidePline1
+        ));
         let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -167,6 +181,10 @@ fn run_same_boolean_test(
         let pos_expected = &[*input_properties];
         let neg_expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
+        assert!(matches!(
+            result.result_info,
+            BooleanResultInfo::Pline2InsidePline1
+        ));
         let pos_pline_result_properties = create_boolean_property_set(&result.pos_plines);
         let neg_pline_result_properties = create_boolean_property_set(&result.neg_plines);
         let passed = property_sets_match_abs_a(&pos_pline_result_properties, pos_expected)
@@ -182,6 +200,10 @@ fn run_same_boolean_test(
     {
         let op = Not;
         let result = self1_inward_offset.boolean(self2, op);
+        assert!(matches!(
+            result.result_info,
+            BooleanResultInfo::Pline1InsidePline2
+        ));
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
@@ -196,6 +218,10 @@ fn run_same_boolean_test(
         let pos_expected = &[*input_properties];
         let neg_expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
+        assert!(matches!(
+            result.result_info,
+            BooleanResultInfo::Pline2InsidePline1
+        ));
         let pos_pline_result_properties = create_boolean_property_set(&result.pos_plines);
         let neg_pline_result_properties = create_boolean_property_set(&result.neg_plines);
         let passed = property_sets_match_abs_a(&pos_pline_result_properties, pos_expected)

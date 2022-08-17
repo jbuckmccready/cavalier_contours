@@ -1379,6 +1379,7 @@ pub trait PlineSource {
     /// // circle
     /// assert_eq!(results.pos_plines.len(), 1);
     /// assert_eq!(results.neg_plines.len(), 1);
+    /// assert!(matches!(results.result_info, BooleanResultInfo::Pline2InsidePline1));
     /// assert!(results.pos_plines[0].pline.area().fuzzy_eq(rectangle.area()));
     /// assert!(results.neg_plines[0].pline.area().fuzzy_eq(circle.area()));
     /// ```
@@ -1392,7 +1393,8 @@ pub trait PlineSource {
     /// Perform a boolean `operation` between this polyline and another with options provided.
     ///
     /// Returns the boolean result polylines and their associated slices that were stitched together
-    /// end to end to form them.
+    /// end to end to form them. For the result `pline1` refers to `self`, and `pline2` refers to
+    /// `other`.
     ///
     /// # Examples
     /// ```
@@ -1418,6 +1420,7 @@ pub trait PlineSource {
     /// // circle
     /// assert_eq!(results.pos_plines.len(), 1);
     /// assert_eq!(results.neg_plines.len(), 1);
+    /// assert!(matches!(results.result_info, BooleanResultInfo::Pline2InsidePline1));
     /// assert!(results.pos_plines[0].pline.area().fuzzy_eq(rectangle.area()));
     /// assert!(results.neg_plines[0].pline.area().fuzzy_eq(circle.area()));
     /// ```

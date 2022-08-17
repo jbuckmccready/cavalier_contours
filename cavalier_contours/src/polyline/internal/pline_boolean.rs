@@ -2,8 +2,8 @@ use crate::{
     core::math::dist_squared,
     polyline::{
         seg_midpoint, seg_split_at_point, BooleanOp, BooleanPlineSlice, BooleanResult,
-        BooleanResultPline, FindIntersectsOptions, PlineBasicIntersect, PlineBooleanOptions,
-        PlineCreation, PlineSource, PlineViewData,
+        BooleanResultInfo, BooleanResultPline, FindIntersectsOptions, PlineBasicIntersect,
+        PlineBooleanOptions, PlineCreation, PlineSource, PlineViewData,
     },
 };
 use std::collections::BTreeMap;
@@ -724,8 +724,12 @@ where
     T: Real,
     O: PlineCreation<Num = T>,
 {
-    if pline1.vertex_count() < 2 {
-        return BooleanResult::empty();
+    if pline1.vertex_count() < 2
+        || !pline1.is_closed()
+        || pline2.vertex_count() < 2
+        || !pline2.is_closed()
+    {
+        return BooleanResult::empty(BooleanResultInfo::InvalidInput);
     }
 
     let constructed_index;
@@ -754,18 +758,31 @@ where
         BooleanOp::Or => {
             if boolean_info.completely_overlapping() {
                 // pline1 completely overlapping pline2 just return pline2
-                BooleanResult::from_whole_plines(vec![O::create_from(pline2)], Vec::new())
+                BooleanResult::from_whole_plines(
+                    vec![O::create_from(pline2)],
+                    Vec::new(),
+                    BooleanResultInfo::Overlapping,
+                )
             } else if !boolean_info.any_intersects() {
                 // no intersects, returning only one pline if one is inside other or both if they
                 // are completely disjoint
                 if is_pline1_in_pline2() {
-                    BooleanResult::from_whole_plines(vec![O::create_from(pline2)], Vec::new())
+                    BooleanResult::from_whole_plines(
+                        vec![O::create_from(pline2)],
+                        Vec::new(),
+                        BooleanResultInfo::Pline1InsidePline2,
+                    )
                 } else if is_pline2_in_pline1() {
-                    BooleanResult::from_whole_plines(vec![O::create_from(pline1)], Vec::new())
+                    BooleanResult::from_whole_plines(
+                        vec![O::create_from(pline1)],
+                        Vec::new(),
+                        BooleanResultInfo::Pline2InsidePline1,
+                    )
                 } else {
                     BooleanResult::from_whole_plines(
                         vec![O::create_from(pline1), O::create_from(pline2)],
                         Vec::new(),
+                        BooleanResultInfo::Disjoint,
                     )
                 }
             } else {
@@ -807,22 +824,34 @@ where
                     }
                 }
 
-                BooleanResult::new(pos_plines, neg_plines)
+                BooleanResult::new(pos_plines, neg_plines, BooleanResultInfo::Intersected)
             }
         }
         BooleanOp::And => {
             if boolean_info.completely_overlapping() {
                 // pline1 completely overlapping pline2 just return pline2
-                BooleanResult::from_whole_plines(vec![O::create_from(pline2)], Vec::new())
+                BooleanResult::from_whole_plines(
+                    vec![O::create_from(pline2)],
+                    Vec::new(),
+                    BooleanResultInfo::Overlapping,
+                )
             } else if !boolean_info.any_intersects() {
                 // no intersects, returning only one pline if one is inside other or none if they
                 // are completely disjoint
                 if is_pline1_in_pline2() {
-                    BooleanResult::from_whole_plines(vec![O::create_from(pline1)], Vec::new())
+                    BooleanResult::from_whole_plines(
+                        vec![O::create_from(pline1)],
+                        Vec::new(),
+                        BooleanResultInfo::Pline1InsidePline2,
+                    )
                 } else if is_pline2_in_pline1() {
-                    BooleanResult::from_whole_plines(vec![O::create_from(pline2)], Vec::new())
+                    BooleanResult::from_whole_plines(
+                        vec![O::create_from(pline2)],
+                        Vec::new(),
+                        BooleanResultInfo::Pline2InsidePline1,
+                    )
                 } else {
-                    BooleanResult::empty()
+                    BooleanResult::empty(BooleanResultInfo::Disjoint)
                 }
             } else {
                 // keep all slices from pline1 that are in pline2 and all slices from pline2 that
@@ -847,26 +876,31 @@ where
                     pos_equal_eps,
                 );
 
-                BooleanResult::new(pos_plines, Vec::new())
+                BooleanResult::new(pos_plines, Vec::new(), BooleanResultInfo::Intersected)
             }
         }
         BooleanOp::Not => {
             if boolean_info.completely_overlapping() {
                 // completely overlapping, nothing is left
-                BooleanResult::empty()
+                BooleanResult::empty(BooleanResultInfo::Overlapping)
             } else if !boolean_info.any_intersects() {
                 if is_pline1_in_pline2() {
                     // everything is subtracted (nothing left)
-                    BooleanResult::empty()
+                    BooleanResult::empty(BooleanResultInfo::Pline1InsidePline2)
                 } else if is_pline2_in_pline1() {
                     // negative space island created inside pline1
                     BooleanResult::from_whole_plines(
                         vec![O::create_from(pline1)],
                         vec![O::create_from(pline2)],
+                        BooleanResultInfo::Pline2InsidePline1,
                     )
                 } else {
                     // disjoint
-                    BooleanResult::from_whole_plines(vec![O::create_from(pline1)], Vec::new())
+                    BooleanResult::from_whole_plines(
+                        vec![O::create_from(pline1)],
+                        Vec::new(),
+                        BooleanResultInfo::Disjoint,
+                    )
                 }
             } else {
                 // keep all slices from pline1 that are not in pline2 and all slices on pline2 that
@@ -892,28 +926,31 @@ where
                     pos_equal_eps,
                 );
 
-                BooleanResult::new(pos_plines, Vec::new())
+                BooleanResult::new(pos_plines, Vec::new(), BooleanResultInfo::Intersected)
             }
         }
         BooleanOp::Xor => {
             if boolean_info.completely_overlapping() {
-                BooleanResult::empty()
+                BooleanResult::empty(BooleanResultInfo::Overlapping)
             } else if !boolean_info.any_intersects() {
                 if is_pline1_in_pline2() {
                     BooleanResult::from_whole_plines(
                         vec![O::create_from(pline2)],
                         vec![O::create_from(pline1)],
+                        BooleanResultInfo::Pline1InsidePline2,
                     )
                 } else if is_pline2_in_pline1() {
                     BooleanResult::from_whole_plines(
                         vec![O::create_from(pline1)],
                         vec![O::create_from(pline2)],
+                        BooleanResultInfo::Pline2InsidePline1,
                     )
                 } else {
                     // disjoint
                     BooleanResult::from_whole_plines(
                         vec![O::create_from(pline1), O::create_from(pline2)],
                         Vec::new(),
+                        BooleanResultInfo::Disjoint,
                     )
                 }
             } else {
@@ -960,7 +997,7 @@ where
                 );
 
                 remaining1.extend(remaining2);
-                BooleanResult::new(remaining1, Vec::new())
+                BooleanResult::new(remaining1, Vec::new(), BooleanResultInfo::Intersected)
             }
         }
     }

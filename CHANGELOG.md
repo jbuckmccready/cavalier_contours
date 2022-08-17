@@ -4,12 +4,18 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ## Unreleased
 
+### Added ⭐
+
+- Added `BooleanResultInfo` enum used for new `result_info` field on `BooleanResult`. The enum
+  is used to return information about what happened during the boolean operation.
+
 ### Changed 🔧
 
 - Added `#[inline]` attribute to all of the small Vector2 and base math functions.
 
 ### Fixed 🐛
 
+- Fixed some of the doc comments around pline boolean operation types.
 - Fixed polyline find_intersects to use pos_equal_eps passed in options for querying bounding boxes
   ([#22](https://github.com/jbuckmccready/cavalier_contours/pull/22)).
 - Fixed `PlineViewData::from_new_start` to not discard bulge value if start point lies on top of the
