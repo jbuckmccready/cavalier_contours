@@ -260,24 +260,25 @@ where
 /// Returns the parametric value on the line segment going from `p0` to `p1` at the `point` given.
 ///
 /// Note this function assumes the `point` is on the line and properly handles the cases of vertical
-/// and horizontal lines.
+/// and horizontal lines by using the `epsilon` parameter to fuzzy compare for when `p0.x == p1.x`.
 #[inline]
-pub fn parametric_from_point<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> T
+pub fn parametric_from_point<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>, epsilon: T) -> T
 where
     T: Real,
 {
-    if p0.x.fuzzy_eq(p1.x) {
+    if p0.x.fuzzy_eq_eps(p1.x, epsilon) {
         // vertical segment, use y coordinate
         debug_assert!(
-            point.x.fuzzy_eq(p0.x),
+            point.x.fuzzy_eq_eps(p0.x, epsilon),
             "point does not lie on the line defined by p0 to p1"
         );
         (point.y - p0.y) / (p1.y - p0.y)
     } else {
         // use x coordinate
         debug_assert!(
-            point.fuzzy_eq(p0)
-                || ((point.y - p0.y) / (point.x - p0.x)).fuzzy_eq((p1.y - p0.y) / (p1.x - p0.x)),
+            point.fuzzy_eq_eps(p0, epsilon)
+                || ((point.y - p0.y) / (point.x - p0.x))
+                    .fuzzy_eq_eps((p1.y - p0.y) / (p1.x - p0.x), epsilon),
             "point does not lie on the line defined by p0 to p1"
         );
         (point.x - p0.x) / (p1.x - p0.x)

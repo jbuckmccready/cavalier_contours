@@ -102,7 +102,7 @@ where
 
     if v_is_point {
         // v is point and u is not a point
-        let seg2_t = parametric_from_point(u1, u2, v1);
+        let seg2_t = parametric_from_point(u1, u2, v1, eps);
         if seg2_t.fuzzy_in_range_eps(T::zero(), T::one(), eps) {
             return TrueIntersect {
                 seg1_t: T::zero(),
@@ -115,7 +115,7 @@ where
 
     if u_is_point {
         // u is point and v is not a point
-        let seg1_t = parametric_from_point(v1, v2, u1);
+        let seg1_t = parametric_from_point(v1, v2, u1, eps);
         if seg1_t.fuzzy_in_range_eps(T::zero(), T::one(), eps) {
             return TrueIntersect {
                 seg1_t,

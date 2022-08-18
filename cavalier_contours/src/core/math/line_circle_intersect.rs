@@ -1,5 +1,6 @@
-use super::base_math::{min_max, quadratic_solutions};
+use super::base_math::min_max;
 use super::Vector2;
+use crate::core::math::parametric_from_point;
 use crate::core::traits::Real;
 
 /// Holds the result of finding the intersect between a line segment and a circle.
@@ -41,10 +42,14 @@ pub fn line_circle_intr<T>(
 where
     T: Real,
 {
-    // This function solves for t by substituting the parametric equations for the segment x = v1.X +
-    // t * (v2.X - v1.X) and y = v1.Y + t * (v2.Y - v1.Y) for t = 0 to t = 1 into the circle equation
-    // (x-h)^2 + (y-k)^2 = r^2 and then solving the resulting equation in the form a*t^2 + b*t + c = 0
-    // using the quadratic formula
+    // This function solves for t by solving for cartesian intersect points via geometric
+    // equations with the circle centered at (0, 0). Using the line equation of the form
+    // Ax + By + C = 0 (taken from p1 and p0 shifted to the origin) and comparing with the circle
+    // radius. The x, y cartesian points are then converted to parametric t representation using
+    // p0 and p1.
+
+    // This approach was found to be more numerically stable than solving for t using the quadratic
+    // equations.
 
     use LineCircleIntr::*;
 
@@ -53,14 +58,13 @@ where
     let h = circle_center.x;
     let k = circle_center.y;
 
-    let a_quad = dx * dx + dy * dy;
-
     let eps = epsilon;
 
-    if a_quad.fuzzy_eq_zero_eps(eps) {
-        // p0 == p1, test if point is on the circle
-        let xh = p0.x - h;
-        let yk = p0.y - k;
+    if p0.fuzzy_eq_eps(p1, eps) {
+        // p0 == p1, test if point is on the circle, using average of the points x and y values for
+        // fuzziness
+        let xh = (p0.x + p1.x) / T::two() - h;
+        let yk = (p0.y + p1.y) / T::two() - k;
         if (xh * xh + yk * yk).fuzzy_eq_eps(radius * radius, eps) {
             return TangentIntersect { t0: T::zero() };
         }
@@ -68,29 +72,61 @@ where
         return NoIntersect;
     }
 
-    let b_quad = T::two() * (dx * (p0.x - h) + dy * (p0.y - k));
+    let p0_shifted = p0 - circle_center;
+    let p1_shifted = p1 - circle_center;
 
-    let c_quad = (p0.x * p0.x - T::two() * h * p0.x + h * h)
-        + (p0.y * p0.y - T::two() * k * p0.y + k * k)
-        - radius * radius;
+    let (a, b, c) = if dx.fuzzy_eq_zero_eps(epsilon) {
+        // vertical line, using average of point x values for fuzziness
+        let x_pos = (p1_shifted.x + p0_shifted.x) / T::two();
+        // x = x_pos
+        // x - x_pos = 0
 
-    let discriminant = b_quad * b_quad - T::four() * a_quad * c_quad;
+        // A = 1
+        // B = 0
+        // C = -x_pos
+        (T::one(), T::zero(), -x_pos)
+    } else {
+        // (y - y1) = m(x - x1)
+        // y - y1 = mx - mx1
+        // mx - y + y1 - mx1 = 0
 
-    let sqrt_discriminant = discriminant.abs().sqrt();
+        // A = -m
+        // B = 1.0
+        // C = -y1 + m*x1
 
-    if sqrt_discriminant.fuzzy_eq_zero_eps(eps) {
-        // 1 solution (tangent line)
-        return TangentIntersect {
-            t0: -b_quad / (T::two() * a_quad),
-        };
-    }
+        // m = (y1 - y0) / (x1 - x0)
 
-    if discriminant < T::zero() {
+        let m = dy / dx;
+        (m, -T::one(), p1_shifted.y - m * p1_shifted.x)
+    };
+
+    let a2 = a * a;
+    let b2 = b * b;
+    let c2 = c * c;
+    let r2 = radius * radius;
+    let a2_b2 = a2 + b2;
+
+    if c2 > r2 * a2_b2 + eps {
         return NoIntersect;
     }
 
-    let (sol1, sol2) = quadratic_solutions(a_quad, b_quad, c_quad, sqrt_discriminant);
+    // adding h and k back to solution terms (shifting from origin back to real coordinates)
+    let x0 = -a * c / a2_b2 + h;
+    let y0 = -b * c / a2_b2 + k;
 
+    if (c2 - r2 * a2_b2).abs() < eps {
+        let t = parametric_from_point(p0, p1, Vector2::new(x0, y0), eps);
+        return TangentIntersect { t0: t };
+    }
+
+    let d = r2 - c2 / a2_b2;
+    let mult = (d / a2_b2).sqrt();
+    let x_sol1 = x0 + b * mult;
+    let x_sol2 = x0 - b * mult;
+    let y_sol1 = y0 - a * mult;
+    let y_sol2 = y0 + a * mult;
+    let sol1 = parametric_from_point(p0, p1, Vector2::new(x_sol1, y_sol1), eps);
+    let sol2 = parametric_from_point(p0, p1, Vector2::new(x_sol2, y_sol2), eps);
     let (t0, t1) = min_max(sol1, sol2);
     TwoIntersects { t0, t1 }
 }
