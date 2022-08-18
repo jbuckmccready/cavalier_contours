@@ -196,6 +196,8 @@ where
 /// Find the closest point on a polyline segment defined by `v1` to `v2` to `point` given.
 /// If there are multiple closest points then one is chosen (which is chosen is not defined).
 ///
+/// `epsilon` is used for fuzzy float comparisons.
+///
 /// # Examples
 ///
 /// ```
@@ -204,12 +206,21 @@ where
 /// // counter clockwise half circle arc going from (2, 2) to (2, 4)
 /// let v1 = PlineVertex::new(2.0, 2.0, 1.0);
 /// let v2 = PlineVertex::new(4.0, 2.0, 0.0);
-/// assert!(seg_closest_point(v1, v2, Vector2::new(3.0, 0.0)).fuzzy_eq(Vector2::new(3.0, 1.0)));
-/// assert!(seg_closest_point(v1, v2, Vector2::new(3.0, 1.2)).fuzzy_eq(Vector2::new(3.0, 1.0)));
-/// assert!(seg_closest_point(v1, v2, v1.pos()).fuzzy_eq(v1.pos()));
-/// assert!(seg_closest_point(v1, v2, v2.pos()).fuzzy_eq(v2.pos()));
+/// assert!(
+///     seg_closest_point(v1, v2, Vector2::new(3.0, 0.0), 1e-5).fuzzy_eq(Vector2::new(3.0, 1.0))
+/// );
+/// assert!(
+///     seg_closest_point(v1, v2, Vector2::new(3.0, 1.2), 1e-5).fuzzy_eq(Vector2::new(3.0, 1.0))
+/// );
+/// assert!(seg_closest_point(v1, v2, v1.pos(), 1e-5).fuzzy_eq(v1.pos()));
+/// assert!(seg_closest_point(v1, v2, v2.pos(), 1e-5).fuzzy_eq(v2.pos()));
 /// ```
-pub fn seg_closest_point<T>(v1: PlineVertex<T>, v2: PlineVertex<T>, point: Vector2<T>) -> Vector2<T>
+pub fn seg_closest_point<T>(
+    v1: PlineVertex<T>,
+    v2: PlineVertex<T>,
+    point: Vector2<T>,
+    epsilon: T,
+) -> Vector2<T>
 where
     T: Real,
 {
@@ -218,12 +229,19 @@ where
     }
 
     let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-    if point.fuzzy_eq(arc_center) {
+    if point.fuzzy_eq_eps(arc_center, epsilon) {
         // avoid normalizing zero length vector (point is at center, just return start point)
         return v1.pos();
     }
 
-    if point_within_arc_sweep(arc_center, v1.pos(), v2.pos(), v1.bulge_is_neg(), point) {
+    if point_within_arc_sweep(
+        arc_center,
+        v1.pos(),
+        v2.pos(),
+        v1.bulge_is_neg(),
+        point,
+        epsilon,
+    ) {
         // closest point is on the arc
         let v_to_point = (point - arc_center).normalize();
         return v_to_point.scale(arc_radius) + arc_center;

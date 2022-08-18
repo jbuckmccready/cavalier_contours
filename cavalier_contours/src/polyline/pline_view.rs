@@ -590,6 +590,8 @@ where
             };
         }
 
+        let validation_eps = T::from(Self::VALIDATION_EPS).unwrap();
+
         let point_is_on_segment = |seg_index, point: Vector2<T>| {
             let on_seg_eps = T::from(Self::VALIDATION_POINT_ON_SEG_EPS).unwrap();
             let v1 = source.at(seg_index);
@@ -598,7 +600,7 @@ where
             {
                 return true;
             }
-            let closest_point = seg_closest_point(v1, v2, point);
+            let closest_point = seg_closest_point(v1, v2, point, validation_eps);
             closest_point.fuzzy_eq_eps(point, on_seg_eps)
         };
         // check that updated start lies on the source polyline according to start index segment
@@ -616,7 +618,6 @@ where
             };
         }
 
-        let validation_eps = T::from(Self::VALIDATION_EPS).unwrap();
         // end point should never lie directly on top of end index segment start
         if self
             .end_point

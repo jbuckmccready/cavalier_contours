@@ -60,13 +60,22 @@ where
 
     let eps = epsilon;
 
+    // segment lengths are used to scale parametric t value for fuzzy comparing
+    // this ensures when comparing parametric values the epsilon value is applied with numbers at a
+    // length/position scale, e.g., a difference in parametric t value of 0.1 represents a much
+    // greater position difference for a segment with a length of 1,000,000 vs. a segment with a
+    // length of 0.01, multiplying by the length first ensures that is accounted for to use with the
+    // epsilon value
+    let seg1_length = (v2 - v1).length();
+    let seg2_length = (u2 - u1).length();
+
     // threshold check here to avoid almost parallel lines resulting in very distant intersection
     if !v_pdot_u.fuzzy_eq_zero_eps(eps) {
         // segments not parallel or collinear
         let seg1_t = u.perp_dot(w) / v_pdot_u;
         let seg2_t = v.perp_dot(w) / v_pdot_u;
-        if !seg1_t.fuzzy_in_range_eps(T::zero(), T::one(), eps)
-            || !seg2_t.fuzzy_in_range_eps(T::zero(), T::one(), eps)
+        if !(seg1_t * seg1_length).fuzzy_in_range_eps(T::zero(), seg1_length, eps)
+            || !(seg2_t * seg2_length).fuzzy_in_range_eps(T::zero(), seg2_length, eps)
         {
             return FalseIntersect { seg1_t, seg2_t };
         }
@@ -103,7 +112,7 @@ where
     if v_is_point {
         // v is point and u is not a point
         let seg2_t = parametric_from_point(u1, u2, v1, eps);
-        if seg2_t.fuzzy_in_range_eps(T::zero(), T::one(), eps) {
+        if (seg2_t * seg2_length).fuzzy_in_range_eps(T::zero(), seg2_length, eps) {
             return TrueIntersect {
                 seg1_t: T::zero(),
                 seg2_t,
@@ -116,7 +125,7 @@ where
     if u_is_point {
         // u is point and v is not a point
         let seg1_t = parametric_from_point(v1, v2, u1, eps);
-        if seg1_t.fuzzy_in_range_eps(T::zero(), T::one(), eps) {
+        if (seg1_t * seg1_length).fuzzy_in_range_eps(T::zero(), seg1_length, eps) {
             return TrueIntersect {
                 seg1_t,
                 seg2_t: T::zero(),
@@ -139,14 +148,16 @@ where
     }
 
     // using threshold check here to make intersect "sticky" to prefer considering it an intersect
-    if !seg2_t0.fuzzy_lt_eps(T::one(), eps) || !seg2_t1.fuzzy_gt_eps(T::zero(), eps) {
+    if !(seg2_t0 * seg2_length).fuzzy_lt_eps(seg2_length, eps)
+        || !(seg2_t1 * seg2_length).fuzzy_gt_eps(T::zero(), eps)
+    {
         return NoIntersect;
     }
 
     seg2_t0 = num_traits::real::Real::max(seg2_t0, T::zero());
     seg2_t1 = num_traits::real::Real::min(seg2_t1, T::one());
 
-    if (seg2_t1 - seg2_t0).fuzzy_eq_zero_eps(eps) {
+    if ((seg2_t1 - seg2_t0) * seg2_length).fuzzy_eq_zero_eps(eps) {
         // intersect is a single point (segments line up end to end)
         // determine if seg1_t is 0.0 or 1.0
         let seg1_t = if v1.fuzzy_eq_eps(u1, eps) || v1.fuzzy_eq_eps(u2, eps) {

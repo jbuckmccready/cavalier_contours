@@ -417,9 +417,7 @@ where
 /// Arc is defined by `center`, `arc_start`, `arc_end`, and arc direction parameter `is_clockwise`.
 /// The angle region is defined as if the arc had infinite radius projected outward in a cone.
 ///
-/// This function uses the default epsilon of
-/// [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon) from
-/// [FuzzyEq](crate::core::traits::FuzzyEq) trait.
+/// `epsilon` is used for fuzzy comparing.
 ///
 /// # Examples
 /// ```
@@ -429,10 +427,16 @@ where
 /// let arc_center = Vector2::new(0.0, 0.0);
 /// let arc_start = Vector2::new(1.0, 0.0);
 /// let arc_end = Vector2::new(0.0, 1.0);
-/// assert!(point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(1.0, 1.0)));
+/// assert!(
+///     point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(1.0, 1.0), 1e-5)
+/// );
 /// // check is fuzzy inclusive
-/// assert!(point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(1.0, 0.0)));
-/// assert!(point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(0.0, 1.0)));
+/// assert!(
+///     point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(1.0, 0.0), 1e-5)
+/// );
+/// assert!(
+///     point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(0.0, 1.0), 1e-5)
+/// );
 /// ```
 #[inline]
 pub fn point_within_arc_sweep<T>(
@@ -441,16 +445,17 @@ pub fn point_within_arc_sweep<T>(
     arc_end: Vector2<T>,
     is_clockwise: bool,
     point: Vector2<T>,
+    epsilon: T,
 ) -> bool
 where
     T: Real,
 {
     if is_clockwise {
-        is_right_or_coincident(center, arc_start, point)
-            && is_left_or_coincident(center, arc_end, point)
+        is_right_or_coincident_eps(center, arc_start, point, epsilon)
+            && is_left_or_coincident_eps(center, arc_end, point, epsilon)
     } else {
-        is_left_or_coincident(center, arc_start, point)
-            && is_right_or_coincident(center, arc_end, point)
+        is_left_or_coincident_eps(center, arc_start, point, epsilon)
+            && is_right_or_coincident_eps(center, arc_end, point, epsilon)
     }
 }
 

@@ -926,6 +926,8 @@ pub trait PlineSource {
     ///
     /// If the polyline is empty then `None` is returned.
     ///
+    /// `pos_equal_eps` is epsilon value used for fuzzy float comparisons.
+    ///
     /// # Examples
     ///
     /// ```
@@ -933,14 +935,18 @@ pub trait PlineSource {
     /// # use cavalier_contours::core::traits::*;
     /// # use cavalier_contours::core::math::*;
     /// let mut polyline: Polyline = Polyline::new();
-    /// assert!(matches!(polyline.closest_point(Vector2::zero()), None));
+    /// assert!(matches!(polyline.closest_point(Vector2::zero(), 1e-5), None));
     /// polyline.add(1.0, 1.0, 1.0);
-    /// let result = polyline.closest_point(Vector2::new(1.0, 0.0)).unwrap();
+    /// let result = polyline.closest_point(Vector2::new(1.0, 0.0), 1e-5).unwrap();
     /// assert_eq!(result.seg_start_index, 0);
     /// assert!(result.seg_point.fuzzy_eq(polyline[0].pos()));
     /// assert!(result.distance.fuzzy_eq(1.0));
     /// ```
-    fn closest_point(&self, point: Vector2<Self::Num>) -> Option<ClosestPointResult<Self::Num>> {
+    fn closest_point(
+        &self,
+        point: Vector2<Self::Num>,
+        pos_equal_eps: Self::Num,
+    ) -> Option<ClosestPointResult<Self::Num>> {
         use num_traits::real::Real;
         if self.is_empty() {
             return None;
@@ -962,7 +968,7 @@ pub trait PlineSource {
         for (i, j) in self.iter_segment_indexes() {
             let v1 = self.at(i);
             let v2 = self.at(j);
-            let cp = seg_closest_point(v1, v2, point);
+            let cp = seg_closest_point(v1, v2, point, pos_equal_eps);
             let diff_v = point - cp;
             let dist2 = diff_v.length_squared();
             if dist2 < dist_squared {

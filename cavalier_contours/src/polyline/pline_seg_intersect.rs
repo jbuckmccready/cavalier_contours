@@ -96,20 +96,35 @@ where
         let (arc_radius, arc_center) = seg_arc_radius_and_center(a1, a2);
 
         let point_lies_on_arc = |pt: Vector2<T>| -> bool {
-            point_within_arc_sweep(arc_center, a1.pos(), a2.pos(), a1.bulge_is_neg(), pt)
-                && dist_squared(pt, arc_center)
-                    .sqrt()
-                    .fuzzy_eq_eps(arc_radius, pos_equal_eps)
+            point_within_arc_sweep(
+                arc_center,
+                a1.pos(),
+                a2.pos(),
+                a1.bulge_is_neg(),
+                pt,
+                pos_equal_eps,
+            ) && dist_squared(pt, arc_center)
+                .sqrt()
+                .fuzzy_eq_eps(arc_radius, pos_equal_eps)
         };
 
+        // line segment length used for scaling parametric t value for fuzzy comparing
+        let line_length = (p1 - p0).length();
+
         let point_in_sweep = |t: T| -> Option<Vector2<T>> {
-            if !t.fuzzy_in_range(T::zero(), T::one()) {
+            if !(t * line_length).fuzzy_in_range_eps(T::zero(), line_length, pos_equal_eps) {
                 return None;
             }
 
             let p = point_from_parametric(p0, p1, t);
-            let within_sweep =
-                point_within_arc_sweep(arc_center, a1.pos(), a2.pos(), a1.bulge_is_neg(), p);
+            let within_sweep = point_within_arc_sweep(
+                arc_center,
+                a1.pos(),
+                a2.pos(),
+                a1.bulge_is_neg(),
+                p,
+                pos_equal_eps,
+            );
             if within_sweep {
                 Some(p)
             } else {
@@ -236,8 +251,21 @@ where
     };
 
     let both_arcs_sweep_point = |pt: Vector2<T>| -> bool {
-        point_within_arc_sweep(arc1_center, v1.pos(), v2.pos(), v1.bulge_is_neg(), pt)
-            && point_within_arc_sweep(arc2_center, u1.pos(), u2.pos(), u1.bulge_is_neg(), pt)
+        point_within_arc_sweep(
+            arc1_center,
+            v1.pos(),
+            v2.pos(),
+            v1.bulge_is_neg(),
+            pt,
+            pos_equal_eps,
+        ) && point_within_arc_sweep(
+            arc2_center,
+            u1.pos(),
+            u2.pos(),
+            u1.bulge_is_neg(),
+            pt,
+            pos_equal_eps,
+        )
     };
 
     let intr_result = circle_circle_intr(
@@ -284,16 +312,23 @@ where
 
             let arc1_end = arc1_start + arc1_sweep;
             let arc2_end = arc2_start + arc2_sweep;
+            // using average radius for fuzzy compare (arc radii are fuzzy equal, this is to produce
+            // best fuzzy overlap approximation)
+            let avg_radius = (arc1_radius + arc2_radius) / T::two();
 
             // check if only end points touch (because we made arc sweeps go same direction we
             // only have to test the delta angle between the start and end)
+
+            // note: for fuzzy compare using arc length (radius * angle) rather than just the sweep
+            // angle so that the epsilon value is used in the context of the arc size/scale
             match (
-                delta_angle(arc1_start, arc2_end).fuzzy_eq_zero(),
-                delta_angle(arc2_start, arc1_end).fuzzy_eq_zero(),
+                (avg_radius * delta_angle(arc1_start, arc2_end)).fuzzy_eq_zero_eps(pos_equal_eps),
+                (avg_radius * delta_angle(arc2_start, arc1_end)).fuzzy_eq_zero_eps(pos_equal_eps),
             ) {
                 (true, true) => {
                     // two half circle arcs with end points touching
-                    // note: point1 and point2 are returned in order according to second segment (u1->u2) direction
+                    // note: point1 and point2 are returned in order according to second segment
+                    // (u1->u2) direction
                     TwoIntersects {
                         point1: u1.pos(),
                         point2: u2.pos(),
@@ -320,7 +355,8 @@ where
                         }
                     } else if arc2_starts_in_arc1 {
                         // check if direction reversed to ensure the correct points are used
-                        // note: point1 and point2 are returned in order according to second segment (u1->u2) direction
+                        // note: point1 and point2 are returned in order according to second segment
+                        // (u1->u2) direction
                         if same_direction_arcs {
                             OverlappingArcs {
                                 point1: u1.pos(),
@@ -334,7 +370,8 @@ where
                         }
                     } else if arc2_ends_in_arc1 {
                         // check if direction reversed to ensure the correct points are used
-                        // note: point1 and point2 are returned in order according to second segment (u1->u2) direction
+                        // note: point1 and point2 are returned in order according to second segment
+                        // (u1->u2) direction
                         if same_direction_arcs {
                             OverlappingArcs {
                                 point1: v1.pos(),
@@ -351,7 +388,8 @@ where
                             angle_is_within_sweep(arc1_start, arc2_start, arc2_sweep);
                         if arc1_starts_in_arc2 {
                             // arc1 is fully overlapped by arc2
-                            // note: point1 and point2 are returned in order according to second segment (u1->u2) direction
+                            // note: point1 and point2 are returned in order according to second
+                            // segment (u1->u2) direction
                             if same_direction_arcs {
                                 OverlappingArcs {
                                     point1: v1.pos(),

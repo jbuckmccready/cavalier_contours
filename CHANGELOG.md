@@ -11,14 +11,25 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ### Changed 🔧
 
+- Added epsilon parameter to `PlineSource::closest_point` method to allow for consistency with other
+  calculations using epsilon values for fuzzy comparing.
+- `line_line_intr` function now scales parametric t values by segment lengths before fuzzy comparing
+  with epsilon value to avoid introduced error when line segments are very long or very short.
+- `pline_seg_intr` function now scales parametric t values by segment lengths and angle values by
+  arc radii before fuzzy comparing with epsilon value to avoid introduced error when line segments
+  are very long or very short, or arc radius is very small or very large.
 - Reimplemented `line_circle_intr` function for improved numerical stability.
 - Added epsilon parameter to `parametric_from_point` function to allow consistency with other
-  calculations using fuzzy epsilon values.
+  calculations using epsilon values for fuzzy comparing.
+- Added epsilon parameter to `point_within_arc_sweep` function to allow for consistency with other
+  calculations using epsilon values for fuzzy comparing.
 - Added `#[inline]` attribute to all of the small Vector2 and base math functions.
 
 ### Fixed 🐛
 
-- Fixed boolean operation bug caused by `line_circle_intr` numerical stability problem
+- Fixed boolean operation bugs caused by `line_circle_intr` numerical stability problem,
+  inconsistencies between epsilon values used across functions, and lack of scaling parametric t
+  values and angles for fuzzy comparing with epsilon values
   ([#23](https://github.com/jbuckmccready/cavalier_contours/issues/23)).
 - Fixed some of the doc comments around pline boolean operation types.
 - Fixed polyline find_intersects to use pos_equal_eps passed in options for querying bounding boxes
