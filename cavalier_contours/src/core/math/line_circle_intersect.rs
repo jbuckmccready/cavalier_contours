@@ -106,7 +106,10 @@ where
     let r2 = radius * radius;
     let a2_b2 = a2 + b2;
 
-    if c2 > r2 * a2_b2 + eps {
+    // shortest distance from point on line to origin
+    let shortest_dist = c.abs() / (a2_b2).sqrt();
+
+    if shortest_dist > radius + eps {
         return NoIntersect;
     }
 
@@ -114,13 +117,15 @@ where
     let x0 = -a * c / a2_b2 + h;
     let y0 = -b * c / a2_b2 + k;
 
-    if (c2 - r2 * a2_b2).abs() < eps {
+    if shortest_dist.fuzzy_eq_eps(radius, eps) {
         let t = parametric_from_point(p0, p1, Vector2::new(x0, y0), eps);
         return TangentIntersect { t0: t };
     }
 
     let d = r2 - c2 / a2_b2;
-    let mult = (d / a2_b2).sqrt();
+    // taking abs to avoid NaN in case of very very small negative number as input to sqrt
+    let mult = (d / a2_b2).abs().sqrt();
+
     let x_sol1 = x0 + b * mult;
     let x_sol2 = x0 - b * mult;
     let y_sol1 = y0 - a * mult;
