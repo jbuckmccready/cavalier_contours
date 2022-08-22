@@ -1,8 +1,8 @@
 mod test_utils;
 
 use cavalier_contours::polyline::{
-    BooleanOp, BooleanPlineSlice, BooleanResult, BooleanResultPline, PlineCreation, PlineSource,
-    PlineSourceMut, Polyline,
+    BooleanOp, BooleanPlineSlice, BooleanResult, BooleanResultInfo, BooleanResultPline,
+    PlineCreation, PlineSource, PlineSourceMut, Polyline,
 };
 use test_utils::{
     create_property_set, property_sets_match, property_sets_match_abs_a, ModifiedPlineSet,
@@ -32,6 +32,7 @@ fn run_same_boolean_test(
     // test same polyline
     for &op in [Or, And].iter() {
         let result = self1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Overlapping));
         let mut passed = result.pos_plines.len() == 1 && result.neg_plines.is_empty();
         if passed {
             let result_properties = PlineProperties::from_pline(
@@ -50,6 +51,7 @@ fn run_same_boolean_test(
 
     for &op in [Not, Xor].iter() {
         let result = self1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Overlapping));
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
@@ -73,6 +75,7 @@ fn run_same_boolean_test(
         let op = Or;
         let expected = &[disjoint1_properties, *input_properties];
         let result = disjoint1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Disjoint));
         let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -87,6 +90,7 @@ fn run_same_boolean_test(
     {
         let op = And;
         let result = disjoint1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Disjoint));
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
@@ -100,6 +104,7 @@ fn run_same_boolean_test(
         let op = Not;
         let expected = &[disjoint1_properties];
         let result = disjoint1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Disjoint));
         let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -115,6 +120,7 @@ fn run_same_boolean_test(
         let op = Xor;
         let expected = &[disjoint1_properties, *input_properties];
         let result = disjoint1.boolean(self2, op);
+        assert!(matches!(result.result_info, BooleanResultInfo::Disjoint));
         let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -136,6 +142,10 @@ fn run_same_boolean_test(
         let op = Or;
         let expected = &[*input_properties];
         let result = self2.boolean(&self1_inward_offset, op);
+        assert!(matches!(
+            result.result_info,
+            BooleanResultInfo::Pline2InsidePline1
+        ));
         let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -151,6 +161,10 @@ fn run_same_boolean_test(
         let op = And;
         let expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
+        assert!(matches!(
+            result.result_info,
+            BooleanResultInfo::Pline2InsidePline1
+        ));
         let result_properties = create_boolean_property_set(&result.pos_plines);
         let passed =
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
@@ -167,6 +181,10 @@ fn run_same_boolean_test(
         let pos_expected = &[*input_properties];
         let neg_expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
+        assert!(matches!(
+            result.result_info,
+            BooleanResultInfo::Pline2InsidePline1
+        ));
         let pos_pline_result_properties = create_boolean_property_set(&result.pos_plines);
         let neg_pline_result_properties = create_boolean_property_set(&result.neg_plines);
         let passed = property_sets_match_abs_a(&pos_pline_result_properties, pos_expected)
@@ -182,6 +200,10 @@ fn run_same_boolean_test(
     {
         let op = Not;
         let result = self1_inward_offset.boolean(self2, op);
+        assert!(matches!(
+            result.result_info,
+            BooleanResultInfo::Pline1InsidePline2
+        ));
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
@@ -196,6 +218,10 @@ fn run_same_boolean_test(
         let pos_expected = &[*input_properties];
         let neg_expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
+        assert!(matches!(
+            result.result_info,
+            BooleanResultInfo::Pline2InsidePline1
+        ));
         let pos_pline_result_properties = create_boolean_property_set(&result.pos_plines);
         let neg_pline_result_properties = create_boolean_property_set(&result.neg_plines);
         let passed = property_sets_match_abs_a(&pos_pline_result_properties, pos_expected)
@@ -513,6 +539,78 @@ mod test_specific {
                 (BooleanOp::And, &[PlineProperties::new(8, 44035.3323189534, 1026.5255074451134, 81.20071955870648, -45.0, 404.41586988912127, 210.0)], &[]),
                 (BooleanOp::Not, &[PlineProperties::new(3, -3403.377703804679, 449.8260354415685, 29.99999999999998, -3.4440267329434846, 210.0, 99.99999999999999)], &[]),
                 (BooleanOp::Xor, &[PlineProperties::new(3, -3403.377703804679, 449.8260354415685, 29.99999999999998, -3.4440267329434846, 210.0, 99.99999999999999), PlineProperties::new(5, 5930.749155202231, 588.2593437968856, 29.99999999999998, 85.61012812790688, 280.0, 172.99920254980566)], &[])
+            ]
+        }
+        pill_shapes_overlapping_at_ends_90_deg {
+            (
+                pline_closed![(3.0, 7.0, 0.0), (3.0, 4.0, 1.0), (5.0, 4.0, 0.0), (5.0, 7.0, 1.0)],
+                pline_closed![(4.0, 3.0, 0.0), (9.0, 3.0, 1.0), (9.0, 5.0, 0.0), (4.0, 5.0, 1.0)]
+            )
+            =>
+            [
+                (BooleanOp::Or, &[PlineProperties::new(7, 18.926990816987242, 21.853981633974485, 3.0, 3.0, 10.0, 8.0)], &[]),
+                (BooleanOp::And, &[PlineProperties::new(4, 3.3561944901923457, 6.71238898038469, 3.0, 3.0, 5.0, 5.0)], &[]),
+                (BooleanOp::Not, &[PlineProperties::new(5, -5.785398163397448, 10.71238898038469, 3.0, 4.0, 5.0, 8.0)], &[]),
+                (BooleanOp::Xor, &[PlineProperties::new(5, -5.785398163397448, 10.71238898038469, 3.0, 4.0, 5.0, 8.0), PlineProperties::new(5, 9.785398163397446, 14.71238898038469, 4.0, 3.0, 10.0, 5.0)], &[])
+            ]
+        }
+        pill_shapes_overlapping_at_ends_at_acute_angle {
+            (
+                pline_closed![(3.0, 7.0, 0.0), (3.0, 4.0, 1.0), (5.0, 4.0, 0.0), (5.0, 7.0, 1.0)],
+                pline_closed![(4.31623, 3.05132, 0.0), (10.3162, 5.05132, 1.0), (9.68377, 6.94868, 0.0), (3.68377, 4.94868, 1.0)]
+            )
+            =>
+            [
+                (BooleanOp::Or, &[PlineProperties::new(7, 21.349440304029333, 24.049941151993778, 3.0, 3.000002084139782, 10.999977834286828, 8.0)], &[]),
+                (BooleanOp::And, &[PlineProperties::new(5, 3.5827364210362647, 7.165481520754011, 3.0, 3.000002084139782, 5.0, 5.3874233333333335)], &[]),
+                (BooleanOp::Not, &[PlineProperties::new(5, -5.558852427532134, 10.39063865910795, 3.0, 4.0, 5.0, 8.0)], &[]),
+                (BooleanOp::Xor, &[PlineProperties::new(5, -5.558852427532134, 10.39063865910795, 3.0, 4.0, 5.0, 8.0), PlineProperties::new(5, 12.207851455460933, 17.039688511108828, 4.31623, 3.05132, 10.999977834286828, 6.999992834286827)], &[])
+            ]
+        }
+        overlapping_pill_shaped_ends_reported {
+            // reported case which failed, caused by numerical stability problem in
+            // line_circle_intr function
+            (
+                pline_closed![(161.29, 113.665, 0.0), (167.64, 113.665, 0.0), (167.64, 114.935, 0.0), (161.29, 114.935, 1.0)],
+                pline_closed![(155.575, 113.665, 0.0), (161.29, 113.665, 1.0), (161.29, 114.935, 0.0), (155.575, 114.935, 0.0)]
+            )
+            =>
+            [
+                (BooleanOp::Or, &[PlineProperties::new(4, 15.322550000000774, 26.669999999999987, 155.575, 113.665, 167.64, 114.935)], &[]),
+                (BooleanOp::And, &[PlineProperties::new(2, 1.2667686977437822, 3.989822670059025, 160.655, 113.665, 161.92499999999998, 114.935)], &[]),
+                (BooleanOp::Not, &[PlineProperties::new(4, -7.43111565112854, 15.964911335029496, 161.29, 113.665, 167.64, 114.935)], &[]),
+                (BooleanOp::Xor, &[PlineProperties::new(4, -7.43111565112854, 15.964911335029496, 161.29, 113.665, 167.64, 114.935), PlineProperties::new(4, 6.624665651128453, 14.694911335029516, 155.575, 113.665, 161.29, 114.935)], &[])
+            ]
+        }
+        overlapping_pill_shaped_ends_reported2 {
+            // reported case which failed, caused by inconsistent epsilon values used across
+            // functions and not scaling parametric t values and angles by lengths/radii for
+            // fuzzy comparing with epsilon values
+            (
+                pline_closed![(152.874687837651, 123.98368333641, 0.0), (160.791017837651, 113.90835333641, 1.0), (161.789642162349, 114.69298666359, 0.0), (153.873312162349, 124.76831666359, 1.0)],
+                pline_closed![(160.7910178773358, 113.9083532859021, 0.0), (166.8446878773358, 106.2036832859021, 1.0), (167.8433121226642, 106.9883167140979, 0.0), (161.7896421226642, 114.6929867140979, 1.0)]
+            )
+            =>
+            [
+                (BooleanOp::Or, &[PlineProperties::new(6, 29.98363677157613, 49.21323695956188, 152.739, 105.961, 167.979, 125.01100000000002)], &[]),
+                (BooleanOp::And, &[PlineProperties::new(2, 1.2667686977438057, 3.9898226700590773, 160.65533001984238, 113.66566997474605, 161.92533001984242, 114.93566997474606)], &[]),
+                (BooleanOp::Not, &[PlineProperties::new(4, -16.27288600510112, 29.616414804078143, 152.739, 113.9083532859021, 161.789642162349, 125.01100000000002)], &[]),
+                (BooleanOp::Xor, &[PlineProperties::new(4, -16.27288600510112, 29.616414804078143, 152.739, 113.9083532859021, 161.789642162349, 125.01100000000002), PlineProperties::new(4, 12.443982068731202, 23.586644825542812, 160.7910178773358, 105.961, 167.979, 114.69298666359)], &[])
+            ]
+        }
+        overlapping_pill_shaped_ends_reported3 {
+            // reported case which failed, caused by fuzzy compare between squared numbers which are
+            //  not to scale with epsilon value in line_circle_intr function
+            (
+                pline_closed![(113.1450199999994, 99.04090098302, 0.0), (113.1449999999994, 114.30000098302, 1.0), (111.6450000000006, 114.29999901698, 0.0), (111.6450200000006, 99.04089901698, 1.0)],
+                pline_closed![(113.145, 114.3, 0.0), (113.145, 117.475, 1.0), (111.645, 117.475, 0.0), (111.645, 114.3, 1.0)]
+            )
+            =>
+            [
+                (BooleanOp::Or, &[PlineProperties::new(6, 29.418295867659253, 41.58058898041103, 111.645, 98.29089999999995, 113.14502000000005, 118.225)], &[]),
+                (BooleanOp::And, &[PlineProperties::new(2, 1.7671458676433858, 4.712388980383754, 111.64500000000044, 113.54999950849015, 113.14500000000015, 115.04999950848986)], &[]),
+                (BooleanOp::Not, &[PlineProperties::new(4, -22.88864926275236, 35.230587997390565, 111.6450000000006, 98.29089999999995, 113.14502000000005, 114.3)], &[]),
+                (BooleanOp::Xor, &[PlineProperties::new(4, -22.88864926275236, 35.230587997390565, 111.6450000000006, 98.29089999999995, 113.14502000000005, 114.3), PlineProperties::new(4, 4.762500737263508, 11.062389963404218, 111.645, 114.29999901698, 113.145, 118.225)], &[])
             ]
         }
     }

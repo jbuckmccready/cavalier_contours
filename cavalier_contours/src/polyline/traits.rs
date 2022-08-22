@@ -827,10 +827,6 @@ pub trait PlineSource {
                 .skip(start)
                 .take(vc - start)
                 .chain(self.iter_vertexes().take(start))
-            // self.vertex_data[start..self.len()]
-            //     .iter()
-            //     .chain(self.vertex_data[0..start].iter())
-            //     .copied()
         };
 
         let mut result = Self::OutputPolyline::with_capacity(0, true);
@@ -930,6 +926,8 @@ pub trait PlineSource {
     ///
     /// If the polyline is empty then `None` is returned.
     ///
+    /// `pos_equal_eps` is epsilon value used for fuzzy float comparisons.
+    ///
     /// # Examples
     ///
     /// ```
@@ -937,14 +935,18 @@ pub trait PlineSource {
     /// # use cavalier_contours::core::traits::*;
     /// # use cavalier_contours::core::math::*;
     /// let mut polyline: Polyline = Polyline::new();
-    /// assert!(matches!(polyline.closest_point(Vector2::zero()), None));
+    /// assert!(matches!(polyline.closest_point(Vector2::zero(), 1e-5), None));
     /// polyline.add(1.0, 1.0, 1.0);
-    /// let result = polyline.closest_point(Vector2::new(1.0, 0.0)).unwrap();
+    /// let result = polyline.closest_point(Vector2::new(1.0, 0.0), 1e-5).unwrap();
     /// assert_eq!(result.seg_start_index, 0);
     /// assert!(result.seg_point.fuzzy_eq(polyline[0].pos()));
     /// assert!(result.distance.fuzzy_eq(1.0));
     /// ```
-    fn closest_point(&self, point: Vector2<Self::Num>) -> Option<ClosestPointResult<Self::Num>> {
+    fn closest_point(
+        &self,
+        point: Vector2<Self::Num>,
+        pos_equal_eps: Self::Num,
+    ) -> Option<ClosestPointResult<Self::Num>> {
         use num_traits::real::Real;
         if self.is_empty() {
             return None;
@@ -966,7 +968,7 @@ pub trait PlineSource {
         for (i, j) in self.iter_segment_indexes() {
             let v1 = self.at(i);
             let v2 = self.at(j);
-            let cp = seg_closest_point(v1, v2, point);
+            let cp = seg_closest_point(v1, v2, point, pos_equal_eps);
             let diff_v = point - cp;
             let dist2 = diff_v.length_squared();
             if dist2 < dist_squared {
@@ -1383,6 +1385,7 @@ pub trait PlineSource {
     /// // circle
     /// assert_eq!(results.pos_plines.len(), 1);
     /// assert_eq!(results.neg_plines.len(), 1);
+    /// assert!(matches!(results.result_info, BooleanResultInfo::Pline2InsidePline1));
     /// assert!(results.pos_plines[0].pline.area().fuzzy_eq(rectangle.area()));
     /// assert!(results.neg_plines[0].pline.area().fuzzy_eq(circle.area()));
     /// ```
@@ -1396,7 +1399,8 @@ pub trait PlineSource {
     /// Perform a boolean `operation` between this polyline and another with options provided.
     ///
     /// Returns the boolean result polylines and their associated slices that were stitched together
-    /// end to end to form them.
+    /// end to end to form them. For the result `pline1` refers to `self`, and `pline2` refers to
+    /// `other`.
     ///
     /// # Examples
     /// ```
@@ -1422,6 +1426,7 @@ pub trait PlineSource {
     /// // circle
     /// assert_eq!(results.pos_plines.len(), 1);
     /// assert_eq!(results.neg_plines.len(), 1);
+    /// assert!(matches!(results.result_info, BooleanResultInfo::Pline2InsidePline1));
     /// assert!(results.pos_plines[0].pline.area().fuzzy_eq(rectangle.area()));
     /// assert!(results.neg_plines[0].pline.area().fuzzy_eq(circle.area()));
     /// ```

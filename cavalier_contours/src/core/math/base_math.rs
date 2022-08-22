@@ -11,6 +11,7 @@ use crate::core::traits::Real;
 /// assert_eq!(min_val, 4);
 /// assert_eq!(max_val, 8);
 /// ```
+#[inline]
 pub fn min_max<T>(v1: T, v2: T) -> (T, T)
 where
     T: PartialOrd,
@@ -38,6 +39,7 @@ where
 /// assert!(normalize_radians(PI).fuzzy_eq(PI));
 /// assert!(normalize_radians(2.0 * PI).fuzzy_eq(2.0 * PI));
 /// ```
+#[inline]
 pub fn normalize_radians<T>(angle: T) -> T
 where
     T: Real,
@@ -68,6 +70,7 @@ where
 /// assert!(delta_angle(0.5 * PI, 0.25 * PI).fuzzy_eq(-0.25 * PI));
 /// assert!(delta_angle(0.25 * PI, 0.5 * PI).fuzzy_eq(0.25 * PI));
 /// ```
+#[inline]
 pub fn delta_angle<T>(angle1: T, angle2: T) -> T
 where
     T: Real,
@@ -87,6 +90,7 @@ where
 /// polarity for edge cases, e.g. if `angle1` is 0 and `angle2` is PI then the delta angle could be
 /// be considered positive or negative ([delta_angle] always returns positive).
 ///
+#[inline]
 pub fn delta_angle_signed<T>(angle1: T, angle2: T, negative: bool) -> T
 where
     T: Real,
@@ -116,6 +120,7 @@ where
 /// // going from PI to PI / 2 counter clockwise sweeps 0.0
 /// assert!(angle_is_between_eps(0.0, PI, PI / 2.0, 1e-5));
 /// ```
+#[inline]
 pub fn angle_is_between_eps<T>(test_angle: T, start_angle: T, end_angle: T, epsilon: T) -> bool
 where
     T: Real,
@@ -130,6 +135,7 @@ where
 ///
 /// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
 /// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
+#[inline]
 pub fn angle_is_between<T>(test_angle: T, start_angle: T, end_angle: T) -> bool
 where
     T: Real,
@@ -141,6 +147,7 @@ where
 ///
 /// If `sweep_angle` is positive then sweep is counter clockwise, otherwise it is clockwise.
 /// `epsilon` controls the fuzzy inclusion.
+#[inline]
 pub fn angle_is_within_sweep_eps<T>(
     test_angle: T,
     start_angle: T,
@@ -162,6 +169,7 @@ where
 ///
 /// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
 /// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
+#[inline]
 pub fn angle_is_within_sweep<T>(test_angle: T, start_angle: T, sweep_angle: T) -> bool
 where
     T: Real,
@@ -171,28 +179,30 @@ where
 
 /// Returns the solutions to the quadratic equation.
 ///
-/// Quadratic equation is `-b +/- sqrt (b * b - 4 * a * c) / (2 * a)`.
-/// With the `discriminant` defined as `(b * b - 4 * a * c)`.
+/// Quadratic equation is `-b +/- sqrt(b * b - 4 * a * c) / (2 * a)`.
+/// With the `sqrt_discriminant` defined as `sqrt(b * b - 4 * a * c)`.
 ///
 /// The purpose of this function is to minimize error in the process of finding solutions
 /// to the quadratic equation.
-pub fn quadratic_solutions<T>(a: T, b: T, c: T, discriminant: T) -> (T, T)
+#[inline]
+pub fn quadratic_solutions<T>(a: T, b: T, c: T, sqrt_discriminant: T) -> (T, T)
 where
     T: Real,
 {
     debug_assert!(
-        (b * b - T::four() * a * c).fuzzy_eq(discriminant),
+        (b * b - T::four() * a * c)
+            .sqrt()
+            .fuzzy_eq(sqrt_discriminant),
         "discriminant is not valid"
     );
     // Avoids loss in precision due to taking the difference of two floating point values that are
     // very near each other in value.
     // https://math.stackexchange.com/questions/311382/solving-a-quadratic-equation-with-precision-when-using-floating-point-variables
-    let sqrt_discr = discriminant.sqrt();
     let denom = T::two() * a;
     let sol1 = if b < T::zero() {
-        (-b + sqrt_discr) / denom
+        (-b + sqrt_discriminant) / denom
     } else {
-        (-b - sqrt_discr) / denom
+        (-b - sqrt_discriminant) / denom
     };
 
     let sol2 = (c / a) / sol1;
@@ -201,6 +211,7 @@ where
 }
 
 /// Distance squared between the points `p0` and `p1`.
+#[inline]
 pub fn dist_squared<T>(p0: Vector2<T>, p1: Vector2<T>) -> T
 where
     T: Real,
@@ -210,6 +221,7 @@ where
 }
 
 /// Angle of the direction vector described by `p0` to `p1`.
+#[inline]
 pub fn angle<T>(p0: Vector2<T>, p1: Vector2<T>) -> T
 where
     T: Real,
@@ -218,6 +230,7 @@ where
 }
 
 /// Midpoint of a line segment defined by `p0` to `p1`.
+#[inline]
 pub fn midpoint<T>(p0: Vector2<T>, p1: Vector2<T>) -> Vector2<T>
 where
     T: Real,
@@ -226,6 +239,7 @@ where
 }
 
 /// Returns the point on the circle with `radius`, `center`, and polar `angle` in radians given.
+#[inline]
 pub fn point_on_circle<T>(radius: T, center: Vector2<T>, angle: T) -> Vector2<T>
 where
     T: Real,
@@ -235,6 +249,7 @@ where
 }
 
 /// Returns the point on the line segment going from `p0` to `p1` at parametric value `t`.
+#[inline]
 pub fn point_from_parametric<T>(p0: Vector2<T>, p1: Vector2<T>, t: T) -> Vector2<T>
 where
     T: Real,
@@ -245,23 +260,25 @@ where
 /// Returns the parametric value on the line segment going from `p0` to `p1` at the `point` given.
 ///
 /// Note this function assumes the `point` is on the line and properly handles the cases of vertical
-/// and horizontal lines.
-pub fn parametric_from_point<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> T
+/// and horizontal lines by using the `epsilon` parameter to fuzzy compare for when `p0.x == p1.x`.
+#[inline]
+pub fn parametric_from_point<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>, epsilon: T) -> T
 where
     T: Real,
 {
-    if p0.x.fuzzy_eq(p1.x) {
+    if p0.x.fuzzy_eq_eps(p1.x, epsilon) {
         // vertical segment, use y coordinate
         debug_assert!(
-            point.x.fuzzy_eq(p0.x),
+            point.x.fuzzy_eq_eps(p0.x, epsilon),
             "point does not lie on the line defined by p0 to p1"
         );
         (point.y - p0.y) / (p1.y - p0.y)
     } else {
         // use x coordinate
         debug_assert!(
-            point.fuzzy_eq(p0)
-                || ((point.y - p0.y) / (point.x - p0.x)).fuzzy_eq((p1.y - p0.y) / (p1.x - p0.x)),
+            point.fuzzy_eq_eps(p0, epsilon)
+                || ((point.y - p0.y) / (point.x - p0.x))
+                    .fuzzy_eq_eps((p1.y - p0.y) / (p1.x - p0.x), epsilon),
             "point does not lie on the line defined by p0 to p1"
         );
         (point.x - p0.x) / (p1.x - p0.x)
@@ -269,6 +286,7 @@ where
 }
 
 /// Returns the closest point on the line segment from `p0` to `p1` to the `point` given.
+#[inline]
 pub fn line_seg_closest_point<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> Vector2<T>
 where
     T: Real,
@@ -292,6 +310,7 @@ where
 }
 
 /// Helper function to avoid repeating code for is_left and is_right checks.
+#[inline]
 fn perp_dot_test_value<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> T
 where
     T: Real,
@@ -312,6 +331,7 @@ where
 /// assert!(is_left(p0, p1, Vector2::new(0.0, 1.0)));
 /// assert!(!is_left(p0, p1, Vector2::new(1.0, 0.0)));
 /// ```
+#[inline]
 pub fn is_left<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
     T: Real,
@@ -320,6 +340,7 @@ where
 }
 
 /// Same as [is_left] but uses <= operator rather than < for boundary inclusion.
+#[inline]
 pub fn is_left_or_equal<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
     T: Real,
@@ -333,6 +354,7 @@ where
 /// direction vector defined by `p1 - p0`.
 ///
 /// `epsilon` controls the fuzzy compare.
+#[inline]
 pub fn is_left_or_coincident_eps<T>(
     p0: Vector2<T>,
     p1: Vector2<T>,
@@ -350,6 +372,7 @@ where
 ///
 /// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
 /// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
+#[inline]
 pub fn is_left_or_coincident<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
     T: Real,
@@ -363,6 +386,7 @@ where
 /// direction vector defined by `p1 - p0`.
 ///
 /// `epsilon` controls the fuzzy compare.
+#[inline]
 pub fn is_right_or_coincident_eps<T>(
     p0: Vector2<T>,
     p1: Vector2<T>,
@@ -380,6 +404,7 @@ where
 ///
 /// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
 /// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
+#[inline]
 pub fn is_right_or_coincident<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
     T: Real,
@@ -392,9 +417,7 @@ where
 /// Arc is defined by `center`, `arc_start`, `arc_end`, and arc direction parameter `is_clockwise`.
 /// The angle region is defined as if the arc had infinite radius projected outward in a cone.
 ///
-/// This function uses the default epsilon of
-/// [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon) from
-/// [FuzzyEq](crate::core::traits::FuzzyEq) trait.
+/// `epsilon` is used for fuzzy comparing.
 ///
 /// # Examples
 /// ```
@@ -404,27 +427,35 @@ where
 /// let arc_center = Vector2::new(0.0, 0.0);
 /// let arc_start = Vector2::new(1.0, 0.0);
 /// let arc_end = Vector2::new(0.0, 1.0);
-/// assert!(point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(1.0, 1.0)));
+/// assert!(
+///     point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(1.0, 1.0), 1e-5)
+/// );
 /// // check is fuzzy inclusive
-/// assert!(point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(1.0, 0.0)));
-/// assert!(point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(0.0, 1.0)));
+/// assert!(
+///     point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(1.0, 0.0), 1e-5)
+/// );
+/// assert!(
+///     point_within_arc_sweep(arc_center, arc_start, arc_end, false, Vector2::new(0.0, 1.0), 1e-5)
+/// );
 /// ```
+#[inline]
 pub fn point_within_arc_sweep<T>(
     center: Vector2<T>,
     arc_start: Vector2<T>,
     arc_end: Vector2<T>,
     is_clockwise: bool,
     point: Vector2<T>,
+    epsilon: T,
 ) -> bool
 where
     T: Real,
 {
     if is_clockwise {
-        is_right_or_coincident(center, arc_start, point)
-            && is_left_or_coincident(center, arc_end, point)
+        is_right_or_coincident_eps(center, arc_start, point, epsilon)
+            && is_left_or_coincident_eps(center, arc_end, point, epsilon)
     } else {
-        is_left_or_coincident(center, arc_start, point)
-            && is_right_or_coincident(center, arc_end, point)
+        is_left_or_coincident_eps(center, arc_start, point, epsilon)
+            && is_right_or_coincident_eps(center, arc_end, point, epsilon)
     }
 }
 

@@ -55,6 +55,7 @@ pub fn circle_circle_intr<T>(
     center1: Vector2<T>,
     radius2: T,
     center2: Vector2<T>,
+    epsilon: T,
 ) -> CircleCircleIntr<T>
 where
     T: Real,
@@ -66,16 +67,18 @@ where
     let d2 = cv.dot(cv);
     let d = d2.sqrt();
 
-    if d.fuzzy_eq_zero() {
+    let eps = epsilon;
+
+    if d.fuzzy_eq_zero_eps(eps) {
         // same center position
-        if radius1.fuzzy_eq(radius2) {
+        if radius1.fuzzy_eq_eps(radius2, eps) {
             return Overlapping;
         }
         return NoIntersect;
     }
 
     // different center position
-    if !d.fuzzy_lt(radius1 + radius2) || !d.fuzzy_gt((radius1 - radius2).abs()) {
+    if !d.fuzzy_lt_eps(radius1 + radius2, eps) || !d.fuzzy_gt_eps((radius1 - radius2).abs(), eps) {
         // distance relative to radii is too large or too small for intersects to occur
         return NoIntersect;
     }
@@ -97,7 +100,7 @@ where
     let pt1 = Vector2::new(midpoint.x + x_term, midpoint.y - y_term);
     let pt2 = Vector2::new(midpoint.x - x_term, midpoint.y + y_term);
 
-    if pt1.fuzzy_eq(pt2) {
+    if pt1.fuzzy_eq_eps(pt2, eps) {
         return TangentIntersect { point: pt1 };
     }
 

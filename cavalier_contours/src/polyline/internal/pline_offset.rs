@@ -171,7 +171,7 @@ fn line_line_join<T, O>(
         // connecting to/from collapsed arc, always connect using arc
         connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
     } else {
-        match line_line_intr(v1.pos(), v2.pos(), u1.pos(), u2.pos()) {
+        match line_line_intr(v1.pos(), v2.pos(), u1.pos(), u2.pos(), pos_equal_eps) {
             LineLineIntr::NoIntersect => {
                 // parallel lines, join with half circle
                 let sp = s1.v2.pos();
@@ -230,8 +230,14 @@ fn line_arc_join<T, O>(
 
     let mut process_intersect = |t: T, intersect: Vector2<T>| {
         let true_line_intr = !is_false_intersect(t);
-        let true_arc_intr =
-            point_within_arc_sweep(arc_center, u1.pos(), u2.pos(), u1.bulge_is_neg(), intersect);
+        let true_arc_intr = point_within_arc_sweep(
+            arc_center,
+            u1.pos(),
+            u2.pos(),
+            u1.bulge_is_neg(),
+            intersect,
+            pos_equal_eps,
+        );
 
         if true_line_intr && true_arc_intr {
             // trim at intersect
@@ -268,7 +274,7 @@ fn line_arc_join<T, O>(
         result.add_or_replace_vertex(*u1, pos_equal_eps);
     };
 
-    match line_circle_intr(v1.pos(), v2.pos(), arc_radius, arc_center) {
+    match line_circle_intr(v1.pos(), v2.pos(), arc_radius, arc_center, pos_equal_eps) {
         LineCircleIntr::NoIntersect => {
             connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
         }
@@ -317,8 +323,14 @@ fn arc_line_join<T, O>(
 
     let mut process_intersect = |t: T, intersect: Vector2<T>| {
         let true_line_intr = !is_false_intersect(t);
-        let true_arc_intr =
-            point_within_arc_sweep(arc_center, v1.pos(), v2.pos(), v1.bulge_is_neg(), intersect);
+        let true_arc_intr = point_within_arc_sweep(
+            arc_center,
+            v1.pos(),
+            v2.pos(),
+            v1.bulge_is_neg(),
+            intersect,
+            pos_equal_eps,
+        );
 
         if true_line_intr && true_arc_intr {
             let prev_vertex = result.last().unwrap();
@@ -345,7 +357,7 @@ fn arc_line_join<T, O>(
         connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
     };
 
-    match line_circle_intr(u1.pos(), u2.pos(), arc_radius, arc_center) {
+    match line_circle_intr(u1.pos(), u2.pos(), arc_radius, arc_center, pos_equal_eps) {
         LineCircleIntr::NoIntersect => {
             connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
         }
@@ -399,8 +411,21 @@ fn arc_arc_join<T, O>(
     let (arc2_radius, arc2_center) = seg_arc_radius_and_center(*u1, *u2);
 
     let both_arcs_sweep_point = |point: Vector2<T>| {
-        point_within_arc_sweep(arc1_center, v1.pos(), v2.pos(), v1.bulge_is_neg(), point)
-            && point_within_arc_sweep(arc2_center, u1.pos(), u2.pos(), u1.bulge_is_neg(), point)
+        point_within_arc_sweep(
+            arc1_center,
+            v1.pos(),
+            v2.pos(),
+            v1.bulge_is_neg(),
+            point,
+            pos_equal_eps,
+        ) && point_within_arc_sweep(
+            arc2_center,
+            u1.pos(),
+            u2.pos(),
+            u1.bulge_is_neg(),
+            point,
+            pos_equal_eps,
+        )
     };
 
     let mut process_intersect = |intersect: Vector2<T>, true_intersect: bool| {
@@ -444,7 +469,13 @@ fn arc_arc_join<T, O>(
         }
     };
 
-    match circle_circle_intr(arc1_radius, arc1_center, arc2_radius, arc2_center) {
+    match circle_circle_intr(
+        arc1_radius,
+        arc1_center,
+        arc2_radius,
+        arc2_center,
+        pos_equal_eps,
+    ) {
         CircleCircleIntr::NoIntersect => {
             connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
         }
@@ -455,7 +486,7 @@ fn arc_arc_join<T, O>(
             // always use intersect closest to original point
             let dist1 = dist_squared(point1, s1.orig_v2_pos);
             let dist2 = dist_squared(point2, s1.orig_v2_pos);
-            if dist1.fuzzy_eq(dist2) {
+            if dist1.fuzzy_eq_eps(dist2, pos_equal_eps) {
                 // catch case where both points are equal distance (occurs if input arcs connect at
                 // tangent point), prioritize true intersect (eliminates intersect in raw offset
                 // polyline that must be processed later and prevents false creation of segments if
@@ -622,6 +653,7 @@ fn point_valid_for_offset<P, T>(
     aabb_index: &StaticAABB2DIndex<T>,
     point: Vector2<T>,
     query_stack: &mut Vec<usize>,
+    pos_equal_eps: T,
     offset_tol: T,
 ) -> bool
 where
@@ -633,7 +665,7 @@ where
     let mut point_valid = true;
     let mut visitor = |i: usize| {
         let j = polyline.next_wrapping_index(i);
-        let closest_point = seg_closest_point(polyline.at(i), polyline.at(j), point);
+        let closest_point = seg_closest_point(polyline.at(i), polyline.at(j), point, pos_equal_eps);
         let dist = dist_squared(closest_point, point);
         point_valid = dist > min_dist;
         if point_valid {
@@ -681,7 +713,7 @@ where
 
     let raw_offset_index = raw_offset_polyline.create_approx_aabb_index().unwrap();
     let self_intrs =
-        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, pos_equal_eps);
+        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, false, pos_equal_eps);
 
     let mut query_stack = Vec::new();
     if self_intrs.is_empty() {
@@ -692,6 +724,7 @@ where
             orig_polyline_index,
             raw_offset_polyline.at(0).pos(),
             &mut query_stack,
+            pos_equal_eps,
             offset_dist_eps,
         ) {
             // not valid
@@ -736,7 +769,13 @@ where
             let mut visitor = |i: usize| {
                 let j = original_polyline.next_wrapping_index(i);
                 has_intersect = !matches!(
-                    pline_seg_intr(v1, v2, original_polyline.at(i), original_polyline.at(j)),
+                    pline_seg_intr(
+                        v1,
+                        v2,
+                        original_polyline.at(i),
+                        original_polyline.at(j),
+                        pos_equal_eps
+                    ),
                     PlineSegIntr::NoIntersect
                 );
                 if has_intersect {
@@ -765,6 +804,7 @@ where
             orig_polyline_index,
             point,
             query_stack,
+            pos_equal_eps,
             offset_dist_eps,
         )
     };
@@ -906,7 +946,14 @@ fn visit_circle_intersects<P, T, F>(
      -> bool {
         // skip false intersects and intersects at start of seg
         !arc_start.fuzzy_eq_eps(intr, pos_equal_eps)
-            && point_within_arc_sweep(arc_center, arc_start, arc_end, bulge < T::zero(), intr)
+            && point_within_arc_sweep(
+                arc_center,
+                arc_start,
+                arc_end,
+                bulge < T::zero(),
+                intr,
+                pos_equal_eps,
+            )
     };
 
     let query_results = aabb_index.query(
@@ -920,7 +967,13 @@ fn visit_circle_intersects<P, T, F>(
         let v1 = pline.at(start_index);
         let v2 = pline.at(pline.next_wrapping_index(start_index));
         if v1.bulge_is_zero() {
-            match line_circle_intr(v1.pos(), v2.pos(), circle_radius, circle_center) {
+            match line_circle_intr(
+                v1.pos(),
+                v2.pos(),
+                circle_radius,
+                circle_center,
+                pos_equal_eps,
+            ) {
                 LineCircleIntr::NoIntersect => {}
                 LineCircleIntr::TangentIntersect { t0 } => {
                     if is_valid_line_intr(t0) {
@@ -938,7 +991,13 @@ fn visit_circle_intersects<P, T, F>(
             }
         } else {
             let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-            match circle_circle_intr(arc_radius, arc_center, circle_radius, circle_center) {
+            match circle_circle_intr(
+                arc_radius,
+                arc_center,
+                circle_radius,
+                circle_center,
+                pos_equal_eps,
+            ) {
                 CircleCircleIntr::NoIntersect => {}
                 CircleCircleIntr::TangentIntersect { point } => {
                     if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, point) {
@@ -983,7 +1042,7 @@ where
     let raw_offset_index = raw_offset_polyline.create_approx_aabb_index().unwrap();
 
     let self_intrs =
-        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, pos_equal_eps);
+        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, false, pos_equal_eps);
 
     let dual_intrs = find_intersects(
         raw_offset_polyline,
@@ -1050,6 +1109,7 @@ where
             orig_polyline_index,
             raw_offset_polyline.at(0).pos(),
             &mut query_stack,
+            pos_equal_eps,
             offset_dist_eps,
         ) {
             return result;
@@ -1078,7 +1138,13 @@ where
             let mut visitor = |i: usize| {
                 let j = original_polyline.next_wrapping_index(i);
                 has_intersect = !matches!(
-                    pline_seg_intr(v1, v2, original_polyline.at(i), original_polyline.at(j)),
+                    pline_seg_intr(
+                        v1,
+                        v2,
+                        original_polyline.at(i),
+                        original_polyline.at(j),
+                        pos_equal_eps
+                    ),
                     PlineSegIntr::NoIntersect
                 );
                 if has_intersect {
@@ -1107,6 +1173,7 @@ where
             orig_polyline_index,
             point,
             query_stack,
+            pos_equal_eps,
             offset_dist_eps,
         )
     };

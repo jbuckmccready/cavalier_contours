@@ -54,7 +54,7 @@ fn true_intersect() {
     let u2 = Vector2::new(1.0, 1.0);
     let v1 = Vector2::new(-1.0, 1.0);
     let v2 = Vector2::new(1.0, -1.0);
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -71,7 +71,7 @@ fn end_point_start_point_touch_same_direction() {
     let v1 = Vector2::new(1.0, 1.0);
     let v2 = Vector2::new(2.0, 2.0);
 
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -81,7 +81,7 @@ fn end_point_start_point_touch_same_direction() {
     );
 
     // flip argument order
-    let result = line_line_intr(v1, v2, u1, u2);
+    let result = line_line_intr(v1, v2, u1, u2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -93,7 +93,7 @@ fn end_point_start_point_touch_same_direction() {
     // rotate v1->v2 should get same result
     for &angle in TEST_ROTATION_ANGLES {
         let v2 = v2.rotate_about(v1, angle);
-        let result = line_line_intr(u1, u2, v1, v2);
+        let result = line_line_intr(u1, u2, v1, v2, 1e-5);
         assert_case_eq!(
             result,
             TrueIntersect {
@@ -111,7 +111,7 @@ fn start_points_touch_opposing_direction() {
     let v1 = Vector2::new(0.0, 0.0);
     let v2 = Vector2::new(-1.0, -1.0);
 
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -121,7 +121,7 @@ fn start_points_touch_opposing_direction() {
     );
 
     // flip argument order
-    let result = line_line_intr(v1, v2, u1, u2);
+    let result = line_line_intr(v1, v2, u1, u2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -133,7 +133,7 @@ fn start_points_touch_opposing_direction() {
     // rotate v1->v2 should get same result
     for &angle in TEST_ROTATION_ANGLES {
         let v2 = v2.rotate_about(v1, angle);
-        let result = line_line_intr(u1, u2, v1, v2);
+        let result = line_line_intr(u1, u2, v1, v2, 1e-5);
         assert_case_eq!(
             result,
             TrueIntersect {
@@ -150,7 +150,7 @@ fn false_intersect() {
     let u2 = Vector2::new(-0.5, -0.5);
     let v1 = Vector2::new(-1.0, 1.0);
     let v2 = Vector2::new(1.0, -1.0);
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         FalseIntersect {
@@ -166,7 +166,7 @@ fn no_intersect() {
     let u2 = Vector2::new(1.0, 1.0);
     let v1 = Vector2::new(0.0, 1.0);
     let v2 = Vector2::new(1.0, 2.0);
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(result, NoIntersect::<f64>);
 }
 
@@ -176,7 +176,7 @@ fn no_intersect_vertical() {
     let u2 = Vector2::new(2.0, 1.0);
     let v1 = Vector2::new(-1.0, -1.0);
     let v2 = Vector2::new(-1.0, -2.0);
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(result, NoIntersect::<f64>);
 }
 
@@ -186,7 +186,7 @@ fn no_intersect_horizontal() {
     let u2 = Vector2::new(2.0, -1.0);
     let v1 = Vector2::new(-1.0, 5.0);
     let v2 = Vector2::new(1.0, 5.0);
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(result, NoIntersect::<f64>);
 }
 
@@ -196,7 +196,7 @@ fn overlapping_intersect() {
     let u2 = Vector2::new(1.0, 1.0);
     let v1 = Vector2::new(0.0, 0.0);
     let v2 = Vector2::new(0.5, 0.5);
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         Overlapping {
@@ -212,7 +212,7 @@ fn point_intersect() {
     let u2 = Vector2::new(1.0, 1.0);
     let v1 = Vector2::new(0.0, 0.0);
     let v2 = Vector2::new(0.0, 0.0);
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -222,7 +222,7 @@ fn point_intersect() {
     );
 
     // flip arg order
-    let result = line_line_intr(v1, v2, u1, u2);
+    let result = line_line_intr(v1, v2, u1, u2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -238,7 +238,7 @@ fn point_intersect_vertical() {
     let u2 = Vector2::new(0.0, 1.0);
     let v1 = Vector2::new(0.0, 0.0);
     let v2 = Vector2::new(0.0, 0.0);
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -248,7 +248,7 @@ fn point_intersect_vertical() {
     );
 
     // flip arg order
-    let result = line_line_intr(v1, v2, u1, u2);
+    let result = line_line_intr(v1, v2, u1, u2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -264,7 +264,7 @@ fn point_intersect_horizontal() {
     let u2 = Vector2::new(1.0, 0.0);
     let v1 = Vector2::new(0.0, 0.0);
     let v2 = Vector2::new(0.0, 0.0);
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -274,7 +274,7 @@ fn point_intersect_horizontal() {
     );
 
     // flip arg order
-    let result = line_line_intr(v1, v2, u1, u2);
+    let result = line_line_intr(v1, v2, u1, u2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -290,7 +290,7 @@ fn point_intersect_at_end() {
     let u2 = Vector2::new(1.0, 1.0);
     let v1 = u1;
     let v2 = u1;
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -300,7 +300,7 @@ fn point_intersect_at_end() {
     );
 
     // flip arg order
-    let result = line_line_intr(v1, v2, u1, u2);
+    let result = line_line_intr(v1, v2, u1, u2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -312,7 +312,7 @@ fn point_intersect_at_end() {
     // other end
     let v1 = u2;
     let v2 = u2;
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -322,7 +322,7 @@ fn point_intersect_at_end() {
     );
 
     // flip arg order
-    let result = line_line_intr(v1, v2, u1, u2);
+    let result = line_line_intr(v1, v2, u1, u2, 1e-5);
     assert_case_eq!(
         result,
         TrueIntersect {
@@ -338,7 +338,7 @@ fn entirely_overlapping_same_direction() {
     let u2 = Vector2::new(1.0, 1.0);
     let v1 = u1;
     let v2 = u2;
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         Overlapping {
@@ -351,7 +351,7 @@ fn entirely_overlapping_same_direction() {
     for &angle in TEST_ROTATION_ANGLES {
         let u2 = u2.rotate_about(u1, angle);
         let v2 = v2.rotate_about(v1, angle);
-        let result = line_line_intr(u1, u2, v1, v2);
+        let result = line_line_intr(u1, u2, v1, v2, 1e-5);
         assert_case_eq!(
             result,
             Overlapping {
@@ -367,7 +367,7 @@ fn entirely_overlapping_opposing_direction() {
     let u2 = Vector2::new(1.0, 1.0);
     let v1 = u2;
     let v2 = u1;
-    let result = line_line_intr(u1, u2, v1, v2);
+    let result = line_line_intr(u1, u2, v1, v2, 1e-5);
     assert_case_eq!(
         result,
         Overlapping {
@@ -377,7 +377,7 @@ fn entirely_overlapping_opposing_direction() {
     );
 
     // flip arg order
-    let result = line_line_intr(v1, v2, u1, u2);
+    let result = line_line_intr(v1, v2, u1, u2, 1e-5);
     assert_case_eq!(
         result,
         Overlapping {
@@ -390,7 +390,7 @@ fn entirely_overlapping_opposing_direction() {
     for &angle in TEST_ROTATION_ANGLES {
         let u2 = u2.rotate_about(u1, angle);
         let v1 = v1.rotate_about(v2, angle);
-        let result = line_line_intr(u1, u2, v1, v2);
+        let result = line_line_intr(u1, u2, v1, v2, 1e-5);
         assert_case_eq!(
             result,
             Overlapping {

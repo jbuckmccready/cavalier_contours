@@ -71,7 +71,7 @@ impl<T> IndexMut<usize> for Polyline<T> {
     }
 }
 
-impl<'a, T> PlineSource for Polyline<T>
+impl<T> PlineSource for Polyline<T>
 where
     T: Real,
 {

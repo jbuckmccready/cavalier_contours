@@ -1,7 +1,6 @@
+use cavalier_contours::assert_fuzzy_eq;
 use cavalier_contours_ffi::*;
 use std::ptr;
-
-mod macros;
 
 fn create_pline(vertexes: &[(f64, f64, f64)], is_closed: bool) -> *mut cavc_pline {
     let mut buffer = Vec::with_capacity(vertexes.len());

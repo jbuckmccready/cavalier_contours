@@ -31,7 +31,7 @@ fn no_intersect_outside() {
     let c1 = Vector2::new(-1.0, -1.0);
     let r2 = 0.5;
     let c2 = Vector2::new(0.0, 5.0);
-    let result = circle_circle_intr(r1, c1, r2, c2);
+    let result = circle_circle_intr(r1, c1, r2, c2, 1e-5);
     assert_case_eq!(result, NoIntersect::<f64>);
 }
 
@@ -41,7 +41,7 @@ fn no_intersect_inside() {
     let c1 = Vector2::new(-1.0, -1.0);
     let r2 = 0.5;
     let c2 = Vector2::new(1.0, 1.0);
-    let result = circle_circle_intr(r1, c1, r2, c2);
+    let result = circle_circle_intr(r1, c1, r2, c2, 1e-5);
     assert_case_eq!(result, NoIntersect::<f64>);
 }
 
@@ -51,7 +51,7 @@ fn tangent_intersect_outside() {
     let c1 = Vector2::new(-1.0, 1.0);
     let r2 = 0.5;
     let c2 = Vector2::new(0.5, 1.0);
-    let result = circle_circle_intr(r1, c1, r2, c2);
+    let result = circle_circle_intr(r1, c1, r2, c2, 1e-5);
     assert_case_eq!(
         result,
         TangentIntersect {
@@ -66,7 +66,7 @@ fn tangent_intersect_inside() {
     let c1 = Vector2::new(0.0, 1.0);
     let r2 = 4.0;
     let c2 = Vector2::new(0.0, 0.0);
-    let result = circle_circle_intr(r1, c1, r2, c2);
+    let result = circle_circle_intr(r1, c1, r2, c2, 1e-5);
     assert_case_eq!(
         result,
         TangentIntersect {
@@ -81,7 +81,7 @@ fn two_intersects() {
     let c1 = Vector2::new(0.0, 1.0);
     let r2 = 4.0;
     let c2 = Vector2::new(5.0, 5.0);
-    let result = circle_circle_intr(r1, c1, r2, c2);
+    let result = circle_circle_intr(r1, c1, r2, c2, 1e-5);
     let expected_point1 = Vector2::new(2.945782625365772, 1.567771718292785);
     let expected_point2 = Vector2::new(1.2005588380488623, 3.749301452438922);
     assert_case_eq!(
@@ -99,6 +99,6 @@ fn overlapping() {
     let c1 = Vector2::new(-1.0, 1.0);
     let r2 = r1;
     let c2 = c1;
-    let result = circle_circle_intr(r1, c1, r2, c2);
+    let result = circle_circle_intr(r1, c1, r2, c2, 1e-5);
     assert_case_eq!(result, Overlapping::<f64>);
 }

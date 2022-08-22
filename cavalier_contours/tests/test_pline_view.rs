@@ -146,6 +146,48 @@ fn from_slice_points_single_seg() {
 
         assert!(slice.is_none());
     }
+
+    let closed_pline = pline_closed![
+        (0.0, 0.0, 0.0),
+        (5.0, 0.0, 0.0),
+        (5.0, 5.0, 0.0),
+        (0.0, 5.0, 0.0)
+    ];
+
+    // collapsed closed polyline (by having start and end point same with same segment index)
+    {
+        let slice = PlineViewData::from_slice_points(
+            &closed_pline,
+            Vector2::new(0.0, 0.0),
+            0,
+            Vector2::new(0.0, 0.0),
+            0,
+            POS_EQ_EPS,
+        );
+
+        assert!(slice.is_none());
+    }
+
+    // complete closed polyline (by having end point be at end of last segment)
+    {
+        let slice = PlineViewData::from_slice_points(
+            &closed_pline,
+            Vector2::new(0.0, 0.0),
+            0,
+            Vector2::new(0.0, 0.0),
+            3,
+            POS_EQ_EPS,
+        )
+        .unwrap();
+
+        for ((v1, v2), (u1, u2)) in closed_pline
+            .iter_segments()
+            .zip(slice.view(&closed_pline).iter_segments())
+        {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2, u2);
+        }
+    }
 }
 
 #[test]
@@ -362,5 +404,227 @@ fn from_slice_points_multi_seg() {
             POS_EQ_EPS,
         );
         assert!(slice.is_none());
+    }
+}
+
+#[test]
+fn from_new_start() {
+    let closed_pline = pline_closed![
+        (0.0, 0.0, 0.0),
+        (5.0, 0.0, 0.0),
+        (5.0, 5.0, 0.0),
+        (0.0, 5.0, 0.0)
+    ];
+
+    let closed_pline_with_bulges = pline_closed![
+        (0.0, 0.0, 0.1),
+        (5.0, 0.0, 0.2),
+        (5.0, 5.0, 0.3),
+        (0.0, 5.0, 0.4)
+    ];
+
+    // change start on first segment of closed polyline
+    {
+        let view_data =
+            PlineViewData::from_new_start(&closed_pline, Vector2::new(1.5, 0.0), 0, POS_EQ_EPS)
+                .unwrap();
+
+        let expected = pline_closed![
+            (1.5, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+            (5.0, 5.0, 0.0),
+            (0.0, 5.0, 0.0),
+            (0.0, 0.0, 0.0),
+        ];
+
+        let view = view_data.view(&closed_pline);
+
+        assert_eq!(expected.segment_count(), view.segment_count());
+
+        for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
+    }
+
+    // change start on top of first vertex of closed polyline (no change)
+    {
+        let view_data =
+            PlineViewData::from_new_start(&closed_pline, Vector2::new(0.0, 0.0), 0, POS_EQ_EPS)
+                .unwrap();
+
+        let view = view_data.view(&closed_pline);
+
+        assert_eq!(closed_pline.segment_count(), view.segment_count());
+
+        for ((v1, v2), (u1, u2)) in closed_pline.iter_segments().zip(view.iter_segments()) {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
+    }
+
+    // change start on top of first vertex of closed polyline with bulge values (no change)
+    {
+        let view_data = PlineViewData::from_new_start(
+            &closed_pline_with_bulges,
+            Vector2::new(0.0, 0.0),
+            0,
+            POS_EQ_EPS,
+        )
+        .unwrap();
+
+        let view = view_data.view(&closed_pline_with_bulges);
+
+        assert_eq!(
+            closed_pline_with_bulges.segment_count(),
+            view.segment_count()
+        );
+
+        for ((v1, v2), (u1, u2)) in closed_pline_with_bulges
+            .iter_segments()
+            .zip(view.iter_segments())
+        {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
+    }
+
+    // change start on top of first vertex of closed polyline (no change) (using last segment index
+    // that puts point on end of segment)
+    {
+        let view_data =
+            PlineViewData::from_new_start(&closed_pline, Vector2::new(0.0, 0.0), 3, POS_EQ_EPS)
+                .unwrap();
+
+        let view = view_data.view(&closed_pline);
+
+        assert_eq!(closed_pline.segment_count(), view.segment_count());
+
+        for ((v1, v2), (u1, u2)) in closed_pline.iter_segments().zip(view.iter_segments()) {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
+    }
+
+    // change start on top of second vertex of closed polyline
+    {
+        let view_data =
+            PlineViewData::from_new_start(&closed_pline, Vector2::new(5.0, 0.0), 1, POS_EQ_EPS)
+                .unwrap();
+
+        let expected = pline_closed![
+            (5.0, 0.0, 0.0),
+            (5.0, 5.0, 0.0),
+            (0.0, 5.0, 0.0),
+            (0.0, 0.0, 0.0),
+        ];
+
+        let view = view_data.view(&closed_pline);
+
+        assert_eq!(expected.segment_count(), view.segment_count());
+
+        for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
+    }
+
+    // change start on top of first vertex of closed polyline with bulge values (no change)
+    {
+        let view_data = PlineViewData::from_new_start(
+            &closed_pline_with_bulges,
+            Vector2::new(5.0, 0.0),
+            1,
+            POS_EQ_EPS,
+        )
+        .unwrap();
+
+        let expected = pline_closed![
+            (5.0, 0.0, 0.2),
+            (5.0, 5.0, 0.3),
+            (0.0, 5.0, 0.4),
+            (0.0, 0.0, 0.1),
+        ];
+
+        let view = view_data.view(&closed_pline_with_bulges);
+
+        assert_eq!(expected.segment_count(), view.segment_count());
+
+        for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
+    }
+
+    // change start on top of second vertex of closed polyline (using last segment index
+    // that puts point on end of segment)
+    {
+        let view_data =
+            PlineViewData::from_new_start(&closed_pline, Vector2::new(5.0, 0.0), 0, POS_EQ_EPS)
+                .unwrap();
+
+        let expected = pline_closed![
+            (5.0, 0.0, 0.0),
+            (5.0, 5.0, 0.0),
+            (0.0, 5.0, 0.0),
+            (0.0, 0.0, 0.0),
+        ];
+
+        let view = view_data.view(&closed_pline);
+
+        assert_eq!(expected.segment_count(), view.segment_count());
+
+        for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
+    }
+
+    // change start on second segment of closed polyline
+    {
+        let view_data =
+            PlineViewData::from_new_start(&closed_pline, Vector2::new(5.0, 2.22), 1, POS_EQ_EPS)
+                .unwrap();
+
+        let expected = pline_closed![
+            (5.0, 2.22, 0.0),
+            (5.0, 5.0, 0.0),
+            (0.0, 5.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+        ];
+
+        let view = view_data.view(&closed_pline);
+
+        assert_eq!(expected.segment_count(), view.segment_count());
+
+        for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
+    }
+
+    // change start on last segment of closed polyline
+    {
+        let view_data =
+            PlineViewData::from_new_start(&closed_pline, Vector2::new(0.0, 2.22), 3, POS_EQ_EPS)
+                .unwrap();
+
+        let expected = pline_closed![
+            (0.0, 2.22, 0.0),
+            (0.0, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+            (5.0, 5.0, 0.0),
+            (0.0, 5.0, 0.0),
+        ];
+
+        let view = view_data.view(&closed_pline);
+
+        assert_eq!(expected.segment_count(), view.segment_count());
+
+        for ((v1, v2), (u1, u2)) in expected.iter_segments().zip(view.iter_segments()) {
+            assert_fuzzy_eq!(v1, u1);
+            assert_fuzzy_eq!(v2.pos(), u2.pos());
+        }
     }
 }

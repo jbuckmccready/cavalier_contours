@@ -1,5 +1,4 @@
-/// Macro used for test assertions.
-#[doc(hidden)]
+/// Macro used for fuzzy equal assertions.
 #[macro_export]
 macro_rules! assert_fuzzy_eq {
     ($left:expr, $right:expr) => {{
