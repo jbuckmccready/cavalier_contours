@@ -34,31 +34,34 @@ where
 
 /// Finds the intersects between two lines segments.
 ///
-/// This function returns the parametric solution(s) using the general
-/// line segment equation `P(t) = p0 + t * (p1 - p0)`.
-/// Note that this equation holds for both line segments.
+/// This function returns the parametric solution(s) using the general line segment equation
+/// `P(t) = p0 + t * (p1 - p0)`. Where `t` then goes from 0 to 1. For `t < 0` or `t > 1` the result
+/// is on the same line but not within the line segment.
+///
+/// `epsilon` is used for fuzzy float comparisons.
 ///
 /// # Explanation on result cases `LineLineIntr`
 /// ## `NoIntersect`
 /// Either of the following cases:
-/// * Lines are (almost) parallel
+/// * Lines are (or almost, using `epsilon` to determine) parallel
 /// * Both line segments are points and distinct from each other
 /// * One line segment is a point and distinct from the other line segment
-/// * Line segments are parallel and atleast one must be extended to intersect
 ///
 /// ## `TrueIntersect`
 /// Either of the following cases:
 /// * Line segments are not parallel and intersect at one point
-/// * Both line segments are points and lie over each other
-/// * One line segment is a point and lies in other line segment
+/// * Both line segments are points and lie over each other (using `epsilon` for position compare)
+/// * One line segment is a point and lies in other line segment (again using `epsilon`)
 ///
 /// ## `FalseIntersect`
 /// Either of the following cases:
-/// * Line segments are not parallel and atleast one must be extended to intersect
+/// * Line segments are not parallel and at least one must be extended to intersect (that is for
+/// `0 <= t <= 1` for both segments there is no intersect)
 ///
 /// ## `Overlapping`
 /// Either of the following cases:
-/// * Line segments are collinear and overlap
+/// * The lines are collinear and overlap, the segments may fully, partially or not overlap at all
+/// (determined by parametric t values returned)
 ///
 /// # Examples
 ///
@@ -71,9 +74,13 @@ where
 /// let v2 = Vector2::new(1.0, 0.0);
 /// let u1 = Vector2::new(0.5, -1.0);
 /// let u2 = Vector2::new(0.5, 1.0);
-/// if let LineLineIntr::TrueIntersect{seg1_t: t1, seg2_t: t2} = line_line_intr(v1, v2, u1, u2) {
-///    assert_eq!(t1, 0.5);
-///    assert_eq!(t2, 0.5);
+/// if let LineLineIntr::TrueIntersect {
+///     seg1_t: t1,
+///     seg2_t: t2,
+/// } = line_line_intr(v1, v2, u1, u2, 1e-5)
+/// {
+///     assert_eq!(t1, 0.5);
+///     assert_eq!(t2, 0.5);
 /// } else {
 ///     unreachable!("expected true intersection between line segments");
 /// }

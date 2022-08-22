@@ -33,6 +33,8 @@ where
 /// hold either a `TangentIntersect` with a single intersection point or `TwoIntersects`
 /// with two intersection points.
 ///
+/// `epsilon` is used for fuzzy float comparisons.
+///
 /// # Examples
 ///
 /// ```
@@ -44,8 +46,10 @@ where
 /// let c1 = Vector2::new(0.0, 0.0);
 /// let r2 = 1.0;
 /// let c2 = Vector2::new(0.0, 2.0);
-/// if let CircleCircleIntr::TangentIntersect{point:p} = circle_circle_intr(r1, c1, r2, c2) {
-///    assert_eq!(p, Vector2::new(0.0, 1.0));
+/// if let CircleCircleIntr::TangentIntersect { point: p } =
+///     circle_circle_intr(r1, c1, r2, c2, 1e-5)
+/// {
+///     assert_eq!(p, Vector2::new(0.0, 1.0));
 /// } else {
 ///     unreachable!("expected a tangent intersection");
 /// }

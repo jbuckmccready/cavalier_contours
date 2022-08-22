@@ -34,6 +34,8 @@ where
 /// nearest to `p1`. Intersects are "sticky" and "snap" to tangent points using fuzzy comparisons,
 /// e.g. a segment very close to being tangent line will return a single intersect point.
 ///
+/// `epsilon` is used for fuzzy float comparisons.
+///
 /// # Examples
 ///
 /// ```
@@ -46,7 +48,7 @@ where
 /// let r = 1.0;
 /// let c = Vector2::new(0.0, 1.0);
 ///
-/// if let LineCircleIntr::TangentIntersect{t0: t} = line_circle_intr(p0, p1, r, c) {
+/// if let LineCircleIntr::TangentIntersect{ t0: t } = line_circle_intr(p0, p1, r, c, 1e-5) {
 ///     assert_eq!(t, 0.0);
 /// } else {
 ///     unreachable!("expected tangent intersect");
