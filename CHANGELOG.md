@@ -8,6 +8,9 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 - Added `BooleanResultInfo` enum used for new `result_info` field on `BooleanResult`. The enum
   is used to return information about what happened during the boolean operation.
+- Added doc tests and improved documentation to intersect functions `circle_circle_intr`,
+  `line_circle_intr`, and `line_line_intr`
+  ([#18](https://github.com/jbuckmccready/cavalier_contours/pull/18)).
 
 ### Changed 🔧
 
