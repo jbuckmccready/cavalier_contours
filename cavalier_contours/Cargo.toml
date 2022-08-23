@@ -6,6 +6,7 @@ edition = "2018"
 keywords = ["algorithm", "2d", "computational", "geometry", "spatial"]
 license = "MIT OR Apache-2.0"
 name = "cavalier_contours"
+readme = "../README.md"
 repository = "https://github.com/jbuckmccready/cavalier_contours"
 version = "0.2.0"
 
