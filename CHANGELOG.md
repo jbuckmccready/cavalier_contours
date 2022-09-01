@@ -30,6 +30,11 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ### Fixed 🐛
 
+- Fixed `PlineSource::remove_redundant` to use epsilon values in all fuzzy compares. Previously
+  used default epsilon value from Num trait in some comparisons. If epsilon value passed in is less
+  than default Num trait value (`1e-8` for `f32` and `f64` values) then it is more aggressive in
+  removing vertexes.
+- Fixed pline `find_intersects` function to use epsilon parameter in all cases.
 - Fixed boolean operation bugs caused by `line_circle_intr` numerical stability problem,
   inconsistencies between epsilon values used across functions, and lack of scaling parametric t
   values and angles for fuzzy comparing with epsilon values

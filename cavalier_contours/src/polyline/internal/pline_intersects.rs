@@ -416,7 +416,7 @@ where
     for intr in result.basic_intersects.iter() {
         if possible_duplicates1.contains(&intr.start_index1) {
             let start_pt1 = pline1.at(intr.start_index1).pos();
-            if intr.point.fuzzy_eq(start_pt1) {
+            if intr.point.fuzzy_eq_eps(start_pt1, pos_equal_eps) {
                 // skip including the intersect
                 continue;
             }
@@ -424,7 +424,7 @@ where
 
         if possible_duplicates2.contains(&intr.start_index2) {
             let start_pt2 = pline2.at(intr.start_index2).pos();
-            if intr.point.fuzzy_eq(start_pt2) {
+            if intr.point.fuzzy_eq_eps(start_pt2, pos_equal_eps) {
                 // skip including the intersect
                 continue;
             }

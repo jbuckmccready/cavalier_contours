@@ -536,10 +536,13 @@ pub trait PlineSource {
                     return true;
                 }
 
-                // check if collinear points
-                (v1.x * (v2.y - v3.y) + v2.x * (v3.y - v1.y) + v3.x * (v1.y - v2.y)).fuzzy_eq_zero() &&
-            // and check if same direction
-            (v3.pos() - v2.pos()).dot(v2.pos() - v1.pos()) > Self::Num::zero()
+                let collinear =
+                    (v1.x * (v2.y - v3.y) + v2.x * (v3.y - v1.y) + v3.x * (v1.y - v2.y))
+                        .fuzzy_eq_zero_eps(pos_equal_eps);
+                let same_direction =
+                    (v3.pos() - v2.pos()).dot(v2.pos() - v1.pos()) > -pos_equal_eps;
+
+                collinear && same_direction
             };
 
         let mut v1 = self.at(0);
@@ -614,15 +617,23 @@ pub trait PlineSource {
 
                     let (arc_radius2, arc_center2) = seg_arc_radius_and_center(v2, v3);
 
-                    if arc_radius1.fuzzy_eq(arc_radius2) && arc_center1.fuzzy_eq(arc_center2) {
+                    if arc_radius1.fuzzy_eq_eps(arc_radius2, pos_equal_eps)
+                        && arc_center1.fuzzy_eq_eps(arc_center2, pos_equal_eps)
+                    {
                         let angle1 = angle(arc_center1, v1.pos());
                         let angle2 = angle(arc_center1, v2.pos());
                         let angle3 = angle(arc_center1, v3.pos());
                         let total_sweep =
                             delta_angle(angle1, angle2).abs() + delta_angle(angle2, angle3).abs();
 
+                        let avg_radius = (arc_radius1 + arc_radius2) / Self::Num::two();
+
                         // can only combine vertexes if total sweep will still be less than PI
-                        if total_sweep <= Self::Num::pi() {
+                        // multiplying by average radius for fuzzy compare to have numbers in scale
+                        // of epsilon
+                        if (avg_radius * total_sweep)
+                            .fuzzy_lt_eps(avg_radius * Self::Num::pi(), pos_equal_eps)
+                        {
                             let bulge = if v1_bulge_is_pos {
                                 bulge_from_angle(total_sweep)
                             } else {
@@ -738,13 +749,19 @@ pub trait PlineSource {
 
                 let (arc_radius2, arc_center2) = seg_arc_radius_and_center(v2, v3);
 
-                if arc_radius1.fuzzy_eq(arc_radius2) && arc_center1.fuzzy_eq(arc_center2) {
+                if arc_radius1.fuzzy_eq_eps(arc_radius2, pos_equal_eps)
+                    && arc_center1.fuzzy_eq_eps(arc_center2, pos_equal_eps)
+                {
                     let angle1 = angle(arc_center1, v1.pos());
                     let angle2 = angle(arc_center1, v2.pos());
                     let angle3 = angle(arc_center1, v3.pos());
                     let total_sweep =
                         delta_angle(angle1, angle2).abs() + delta_angle(angle2, angle3).abs();
-                    if total_sweep <= Self::Num::pi() {
+
+                    let avg_radius = (arc_radius1 + arc_radius2) / Self::Num::two();
+                    if (avg_radius * total_sweep)
+                        .fuzzy_lt_eps(avg_radius * Self::Num::pi(), pos_equal_eps)
+                    {
                         let bulge = if v1_bulge_is_pos {
                             bulge_from_angle(total_sweep)
                         } else {

@@ -251,6 +251,7 @@ where
         (start_angle, sweep_angle)
     };
 
+    // helper function to test if both arcs sweep a point
     let both_arcs_sweep_point = |pt: Vector2<T>| -> bool {
         point_within_arc_sweep(
             arc1_center,
@@ -269,6 +270,34 @@ where
         )
     };
 
+    // helper function to test if a point lies on arc1 segment
+    let point_lies_on_arc1 = |pt: Vector2<T>| -> bool {
+        point_within_arc_sweep(
+            arc1_center,
+            v1.pos(),
+            v2.pos(),
+            v1.bulge_is_neg(),
+            pt,
+            pos_equal_eps,
+        ) && dist_squared(pt, arc1_center)
+            .sqrt()
+            .fuzzy_eq_eps(arc1_radius, pos_equal_eps)
+    };
+
+    // helper function to test if a point lies on arc2 segment
+    let point_lies_on_arc2 = |pt: Vector2<T>| -> bool {
+        point_within_arc_sweep(
+            arc2_center,
+            u1.pos(),
+            u2.pos(),
+            u1.bulge_is_neg(),
+            pt,
+            pos_equal_eps,
+        ) && dist_squared(pt, arc2_center)
+            .sqrt()
+            .fuzzy_eq_eps(arc2_radius, pos_equal_eps)
+    };
+
     let intr_result = circle_circle_intr(
         arc1_radius,
         arc1_center,
@@ -280,23 +309,122 @@ where
     match intr_result {
         CircleCircleIntr::NoIntersect => NoIntersect,
         CircleCircleIntr::TangentIntersect { point } => {
-            if both_arcs_sweep_point(point) {
+            // first check if end points lie on arcs and substitute with end point if so to be
+            // consistent with stickiness to end points done in other cases (e.g., line-arc
+            // intersect)
+            if point_lies_on_arc1(u1.pos()) {
+                TangentIntersect { point: u1.pos() }
+            } else if point_lies_on_arc1(u2.pos()) {
+                TangentIntersect { point: u2.pos() }
+            } else if point_lies_on_arc2(v1.pos()) {
+                TangentIntersect { point: v1.pos() }
+            } else if point_lies_on_arc2(v2.pos()) {
+                TangentIntersect { point: v2.pos() }
+            } else if both_arcs_sweep_point(point) {
                 TangentIntersect { point }
             } else {
                 NoIntersect
             }
         }
         CircleCircleIntr::TwoIntersects { point1, point2 } => {
+            // determine if end points lie on arcs and substitute with end points if so to be
+            // consistent with stickiness to end points done in other cases (e.g., line-arc
+            // intersect)
+            let mut end_point_intrs: [Option<Vector2<T>>; 2] = [None; 2];
+            // helper function to collect end point intersects
+            let mut try_add_end_point_intr = |intr: Vector2<T>| {
+                for slot in end_point_intrs.iter_mut() {
+                    match slot {
+                        Some(pt) => {
+                            if pt.fuzzy_eq_eps(intr, pos_equal_eps) {
+                                // duplicate point, skip it (end point from both arcs touch)
+                                break;
+                            }
+                        }
+                        None => {
+                            // insert the end point as intersect
+                            *slot = Some(intr);
+                            break;
+                        }
+                    }
+                }
+            };
+
+            if point_lies_on_arc1(u1.pos()) {
+                try_add_end_point_intr(u1.pos());
+            }
+
+            if point_lies_on_arc1(u2.pos()) {
+                try_add_end_point_intr(u2.pos());
+            }
+
+            if point_lies_on_arc2(v1.pos()) {
+                try_add_end_point_intr(v1.pos());
+            }
+
+            if point_lies_on_arc2(v2.pos()) {
+                try_add_end_point_intr(v2.pos());
+            }
+
             let pt1_in_sweep = both_arcs_sweep_point(point1);
             let pt2_in_sweep = both_arcs_sweep_point(point2);
             if pt1_in_sweep && pt2_in_sweep {
-                TwoIntersects { point1, point2 }
+                match (end_point_intrs[0], end_point_intrs[1]) {
+                    (None, None) => TwoIntersects { point1, point2 },
+                    (None, Some(end_pt)) | (Some(end_pt), None) => {
+                        if dist_squared(end_pt, point1) < dist_squared(end_pt, point2) {
+                            TwoIntersects {
+                                point1: end_pt,
+                                point2,
+                            }
+                        } else {
+                            TwoIntersects {
+                                point1,
+                                point2: end_pt,
+                            }
+                        }
+                    }
+                    (Some(end_pt1), Some(end_pt2)) => {
+                        if dist_squared(end_pt1, point1) < dist_squared(end_pt2, point1) {
+                            TwoIntersects {
+                                point1: end_pt1,
+                                point2: end_pt2,
+                            }
+                        } else {
+                            TwoIntersects {
+                                point1: end_pt2,
+                                point2: end_pt1,
+                            }
+                        }
+                    }
+                }
             } else if pt1_in_sweep {
-                OneIntersect { point: point1 }
+                match (end_point_intrs[0], end_point_intrs[1]) {
+                    (None, None) => OneIntersect { point: point1 },
+                    (None, Some(end_pt)) | (Some(end_pt), None) => OneIntersect { point: end_pt },
+                    (Some(end_pt1), Some(end_pt2)) => TwoIntersects {
+                        point1: end_pt1,
+                        point2: end_pt2,
+                    },
+                }
             } else if pt2_in_sweep {
-                OneIntersect { point: point2 }
+                match (end_point_intrs[0], end_point_intrs[1]) {
+                    (None, None) => OneIntersect { point: point2 },
+                    (None, Some(end_pt)) | (Some(end_pt), None) => OneIntersect { point: end_pt },
+                    (Some(end_pt1), Some(end_pt2)) => TwoIntersects {
+                        point1: end_pt1,
+                        point2: end_pt2,
+                    },
+                }
             } else {
-                NoIntersect
+                match (end_point_intrs[0], end_point_intrs[1]) {
+                    (None, None) => NoIntersect,
+                    (None, Some(end_pt)) | (Some(end_pt), None) => OneIntersect { point: end_pt },
+                    (Some(end_pt1), Some(end_pt2)) => TwoIntersects {
+                        point1: end_pt1,
+                        point2: end_pt2,
+                    },
+                }
             }
         }
         CircleCircleIntr::Overlapping => {
