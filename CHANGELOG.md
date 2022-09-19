@@ -24,6 +24,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - Reimplemented `line_circle_intr` function for improved numerical stability.
 - Added epsilon parameter to `parametric_from_point` function to allow consistency with other
   calculations using epsilon values for fuzzy comparing.
+- Reduce error in calculation done in `parametric_from_point` by using larger component difference
+  rather than explicitly checking for vertical line case.
 - Added epsilon parameter to `point_within_arc_sweep` function to allow for consistency with other
   calculations using epsilon values for fuzzy comparing.
 - Added `#[inline]` attribute to all of the small Vector2 and base math functions.
