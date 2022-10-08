@@ -12,7 +12,7 @@ use crate::core::{math::Vector2, traits::Real};
 /// See [angle_from_bulge](crate::core::math::angle_from_bulge) and
 /// [bulge_from_angle](crate::core::math::bulge_from_angle) for functions to convert between bulge
 /// arc sweep angle.
-#[derive(Debug, Copy, Clone, Default, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct PlineVertex<T = f64> {
     /// X coordinate position for the vertex.
     pub x: T,

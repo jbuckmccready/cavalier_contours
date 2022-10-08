@@ -648,7 +648,7 @@ where
 }
 
 /// Enum used for view data validation debugging and asserting.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ViewDataValidation<T> {
     SourceHasNoSegments,
     OffsetOutOfRange {
