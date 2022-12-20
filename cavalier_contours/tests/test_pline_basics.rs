@@ -867,6 +867,31 @@ fn remove_redundant() {
         assert_fuzzy_eq!(result[0], PlineVertex::new(-0.5, 0.0, 1.0));
         assert_fuzzy_eq!(result[1], PlineVertex::new(0.5, 0.0, 1.0));
     }
+
+    {
+        // n equal points
+        let mut polyline1 = Polyline::with_capacity(3, false);
+        polyline1.add(0.0, 0.0, 0.0);
+        polyline1.add(0.0, 0.0, 0.0);
+        polyline1.add(0.0, 0.0, 0.0);
+        let mut polyline2 = Polyline::with_capacity(3, false);
+        polyline2.add(1.0, 1.0, 0.0);
+        polyline2.add(1.0, 1.0, 0.0);
+        polyline2.add(1.0, 1.0, 1.0);
+        let mut polyline3 = Polyline::with_capacity(2, false);
+        polyline3.add(2.0, 2.0, 0.0);
+        polyline3.add(2.0, 2.0, 1.0);
+
+        let r1 = polyline1.remove_redundant(1e-5).unwrap();
+        let r2 = polyline2.remove_redundant(1e-5).unwrap();
+        let r3 = polyline3.remove_redundant(1e-5).unwrap();
+        assert_eq!(r1.vertex_count(), 1);
+        assert_eq!(r2.vertex_count(), 1);
+        assert_eq!(r3.vertex_count(), 1);
+        assert_fuzzy_eq!(r1[0], PlineVertex::new(0.0, 0.0, 0.0));
+        assert_fuzzy_eq!(r2[0], PlineVertex::new(1.0, 1.0, 1.0));
+        assert_fuzzy_eq!(r3[0], PlineVertex::new(2.0, 2.0, 1.0));
+    }
 }
 
 #[test]
