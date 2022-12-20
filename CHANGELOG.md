@@ -46,6 +46,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   ([#22](https://github.com/jbuckmccready/cavalier_contours/pull/22)).
 - Fixed `PlineViewData::from_new_start` to not discard bulge value if start point lies on top of the
   first vertex of a closed polyline, and added tests to cover case.
+- Fixed pline `remove_redundant` panic when there was more than 2 equal points at start
+  ([#26](https://github.com/jbuckmccready/cavalier_contours/pull/26)).
 
 ## 0.2.0 - 2022-05-12
 
