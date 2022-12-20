@@ -514,13 +514,11 @@ pub trait PlineSource {
         }
 
         if vc == 2 {
-            if self
-                .at(0)
-                .pos()
-                .fuzzy_eq_eps(self.at(1).pos(), pos_equal_eps)
-            {
+            let v1 = self.at(0);
+            let v2 = self.at(1);
+            if v1.pos().fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
                 let mut result = Self::OutputPolyline::with_capacity(1, self.is_closed());
-                result.add_vertex(self.at(0));
+                result.add_vertex(v2); // take bulge from last vertex
                 return Some(result);
             }
             return None;
@@ -552,7 +550,7 @@ pub trait PlineSource {
         let mut i = 2;
         while v1.pos().fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
             v1.bulge = v2.bulge;
-            if i >= vc { break; }
+            if i >= vc { break; } //check for reaching the end of polyline
             v2 = self.at(i);
             i += 1;
         }
@@ -564,6 +562,7 @@ pub trait PlineSource {
             pl.add_vertex(v1);
             Some(pl)
         };
+        // if end is reached return polyline with the only vertex
         if i >= vc { return result; }
 
         let mut v1_v2_arc: Option<(Self::Num, Vector2<Self::Num>)> = None;
