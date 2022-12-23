@@ -9,3 +9,4 @@ mod macros;
 #[macro_use]
 pub mod core;
 pub mod polyline;
+pub mod shape_algorithms;

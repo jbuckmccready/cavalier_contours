@@ -646,7 +646,7 @@ where
 }
 
 #[inline]
-fn point_valid_for_offset<P, T>(
+pub fn point_valid_for_offset<P, T>(
     polyline: &P,
     offset: T,
     aabb_index: &StaticAABB2DIndex<T>,
