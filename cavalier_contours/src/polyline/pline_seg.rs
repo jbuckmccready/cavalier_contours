@@ -186,7 +186,7 @@ where
         );
     }
 
-    // cw, rotate vector from center to pointOnCurve -90 degrees
+    // cw, rotate vector from center to point_on_seg -90 degrees
     Vector2::new(
         point_on_seg.y - arc_center.y,
         -(point_on_seg.x - arc_center.x),
