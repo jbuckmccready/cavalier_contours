@@ -758,7 +758,7 @@ where
         intr_list.sort_unstable_by(|&si1, &si2| {
             let dist1 = dist_squared(si1, start_pos);
             let dist2 = dist_squared(si2, start_pos);
-            dist1.partial_cmp(&dist2).unwrap()
+            dist1.total_cmp(&dist2)
         });
     }
 
@@ -1127,7 +1127,7 @@ where
         intr_list.sort_unstable_by(|&si1, &si2| {
             let dist1 = dist_squared(si1, start_pos);
             let dist2 = dist_squared(si2, start_pos);
-            dist1.partial_cmp(&dist2).unwrap()
+            dist1.total_cmp(&dist2)
         });
     }
 

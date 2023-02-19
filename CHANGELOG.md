@@ -29,6 +29,9 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - Added epsilon parameter to `point_within_arc_sweep` function to allow for consistency with other
   calculations using epsilon values for fuzzy comparing.
 - Added `#[inline]` attribute to all of the small Vector2 and base math functions.
+- Updated `static_aabb2d_index` crate to 0.7.0 (for use of `IndexableNum::total_cmp`).
+- Replaced all uses for `PartialOrd::partial_cmp` with `IndexableNum::total_cmp` to avoid panics
+  when `partial_cmp` returns `None` (e.g., if float is a NaN) and to eliminate branch in compare.
 
 ### Fixed 🐛
 

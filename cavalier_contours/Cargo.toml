@@ -16,4 +16,4 @@ allow_unsafe = [] # feature has no explicit dependencies
 [dependencies]
 num-traits = "0.2"
 serde = {version = "1.0", optional = true, features = ["derive"]}
-static_aabb2d_index = "0.6"
+static_aabb2d_index = "0.7"

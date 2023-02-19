@@ -693,7 +693,7 @@ where
             let start = pline2.at(intr_a.start_index2).pos();
             let dist1 = dist_squared(start, intr_a.point1);
             let dist2 = dist_squared(start, intr_b.point1);
-            dist1.partial_cmp(&dist2).unwrap()
+            dist1.total_cmp(&dist2)
         })
     });
 

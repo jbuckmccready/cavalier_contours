@@ -190,7 +190,7 @@ pub fn slice_at_intersects<P, T, F>(
         intr_list.sort_unstable_by(|intr1, intr2| {
             let dist1 = dist_squared(intr1.pos, start_pos);
             let dist2 = dist_squared(intr2.pos, start_pos);
-            dist1.partial_cmp(&dist2).unwrap()
+            dist1.total_cmp(&dist2)
         });
     }
 
