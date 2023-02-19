@@ -1,5 +1,6 @@
 //! 2D geometry polyline/shape library for offsetting, combining, computing areas, path lengths,
 //! winding numbers, etc.
+#![forbid(unsafe_code)]
 
 pub use static_aabb2d_index;
 

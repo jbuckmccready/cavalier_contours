@@ -11,6 +11,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - Added doc tests and improved documentation to intersect functions `circle_circle_intr`,
   `line_circle_intr`, and `line_line_intr`
   ([#18](https://github.com/jbuckmccready/cavalier_contours/pull/18)).
+  - Added `#![forbid(unsafe_code)]` to main `cavalier_contours` crate to ensure no use of unsafe
+    (obviously does not apply to the `cavalier_contours_ffi` crate).
 
 ### Changed 🔧
 
