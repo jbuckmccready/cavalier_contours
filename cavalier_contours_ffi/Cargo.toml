@@ -7,11 +7,11 @@ keywords = ["algorithm", "2d", "computational", "geometry", "spatial"]
 license = "MIT OR Apache-2.0"
 name = "cavalier_contours_ffi"
 repository = "https://github.com/jbuckmccready/cavalier_contours"
-version = "0.2.0"
+version = "0.3.0"
 
 [lib]
 # using "lib" so this crate can be referenced and used directly by rust and "cdylib" so it can be used as a dynamic lib
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-cavalier_contours = {version = "0.2", path = "../cavalier_contours"}
+cavalier_contours = {version = "0.3", path = "../cavalier_contours"}
