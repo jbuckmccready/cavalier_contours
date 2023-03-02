@@ -141,8 +141,11 @@ where
     // iterate all segment bounding boxes in the spatial index querying itself to test for self
     // intersects
     let mut cf = C::continuing();
-    for (box_index, aabb) in aabb_index.item_boxes().iter().enumerate() {
-        let i = aabb_index.map_all_boxes_index(box_index);
+    for (&i, aabb) in aabb_index
+        .item_indices()
+        .iter()
+        .zip(aabb_index.item_boxes().iter())
+    {
         let j = polyline.next_wrapping_index(i);
         let v1 = polyline.at(i);
         let v2 = polyline.at(j);

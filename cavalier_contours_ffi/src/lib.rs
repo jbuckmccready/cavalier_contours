@@ -1055,9 +1055,8 @@ pub unsafe extern "C" fn cavc_aabbindex_f(aabbindex: *mut cavc_aabbindex) {
     }
 }
 
-/// Wraps the [StaticAABB2DIndex] extent methods (gets total extents of the aabb index).
-///
-/// See: [StaticAABB2DIndex::min_x], [StaticAABB2DIndex::min_y], [StaticAABB2DIndex::max_x], [StaticAABB2DIndex::max_y].
+/// Wraps the [`StaticAABB2DIndex::bounds`] method (gets total extents of the aabb index). Writes
+/// NaNs if the index is empty.
 ///
 /// ## Specific Error Codes
 /// * 1 = `aabbindex` is null.
@@ -1080,10 +1079,17 @@ pub unsafe extern "C" fn cavc_aabbindex_get_extents(
             return 1;
         }
 
-        min_x.write((*aabbindex).0.min_x());
-        min_y.write((*aabbindex).0.min_y());
-        max_x.write((*aabbindex).0.max_x());
-        max_y.write((*aabbindex).0.max_y());
+        if let Some(bounds) = (*aabbindex).0.bounds() {
+            min_x.write(bounds.min_x);
+            min_y.write(bounds.min_y);
+            max_x.write(bounds.max_x);
+            max_y.write(bounds.max_y);
+        } else {
+            min_x.write(f64::NAN);
+            min_y.write(f64::NAN);
+            max_x.write(f64::NAN);
+            max_y.write(f64::NAN);
+        }
         0
     })
 }
