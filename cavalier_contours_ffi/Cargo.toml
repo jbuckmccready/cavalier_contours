@@ -2,7 +2,7 @@
 authors = ["Buck McCready <jbuckmccready@gmail.com>"]
 categories = ["algorithms", "data-structures", "graphics", "mathematics"]
 description = "C foreign function interface for the cavalier_contours crate"
-edition = "2018"
+edition = "2021"
 keywords = ["algorithm", "2d", "computational", "geometry", "spatial"]
 license = "MIT OR Apache-2.0"
 name = "cavalier_contours_ffi"

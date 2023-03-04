@@ -14,7 +14,6 @@ use crate::{
         PlineSource, PlineSourceMut, PlineVertex, PlineViewData,
     },
 };
-use core::panic;
 use static_aabb2d_index::{Control, StaticAABB2DIndex, StaticAABB2DIndexBuilder};
 use std::collections::BTreeMap;
 

@@ -6,7 +6,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ### Changed 🔧
 
-- Updated `StaticAABB2DIndex` dependency to version 1.0
+- Updated `StaticAABB2DIndex` dependency to version 1.0.
+- Bumped rust edition to 2021.
 
 ## 0.3.0 - 2023-02-18
 
