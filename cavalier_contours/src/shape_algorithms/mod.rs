@@ -34,12 +34,12 @@ impl<T> IndexedPolyline<T>
 where
     T: Real,
 {
-    fn new(polyline: Polyline<T>) -> Option<Self> {
-        let spatial_index = polyline.create_approx_aabb_index()?;
-        Some(Self {
+    pub fn new(polyline: Polyline<T>) -> Self {
+        let spatial_index = polyline.create_approx_aabb_index();
+        Self {
             polyline,
             spatial_index,
-        })
+        }
     }
 
     fn parallel_offset(&self, offset: T) -> Vec<Polyline<T>> {
@@ -84,6 +84,13 @@ pub struct Shape<T: Real> {
     pub plines_index: StaticAABB2DIndex<T>,
 }
 
+#[derive(Debug, Clone)]
+pub struct DebugShape<T> {
+    pub slice_point_sets: Vec<SlicePointSet<T>>,
+    pub slice_count: usize,
+    pub slice_start_pts: Vec<Vector2<T>>,
+}
+
 impl<T> Shape<T>
 where
     T: Real,
@@ -96,11 +103,52 @@ where
         if i < s1.len() {
             &s1[i]
         } else {
-            &s2[i]
+            &s2[i - s1.len()]
         }
     }
 
-    pub fn parallel_offset(&self, offset: T) -> Option<Self> {
+    pub fn from_plines<I>(plines: I) -> Self
+    where
+        I: IntoIterator<Item = Polyline<T>>,
+    {
+        let mut ccw_plines = Vec::new();
+        let mut cw_plines = Vec::new();
+        for pl in plines.into_iter() {
+            if pl.orientation() == PlineOrientation::CounterClockwise {
+                ccw_plines.push(IndexedPolyline::new(pl));
+            } else {
+                cw_plines.push(IndexedPolyline::new(pl));
+            }
+        }
+
+        let plines_index = {
+            let mut b = StaticAABB2DIndexBuilder::new(ccw_plines.len() + cw_plines.len());
+
+            let mut add_all_bounds = |plines: &[IndexedPolyline<T>]| {
+                for pline in plines.iter() {
+                    let bounds = pline
+                        .spatial_index
+                        .bounds()
+                        .expect("expect non-empty polyline");
+
+                    b.add(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
+                }
+            };
+
+            add_all_bounds(&ccw_plines);
+            add_all_bounds(&cw_plines);
+
+            b.build().unwrap()
+        };
+
+        Self {
+            ccw_plines,
+            cw_plines,
+            plines_index,
+        }
+    }
+
+    pub fn parallel_offset(&self, offset: T) -> Option<(Self, DebugShape<T>)> {
         // TODO: make part of options parameter.
         let pos_equal_eps = T::from(1e-5).unwrap();
         let offset_tol = T::from(1e-4).unwrap();
@@ -118,8 +166,7 @@ where
 
                 let ccw_offset_loop = OffsetLoop {
                     parent_loop_idx: parent_idx,
-                    indexed_pline: IndexedPolyline::new(offset_pline)
-                        .expect("failed to offset shape polyline"),
+                    indexed_pline: IndexedPolyline::new(offset_pline),
                 };
                 ccw_offset_loops.push(ccw_offset_loop);
             }
@@ -132,8 +179,7 @@ where
                 let area = offset_pline.area();
                 let offset_loop = OffsetLoop {
                     parent_loop_idx: parent_idx,
-                    indexed_pline: IndexedPolyline::new(offset_pline)
-                        .expect("failed to offset shape polyline"),
+                    indexed_pline: IndexedPolyline::new(offset_pline),
                 };
 
                 if area < T::zero() {
@@ -155,19 +201,21 @@ where
         let offset_loops_index = {
             let mut b =
                 StaticAABB2DIndexBuilder::new(ccw_offset_loops.len() + cw_offset_loops.len());
-            for index in ccw_offset_loops
-                .iter()
-                .map(|p| &p.indexed_pline.spatial_index)
-            {
-                b.add(index.min_x(), index.min_y(), index.max_x(), index.max_y());
-            }
 
-            for index in cw_offset_loops
-                .iter()
-                .map(|p| &p.indexed_pline.spatial_index)
-            {
-                b.add(index.min_x(), index.min_y(), index.max_x(), index.max_y());
-            }
+            let mut add_all_bounds = |loops: &[OffsetLoop<T>]| {
+                for l in loops.iter() {
+                    let bounds = l
+                        .indexed_pline
+                        .spatial_index
+                        .bounds()
+                        .expect("expect non-empty polyline");
+
+                    b.add(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
+                }
+            };
+
+            add_all_bounds(&ccw_offset_loops);
+            add_all_bounds(&cw_offset_loops);
 
             b.build()
                 .expect("failed to build spatial index of offset loop bounds")
@@ -185,11 +233,12 @@ where
         for i in 0..offset_loop_count {
             let loop1 = Self::get_loop(i, &ccw_offset_loops, &cw_offset_loops);
             let spatial_idx1 = &loop1.indexed_pline.spatial_index;
+            let bounds = spatial_idx1.bounds().expect("expect non-empty polyline");
             let query_results = offset_loops_index.query_with_stack(
-                spatial_idx1.min_x(),
-                spatial_idx1.min_y(),
-                spatial_idx1.max_x(),
-                spatial_idx1.max_y(),
+                bounds.min_x,
+                bounds.min_y,
+                bounds.max_x,
+                bounds.max_y,
                 &mut query_stack,
             );
 
@@ -352,7 +401,7 @@ where
                         let seg_start = curr_loop.indexed_pline.polyline.at(a.seg_idx).pos();
                         let dist1 = dist_squared(a.pos, seg_start);
                         let dist2 = dist_squared(b.pos, seg_start);
-                        dist1.partial_cmp(&dist2).unwrap()
+                        dist1.total_cmp(&dist2)
                     })
                 });
 
@@ -390,23 +439,23 @@ where
                                 });
                             }
                         }
+                    }
 
-                        // collect slice from last to start
-                        let pt1 = sorted_intrs.last().unwrap();
-                        let pt2 = &sorted_intrs[0];
-                        let v_data = create_slice(pt1, pt2, &curr_loop.indexed_pline.polyline);
-                        if let Some(v_data) = v_data {
-                            if is_slice_valid(
-                                &v_data,
-                                &curr_loop.indexed_pline.polyline,
-                                curr_loop.parent_loop_idx,
-                                &mut query_stack,
-                            ) {
-                                slices_data.push(DissectedSlice {
-                                    source_idx: loop_idx,
-                                    v_data,
-                                });
-                            }
+                    // collect slice from last to start
+                    let pt1 = sorted_intrs.last().unwrap();
+                    let pt2 = &sorted_intrs[0];
+                    let v_data = create_slice(pt1, pt2, &curr_loop.indexed_pline.polyline);
+                    if let Some(v_data) = v_data {
+                        if is_slice_valid(
+                            &v_data,
+                            &curr_loop.indexed_pline.polyline,
+                            curr_loop.parent_loop_idx,
+                            &mut query_stack,
+                        ) {
+                            slices_data.push(DissectedSlice {
+                                source_idx: loop_idx,
+                                v_data,
+                            });
                         }
                     }
                 }
@@ -490,15 +539,15 @@ where
                 );
 
                 if query_results.is_empty() {
-                    if current_pline.vertex_count() > 1 {
+                    if current_pline.vertex_count() > 2 {
                         current_pline.remove_last();
                         current_pline.set_is_closed(true);
                     }
                     let is_ccw = current_pline.orientation() == PlineOrientation::CounterClockwise;
                     if is_ccw {
-                        ccw_plines_result.push(IndexedPolyline::new(current_pline).unwrap());
+                        ccw_plines_result.push(IndexedPolyline::new(current_pline));
                     } else {
-                        cw_plines_result.push(IndexedPolyline::new(current_pline).unwrap());
+                        cw_plines_result.push(IndexedPolyline::new(current_pline));
                     }
                     break;
                 }
@@ -515,7 +564,6 @@ where
                     })
                     .unwrap_or_else(|| query_results[0]);
 
-                current_pline.remove_last();
                 visited_slices_idxs[current_index] = true;
             }
         }
@@ -523,30 +571,41 @@ where
         let plines_index = {
             let mut b =
                 StaticAABB2DIndexBuilder::new(ccw_plines_result.len() + cw_plines_result.len());
-            for pl in ccw_plines_result.iter() {
-                b.add(
-                    pl.spatial_index.min_x(),
-                    pl.spatial_index.min_y(),
-                    pl.spatial_index.max_x(),
-                    pl.spatial_index.max_y(),
-                );
-            }
-            for pl in cw_plines_result.iter() {
-                b.add(
-                    pl.spatial_index.min_x(),
-                    pl.spatial_index.min_y(),
-                    pl.spatial_index.max_x(),
-                    pl.spatial_index.max_y(),
-                );
-            }
+
+            let mut add_all_bounds = |plines: &[IndexedPolyline<T>]| {
+                for pline in plines.iter() {
+                    let bounds = pline
+                        .spatial_index
+                        .bounds()
+                        .expect("expect non-empty polyline");
+
+                    b.add(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
+                }
+            };
+
+            add_all_bounds(&ccw_plines_result);
+            add_all_bounds(&cw_plines_result);
+
             b.build().unwrap()
         };
 
-        Some(Shape {
-            ccw_plines: ccw_plines_result,
-            cw_plines: cw_plines_result,
-            plines_index,
-        })
+        let d = DebugShape {
+            slice_point_sets,
+            slice_count: slices_data.len(),
+            slice_start_pts: slices_data
+                .iter()
+                .map(|s| s.v_data.updated_start.pos())
+                .collect(),
+        };
+
+        Some((
+            Shape {
+                ccw_plines: ccw_plines_result,
+                cw_plines: cw_plines_result,
+                plines_index,
+            },
+            d,
+        ))
     }
 }
 
@@ -554,7 +613,7 @@ where
 
 // intersects between two offset loops
 #[derive(Debug, Clone)]
-struct SlicePointSet<T> {
+pub struct SlicePointSet<T> {
     loop_idx1: usize,
     loop_idx2: usize,
     slice_points: Vec<PlineBasicIntersect<T>>,
