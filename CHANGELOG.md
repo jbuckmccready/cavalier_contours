@@ -9,6 +9,11 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - Updated `StaticAABB2DIndex` dependency to version 1.0.
 - Bumped rust edition to 2021.
 
+### Fixed 🐛
+
+- Fixed `PlineView::from_slice_points` to handle wrapping on same segment
+  ([#28](https://github.com/jbuckmccready/cavalier_contours/pull/28))
+
 ## 0.3.0 - 2023-02-18
 
 ### Added ⭐
