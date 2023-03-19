@@ -1,5 +1,8 @@
 use crate::{
-    core::{math::Vector2, traits::Real},
+    core::{
+        math::{dist_squared, Vector2},
+        traits::Real,
+    },
     polyline::seg_split_at_point,
 };
 
@@ -514,7 +517,26 @@ where
             }
         };
 
-        let traverse_count = source.fwd_wrapping_dist(start_index, end_index);
+        let traverse_count = {
+            let index_dist = source.fwd_wrapping_dist(start_index, end_index);
+            if index_dist == 0
+                && source.is_closed()
+                && !start_point.fuzzy_eq_eps(end_point, pos_equal_eps)
+            {
+                let seg_start = source.at(start_index).pos();
+                let dist1 = dist_squared(seg_start, start_point);
+                let dist2 = dist_squared(seg_start, end_point);
+                if dist1 < dist2 {
+                    // not wrapping around polyline, on same segment
+                    0
+                } else {
+                    // wrapping around polyline back to same segment
+                    source.vertex_count()
+                }
+            } else {
+                index_dist
+            }
+        };
 
         // compute updated start vertex
         let updated_start = {
