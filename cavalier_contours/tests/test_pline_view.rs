@@ -405,6 +405,68 @@ fn from_slice_points_multi_seg() {
         );
         assert!(slice.is_none());
     }
+
+    // slice from middle of first segment wrapping back to start of first segment
+    {
+        let slice = PlineViewData::from_slice_points(
+            &pline,
+            Vector2::new(0.5, -0.5),
+            0,
+            Vector2::new(0.0, 0.0),
+            0,
+            POS_EQ_EPS,
+        )
+        .unwrap();
+
+        let pline_from_slice = Polyline::create_from(&slice.view(&pline));
+        let bulge = bulge_from_angle(FRAC_PI_2);
+        let expected_result = pline_open![
+            (0.5, -0.5, bulge),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 0.0, 0.0)
+        ];
+        assert_fuzzy_eq!(&pline_from_slice, &expected_result);
+    }
+
+    // slice from middle of second segment wrapping back to middle of first segment
+    {
+        let slice = PlineViewData::from_slice_points(
+            &pline,
+            Vector2::new(1.0, 0.5),
+            1,
+            Vector2::new(0.5, -0.5),
+            0,
+            POS_EQ_EPS,
+        )
+        .unwrap();
+
+        let pline_from_slice = Polyline::create_from(&slice.view(&pline));
+        let bulge = bulge_from_angle(FRAC_PI_2);
+        let expected_result = pline_open![
+            (1.0, 0.5, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 0.0, bulge),
+            (0.5, -0.5, 0.0)
+        ];
+        assert_fuzzy_eq!(&pline_from_slice, &expected_result);
+    }
+}
+
+#[test]
+#[should_panic(
+    expected = "start index should be less than or equal to end index if polyline is open"
+)]
+fn attempting_to_wrap_slice_on_open_pline() {
+    let pline = pline_open![(0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0)];
+    let _ = PlineViewData::from_slice_points(
+        &pline,
+        Vector2::new(1.0, 0.5),
+        1,
+        Vector2::new(0.5, -0.5),
+        0,
+        POS_EQ_EPS,
+    );
 }
 
 #[test]
