@@ -5,19 +5,13 @@ pub mod math;
 pub mod traits;
 
 /// Basic control flow enum that can be used when visiting query results.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum Control<B = ()> {
     /// Indicates to the query function to continue visiting results.
+    #[default]
     Continue,
     /// Indicates to the query function to stop visiting results and return a value.
     Break(B),
-}
-
-impl<B> Default for Control<B> {
-    #[inline]
-    fn default() -> Self {
-        Control::Continue
-    }
 }
 
 impl<B> ControlFlow for Control<B> {

@@ -397,8 +397,8 @@ fn run_pline_boolean_tests(
                 let result = modified_pline1.boolean(&modified_pline2, op);
                 let pos_set_result = create_boolean_property_set(&result.pos_plines);
                 let neg_set_result = create_boolean_property_set(&result.neg_plines);
-                let passed = property_sets_match_abs_a(&pos_set_result, &pos_set_expected)
-                    && property_sets_match_abs_a(&neg_set_result, &neg_set_expected);
+                let passed = property_sets_match_abs_a(&pos_set_result, pos_set_expected)
+                    && property_sets_match_abs_a(&neg_set_result, neg_set_expected);
                 assert!(
                     passed,
                     "property sets do not match\nop: {:?}\nstate1: {:?}\nstate2: {:?}",

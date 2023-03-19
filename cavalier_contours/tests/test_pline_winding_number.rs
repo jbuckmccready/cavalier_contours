@@ -23,7 +23,7 @@ fn point_and_circle() {
         let pt = Vector2::new(2.0, 0.0);
         assert_eq!(pl.winding_number(pt), 0);
 
-        let mut pl = pl.clone();
+        let mut pl = pl;
         pl.invert_direction_mut();
         assert_eq!(pl.winding_number(pt), 0);
     }
@@ -53,7 +53,7 @@ fn point_and_rectangle() {
         let pt = Vector2::new(-1.0, 1.0);
         assert_eq!(pl.winding_number(pt), 0);
 
-        let mut pl = pl.clone();
+        let mut pl = pl;
         pl.invert_direction_mut();
         assert_eq!(pl.winding_number(pt), 0);
     }
@@ -84,7 +84,7 @@ fn multiple_windings() {
         let pt = Vector2::new(2.0, 0.0);
         assert_eq!(pl.winding_number(pt), 0);
 
-        let mut pl = pl.clone();
+        let mut pl = pl;
         pl.invert_direction_mut();
         assert_eq!(pl.winding_number(pt), 0);
     }

@@ -121,10 +121,10 @@ fn tangent_intersect_horizontal() {
 #[test]
 fn tangent_at_start_point() {
     // this is a case that previously failed due to numeric stability issues
-    let p0 = Vector2::new(161.28999999999999, 113.66500000000001);
-    let p1 = Vector2::new(167.63999999999999, 113.66500000000001);
-    let circle_center = Vector2::new(161.28999999999999, 114.30000000000001);
-    let radius = 0.63499999999999801;
+    let p0 = Vector2::new(161.29, 113.665);
+    let p1 = Vector2::new(167.64, 113.665);
+    let circle_center = Vector2::new(161.29, 114.30000000000001);
+    let radius = 0.634_999_999_999_998;
     let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(result, TangentIntersect { t0: 0.0 });
 }
