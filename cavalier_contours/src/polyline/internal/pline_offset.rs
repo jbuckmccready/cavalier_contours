@@ -710,7 +710,7 @@ where
     let pos_equal_eps = options.pos_equal_eps;
     let offset_dist_eps = options.offset_dist_eps;
 
-    let raw_offset_index = raw_offset_polyline.create_approx_aabb_index().unwrap();
+    let raw_offset_index = raw_offset_polyline.create_approx_aabb_index();
     let self_intrs =
         all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, false, pos_equal_eps);
 
@@ -1038,7 +1038,7 @@ where
     let pos_equal_eps = options.pos_equal_eps;
     let offset_dist_eps = options.offset_dist_eps;
 
-    let raw_offset_index = raw_offset_polyline.create_approx_aabb_index().unwrap();
+    let raw_offset_index = raw_offset_polyline.create_approx_aabb_index();
 
     let self_intrs =
         all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, false, pos_equal_eps);
@@ -1489,7 +1489,7 @@ where
     let index = if let Some(x) = options.aabb_index {
         x
     } else {
-        constructed_index = polyline.create_approx_aabb_index().unwrap();
+        constructed_index = polyline.create_approx_aabb_index();
         &constructed_index
     };
 

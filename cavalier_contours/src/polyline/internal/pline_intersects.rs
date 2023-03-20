@@ -323,7 +323,7 @@ where
     let pline1_aabb_index = if let Some(x) = options.pline1_aabb_index {
         x
     } else {
-        constructed_index1 = pline1.create_approx_aabb_index().unwrap();
+        constructed_index1 = pline1.create_approx_aabb_index();
         &constructed_index1
     };
 
@@ -888,15 +888,13 @@ mod global_self_intersect_tests {
         let mut pline = Polyline::new_closed();
         pline.add(0.0, 0.0, 1.0);
         pline.add(2.0, 0.0, 1.0);
-        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index().unwrap());
+        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index());
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
 
         let pline_as_lines = pline.arcs_to_approx_lines(1e-2).unwrap();
-        let intrs = global_self_intersects(
-            &pline_as_lines,
-            &pline_as_lines.create_approx_aabb_index().unwrap(),
-        );
+        let intrs =
+            global_self_intersects(&pline_as_lines, &pline_as_lines.create_approx_aabb_index());
 
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
@@ -907,7 +905,7 @@ mod global_self_intersect_tests {
         let mut pline = Polyline::new_closed();
         pline.add(0.0, 0.0, 1.0);
         pline.add(2.0, 0.0, -1.0);
-        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index().unwrap());
+        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index());
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
     }
@@ -919,16 +917,14 @@ mod global_self_intersect_tests {
         pline.add(0.0, 0.0, 1.0);
         pline.add(2.0, 0.0, 1.0);
         pline.add(0.0, 0.0, 0.0);
-        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index().unwrap());
+        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index());
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
 
         // self intersect at end point is returned since not local self intersect
         let pline_as_lines = pline.arcs_to_approx_lines(1e-2).unwrap();
-        let intrs = global_self_intersects(
-            &pline_as_lines,
-            &pline_as_lines.create_approx_aabb_index().unwrap(),
-        );
+        let intrs =
+            global_self_intersects(&pline_as_lines, &pline_as_lines.create_approx_aabb_index());
 
         assert_eq!(intrs.basic_intersects.len(), 1);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
@@ -950,7 +946,7 @@ mod global_self_intersect_tests {
         pline.add(2.0, 0.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
         pline.add(1.0, 1.0, bulge_from_angle(std::f64::consts::FRAC_PI_2));
         pline.add(0.0, 0.0, 0.0);
-        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index().unwrap());
+        let intrs = global_self_intersects(&pline, &pline.create_approx_aabb_index());
         assert_eq!(intrs.basic_intersects.len(), 1);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
         assert_eq!(intrs.basic_intersects[0].start_index1, 0);

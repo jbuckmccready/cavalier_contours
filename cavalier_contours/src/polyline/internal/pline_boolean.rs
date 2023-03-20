@@ -736,7 +736,7 @@ where
     let pline1_aabb_index = if let Some(x) = options.pline1_aabb_index {
         x
     } else {
-        constructed_index = pline1.create_approx_aabb_index().unwrap();
+        constructed_index = pline1.create_approx_aabb_index();
         &constructed_index
     };
 
