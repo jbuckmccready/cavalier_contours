@@ -7,7 +7,9 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 ### Changed 🔧
 
 - ⚠️ BREAKING: `PlineSource::create_aabb_index` and `PlineSource::create_approx_aabb_index` now
-  just return a `StaticAABB2DIndex` rather than an `Option<StaticAABB2DIndex>`
+  just return a `StaticAABB2DIndex` rather than an `Option<StaticAABB2DIndex>`. The equivalent C api
+  calls `cavc_pline_create_aabbindex` and `cavc_pline_create_approx_aabbindex` also no longer
+  return an error code of 2 when polyline has less than 2 vertexes (empty aabb index is returned).
   ([#29](https://github.com/jbuckmccready/cavalier_contours/pull/29)).
 - Updated `StaticAABB2DIndex` dependency to version 1.0.
 - Bumped rust edition to 2021.
