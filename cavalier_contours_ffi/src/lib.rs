@@ -981,7 +981,6 @@ pub unsafe extern "C" fn cavc_pline_boolean(
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
-/// * 2 = `pline` vertex count is less than 2.
 ///
 /// # Safety
 ///
@@ -999,13 +998,9 @@ pub unsafe extern "C" fn cavc_pline_create_approx_aabbindex(
             return 1;
         }
 
-        match (*pline).0.create_approx_aabb_index() {
-            Some(result) => {
-                aabbindex.write(Box::into_raw(Box::new(cavc_aabbindex(result))));
-                0
-            }
-            None => 2,
-        }
+        let result = (*pline).0.create_approx_aabb_index();
+        aabbindex.write(Box::into_raw(Box::new(cavc_aabbindex(result))));
+        0
     })
 }
 
@@ -1013,7 +1008,6 @@ pub unsafe extern "C" fn cavc_pline_create_approx_aabbindex(
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
-/// * 2 = `pline` vertex count is less than 2.
 ///
 /// # Safety
 ///
@@ -1031,13 +1025,9 @@ pub unsafe extern "C" fn cavc_pline_create_aabbindex(
             return 1;
         }
 
-        match (*pline).0.create_aabb_index() {
-            Some(result) => {
-                aabbindex.write(Box::into_raw(Box::new(cavc_aabbindex(result))));
-                0
-            }
-            None => 2,
-        }
+        let result = (*pline).0.create_aabb_index();
+        aabbindex.write(Box::into_raw(Box::new(cavc_aabbindex(result))));
+        0
     })
 }
 

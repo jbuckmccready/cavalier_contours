@@ -1,4 +1,6 @@
-use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder, AABB};
+use static_aabb2d_index::{
+    IndexableNum, StaticAABB2DIndex, StaticAABB2DIndexBuildError, StaticAABB2DIndexBuilder, AABB,
+};
 
 use crate::{
     core::{
@@ -889,12 +891,13 @@ pub trait PlineSource {
     /// bounding box of the segment but may be larger, this is done for performance. If you want the
     /// actual bounding box index use [PlineSource::create_aabb_index] instead.
     ///
-    /// Returns `None` if polyline vertex count is less than 2 or an error occurs in constructing
-    /// the spatial index.
-    fn create_approx_aabb_index(&self) -> Option<StaticAABB2DIndex<Self::Num>> {
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16`.
+    fn create_approx_aabb_index(&self) -> StaticAABB2DIndex<Self::Num> {
         let vc = self.vertex_count();
         if vc < 2 {
-            return None;
+            return unwrap_spatial_index(StaticAABB2DIndexBuilder::new(0));
         }
 
         let seg_count = if self.is_closed() { vc } else { vc - 1 };
@@ -911,7 +914,7 @@ pub trait PlineSource {
             );
         }
 
-        builder.build().ok()
+        unwrap_spatial_index(builder)
     }
 
     /// Creates a spatial index of all the polyline segments.
@@ -920,12 +923,13 @@ pub trait PlineSource {
     /// `StaticAABB2DIndex`. The bounding boxes are the actual bounding box of the segment, for
     /// performance reasons you may want to use [PlineSource::create_approx_aabb_index].
     ///
-    /// Returns `None` if polyline vertex count is less than 2 or an error occurs in constructing
-    /// the spatial index.
-    fn create_aabb_index(&self) -> Option<StaticAABB2DIndex<Self::Num>> {
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16`.
+    fn create_aabb_index(&self) -> StaticAABB2DIndex<Self::Num> {
         let vc = self.vertex_count();
         if vc < 2 {
-            return None;
+            return unwrap_spatial_index(StaticAABB2DIndexBuilder::new(0));
         }
 
         let seg_count = if self.is_closed() { vc } else { vc - 1 };
@@ -942,7 +946,7 @@ pub trait PlineSource {
             );
         }
 
-        builder.build().ok()
+        unwrap_spatial_index(builder)
     }
 
     /// Find the closest segment point on a polyline to a `point` given.
@@ -1192,7 +1196,7 @@ pub trait PlineSource {
     }
 
     /// Returns a new polyline with all arc segments converted to line segments with some
-    /// `error_distance` or None if T fails to cast to or from usize.
+    /// `error_distance` or `None` if `Self::Num` fails to cast to or from usize.
     ///
     /// `error_distance` is the maximum distance from any line segment to the arc it is
     /// approximating. Line segments are circumscribed by the arc (all line end points lie on the
@@ -1255,6 +1259,10 @@ pub trait PlineSource {
     }
 
     /// Visit self intersects of the polyline using default options.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
     #[inline]
     fn visit_self_intersects<C, V>(&self, visitor: &mut V) -> C
     where
@@ -1265,6 +1273,10 @@ pub trait PlineSource {
     }
 
     /// Visit self intersects of the polyline using options provided.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
     fn visit_self_intersects_opt<C, V>(
         &self,
         visitor: &mut V,
@@ -1287,7 +1299,7 @@ pub trait PlineSource {
         let index = if let Some(x) = options.aabb_index {
             x
         } else {
-            constructed_index = self.create_approx_aabb_index().unwrap();
+            constructed_index = self.create_approx_aabb_index();
             &constructed_index
         };
 
@@ -1307,6 +1319,10 @@ pub trait PlineSource {
     }
 
     /// Find all intersects between two polylines using default options.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
     #[inline]
     fn find_intersects<P>(&self, other: &P) -> PlineIntersectsCollection<Self::Num>
     where
@@ -1316,6 +1332,10 @@ pub trait PlineSource {
     }
 
     /// Find all intersects between two polylines using the options provided.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
     #[inline]
     fn find_intersects_opt<P>(
         &self,
@@ -1335,6 +1355,10 @@ pub trait PlineSource {
     /// is to the right.
     ///
     /// Algorithm will use [PlineOffsetOptions::default] for algorithm options.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
     ///
     /// # Examples
     /// ```
@@ -1360,12 +1384,16 @@ pub trait PlineSource {
     /// `options` is a struct that holds optional parameters. See
     /// [PlineOffsetOptions](crate::polyline::PlineOffsetOptions) for specific parameters.
     ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
     /// # Examples
     /// ```
     /// # use cavalier_contours::polyline::*;
     /// # use cavalier_contours::pline_closed;
     /// let pline = pline_closed![(0.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
-    /// let aabb_index = pline.create_approx_aabb_index().unwrap();
+    /// let aabb_index = pline.create_approx_aabb_index();
     /// let options = PlineOffsetOptions {
     ///     // setting option to handle possible self intersects in the polyline
     ///     handle_self_intersects: true,
@@ -1389,6 +1417,10 @@ pub trait PlineSource {
     /// Perform a boolean `operation` between this polyline and another using default options.
     ///
     /// See [PlineSource::boolean_opt] for more information.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
     ///
     /// # Examples
     /// ```
@@ -1425,6 +1457,10 @@ pub trait PlineSource {
     /// end to end to form them. For the result `pline1` refers to `self`, and `pline2` refers to
     /// `other`.
     ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
     /// # Examples
     /// ```
     /// # use cavalier_contours::core::traits::*;
@@ -1437,7 +1473,7 @@ pub trait PlineSource {
     ///     (-1.0, 2.0, 0.0),
     /// ];
     /// let circle = pline_closed![(0.0, 0.0, 1.0), (2.0, 0.0, 1.0)];
-    /// let aabb_index = rectangle.create_approx_aabb_index().unwrap();
+    /// let aabb_index = rectangle.create_approx_aabb_index();
     /// let options = PlineBooleanOptions {
     ///     // passing in existing spatial index of the polyline segments for the first polyline
     ///     pline1_aabb_index: Some(&aabb_index),
@@ -2012,5 +2048,24 @@ impl Iterator for PlineSegIndexIterator {
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.remaining, Some(self.remaining))
+    }
+}
+
+/// Helper function to unwrap a spatial index from a builder or panic for the unexpected case of
+/// failure.
+fn unwrap_spatial_index<T>(builder: StaticAABB2DIndexBuilder<T>) -> StaticAABB2DIndex<T>
+where
+    T: IndexableNum,
+{
+    match builder.build() {
+        Ok(x) => x,
+        Err(e) => match e {
+            StaticAABB2DIndexBuildError::ItemCountError { .. } => {
+                unreachable!("internal library error: count mismatch when building spatial index")
+            }
+            StaticAABB2DIndexBuildError::NumericCastError => {
+                panic!("failed to cast Self::Num type: {e}")
+            }
+        },
     }
 }
