@@ -270,7 +270,7 @@ where
     let y_diff = p1.y - p0.y;
 
     debug_assert!(
-        (((p1.x - p0.x) * (p0.y - point.y) - (p0.x - point.x) * (p1.y - p0.y)).abs()
+        ((x_diff * (p0.y - point.y) - (p0.x - point.x) * y_diff)
             / (x_diff * x_diff + y_diff * y_diff).sqrt())
         .fuzzy_eq_zero_eps(epsilon),
         "point does not lie on the line defined by p0 to p1 (based on distance)"
