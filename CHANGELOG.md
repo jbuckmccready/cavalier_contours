@@ -17,7 +17,9 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 ### Fixed 🐛
 
 - Fixed `PlineView::from_slice_points` to handle wrapping on same segment
-  ([#28](https://github.com/jbuckmccready/cavalier_contours/pull/28))
+  ([#28](https://github.com/jbuckmccready/cavalier_contours/pull/28)).
+- Fixed `line_circle_intr` accuracy in cases with nearly vertical line
+  ([#30](https://github.com/jbuckmccready/cavalier_contours/pull/30)).
 
 ## 0.3.0 - 2023-02-18
 
