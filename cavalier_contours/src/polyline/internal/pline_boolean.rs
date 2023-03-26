@@ -562,7 +562,6 @@ pub fn stitch_slices_into_closed_polylines<P, R, T, S, O>(
     source_pline1: &P,
     source_pline2: &R,
     stitch_selector: &S,
-    slice_join_eps: T,
     pos_equal_eps: T,
 ) -> Vec<BooleanResultPline<O>>
 where
@@ -587,12 +586,7 @@ where
             } else {
                 slice.view_data.updated_start.pos()
             };
-            builder.add(
-                pt.x - slice_join_eps,
-                pt.y - slice_join_eps,
-                pt.x + slice_join_eps,
-                pt.y + slice_join_eps,
-            );
+            builder.add(pt.x, pt.y, pt.x, pt.y);
         }
 
         builder.build().unwrap()
@@ -605,7 +599,7 @@ where
         debug_assert!(pline
             .at(0)
             .pos()
-            .fuzzy_eq_eps(pline.last().unwrap().pos(), slice_join_eps));
+            .fuzzy_eq_eps(pline.last().unwrap().pos(), pos_equal_eps));
 
         if pline.vertex_count() < 3 {
             // skip slice in case of just two vertexes on top of each other
@@ -669,10 +663,10 @@ where
 
             let ep = current_pline.last().unwrap().pos();
             aabb_index.visit_query_with_stack(
-                ep.x - slice_join_eps,
-                ep.y - slice_join_eps,
-                ep.x + slice_join_eps,
-                ep.y + slice_join_eps,
+                ep.x - pos_equal_eps,
+                ep.y - pos_equal_eps,
+                ep.x + pos_equal_eps,
+                ep.y + pos_equal_eps,
                 &mut query_visitor,
                 &mut query_stack,
             );
@@ -752,7 +746,6 @@ where
     let is_pline2_in_pline1 = || point_in_pline1(pline2.at(0).pos());
 
     let pos_equal_eps = options.pos_equal_eps;
-    let slice_join_eps = options.slice_join_eps;
 
     match operation {
         BooleanOp::Or => {
@@ -805,7 +798,6 @@ where
                     pline1,
                     pline2,
                     &stitch_selector,
-                    slice_join_eps,
                     pos_equal_eps,
                 );
 
@@ -872,7 +864,6 @@ where
                     pline1,
                     pline2,
                     &stitch_selector,
-                    slice_join_eps,
                     pos_equal_eps,
                 );
 
@@ -922,7 +913,6 @@ where
                     pline1,
                     pline2,
                     &stitch_selector,
-                    slice_join_eps,
                     pos_equal_eps,
                 );
 
@@ -971,7 +961,6 @@ where
                     pline1,
                     pline2,
                     &stitch_selector1,
-                    slice_join_eps,
                     pos_equal_eps,
                 );
 
@@ -992,7 +981,6 @@ where
                     pline1,
                     pline2,
                     &stitch_selector2,
-                    slice_join_eps,
                     pos_equal_eps,
                 );
 

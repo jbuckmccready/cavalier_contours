@@ -221,9 +221,6 @@ where
     pub pline1_aabb_index: Option<&'a StaticAABB2DIndex<T>>,
     /// Fuzzy comparison epsilon used for determining if two positions are equal.
     pub pos_equal_eps: T,
-    /// Fuzzy comparison epsilon used for determining if two positions are equal when stitching
-    /// polyline slices together.
-    pub slice_join_eps: T,
 }
 
 impl<'a, T> PlineBooleanOptions<'a, T>
@@ -235,7 +232,6 @@ where
         Self {
             pline1_aabb_index: None,
             pos_equal_eps: T::from(1e-5).unwrap(),
-            slice_join_eps: T::from(1e-4).unwrap(),
         }
     }
 }

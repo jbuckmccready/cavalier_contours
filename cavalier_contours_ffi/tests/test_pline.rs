@@ -638,13 +638,11 @@ fn pline_eval_boolean() {
         let mut options = cavc_pline_boolean_o {
             pline1_aabb_index: std::ptr::null(),
             pos_equal_eps: std::f64::NAN,
-            slice_join_eps: std::f64::NAN,
         };
 
         unsafe {
             assert_eq!(cavc_pline_boolean_o_init(&mut options), 0);
             assert!(!options.pos_equal_eps.is_nan());
-            assert!(!options.slice_join_eps.is_nan());
 
             let mut pline1_aabb_index = ptr::null();
 
