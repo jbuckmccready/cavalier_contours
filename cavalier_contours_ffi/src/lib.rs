@@ -143,7 +143,6 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset_o_init(
 pub struct cavc_pline_boolean_o {
     pub pline1_aabb_index: *const cavc_aabbindex,
     pub pos_equal_eps: f64,
-    pub slice_join_eps: f64,
 }
 
 impl cavc_pline_boolean_o {
@@ -156,7 +155,6 @@ impl cavc_pline_boolean_o {
         PlineBooleanOptions {
             pline1_aabb_index: self.pline1_aabb_index.as_ref().map(|w| &w.0),
             pos_equal_eps: self.pos_equal_eps,
-            slice_join_eps: self.slice_join_eps,
         }
     }
 }
@@ -167,7 +165,6 @@ impl Default for cavc_pline_boolean_o {
         Self {
             pline1_aabb_index: std::ptr::null(),
             pos_equal_eps: d.pos_equal_eps,
-            slice_join_eps: d.slice_join_eps,
         }
     }
 }
