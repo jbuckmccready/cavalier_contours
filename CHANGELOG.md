@@ -7,7 +7,9 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 ### Changed 🔧
 
 - ⚠️ BREAKING: `PlineSource::create_aabb_index` and `PlineSource::create_approx_aabb_index` now
-  just return a `StaticAABB2DIndex` rather than an `Option<StaticAABB2DIndex>`
+  just return a `StaticAABB2DIndex` rather than an `Option<StaticAABB2DIndex>`. The equivalent C api
+  calls `cavc_pline_create_aabbindex` and `cavc_pline_create_approx_aabbindex` also no longer
+  return an error code of 2 when polyline has less than 2 vertexes (empty aabb index is returned).
   ([#29](https://github.com/jbuckmccready/cavalier_contours/pull/29)).
 - Updated `StaticAABB2DIndex` dependency to version 1.0.
 - Bumped rust edition to 2021.
@@ -15,7 +17,9 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 ### Fixed 🐛
 
 - Fixed `PlineView::from_slice_points` to handle wrapping on same segment
-  ([#28](https://github.com/jbuckmccready/cavalier_contours/pull/28))
+  ([#28](https://github.com/jbuckmccready/cavalier_contours/pull/28)).
+- Fixed `line_circle_intr` accuracy in cases with nearly vertical line
+  ([#30](https://github.com/jbuckmccready/cavalier_contours/pull/30)).
 
 ## 0.3.0 - 2023-02-18
 
@@ -26,8 +30,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - Added doc tests and improved documentation to intersect functions `circle_circle_intr`,
   `line_circle_intr`, and `line_line_intr`
   ([#18](https://github.com/jbuckmccready/cavalier_contours/pull/18)).
-  - Added `#![forbid(unsafe_code)]` to main `cavalier_contours` crate to ensure no use of unsafe
-    (obviously does not apply to the `cavalier_contours_ffi` crate).
+- Added `#![forbid(unsafe_code)]` to main `cavalier_contours` crate to ensure no use of unsafe
+  (obviously does not apply to the `cavalier_contours_ffi` crate).
 
 ### Changed 🔧
 
