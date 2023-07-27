@@ -12,7 +12,6 @@ version = "0.3.0"
 
 [features]
 allow_unsafe = [] # feature has no explicit dependencies
-default = ["serde"]
 
 [dependencies]
 num-traits = "0.2"

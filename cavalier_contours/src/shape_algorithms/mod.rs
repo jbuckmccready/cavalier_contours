@@ -14,14 +14,22 @@ use crate::{
     },
 };
 
-pub struct OffsetLoop<T: Real> {
+struct OffsetLoop<T: Real> {
     pub parent_loop_idx: usize,
     pub indexed_pline: IndexedPolyline<T>,
 }
 
-pub struct ClosedPlineSet<T> {
-    pub ccw_loops: Vec<Polyline<T>>,
-    pub cw_loops: Vec<Polyline<T>>,
+impl<T> Default for OffsetLoop<T>
+where
+    T: Real,
+{
+    #[inline]
+    fn default() -> Self {
+        Self {
+            parent_loop_idx: Default::default(),
+            indexed_pline: IndexedPolyline::new(Polyline::new()),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -42,78 +50,87 @@ where
         }
     }
 
-    fn parallel_offset(&self, offset: T) -> Vec<Polyline<T>> {
+    fn parallel_offset_for_shape(
+        &self,
+        offset: T,
+        options: &ShapeOffsetOptions<T>,
+    ) -> Vec<Polyline<T>> {
         let opts = PlineOffsetOptions {
             aabb_index: Some(&self.spatial_index),
             handle_self_intersects: false,
-            ..Default::default()
+            pos_equal_eps: options.pos_equal_eps,
+            slice_join_eps: options.slice_join_eps,
+            offset_dist_eps: options.offset_dist_eps,
         };
 
         self.polyline.parallel_offset_opt(offset, &opts)
     }
 }
 
-pub trait ShapeSource {
-    type Num: Real;
-    type OutputPolyline;
-    type Loop: PlineSource<Num = Self::Num, OutputPolyline = Self::OutputPolyline>;
-    fn ccw_loop_count(&self) -> usize;
-    fn cw_loop_count(&self) -> usize;
-    fn get_loop(&self, i: usize) -> &Self::Loop;
-}
-
-pub trait ShapeIndex {
-    type Num: Real;
-    fn get_loop_index(&self, i: usize) -> Option<&StaticAABB2DIndex<Self::Num>>;
-}
-
-impl<T> ShapeIndex for Vec<StaticAABB2DIndex<T>>
-where
-    T: Real,
-{
-    type Num = T;
-    fn get_loop_index(&self, i: usize) -> Option<&StaticAABB2DIndex<Self::Num>> {
-        self.get(i)
-    }
-}
-
+/// Shape represented by positive area counter clockwise polylines, `ccw_plines` and negative/hole
+/// area clockwise polylines, `cw_plines`.
 #[derive(Debug, Clone)]
 pub struct Shape<T: Real> {
+    /// Positive/filled area counter clockwise polylines.
     pub ccw_plines: Vec<IndexedPolyline<T>>,
+    /// Negative/hole area clockwise polylines.
     pub cw_plines: Vec<IndexedPolyline<T>>,
+    /// Spatial index of all the polyline area bounding boxes, index positions correspond to in
+    /// order all the counter clockwise polylines followed by all the clockwise polylines. E.g., if
+    /// there is 1 `ccw_plines` and 2 `cw_plines` then index position 0 is the bounding box for the
+    /// ccw pline and index positions 1 and 2 correspond to the first and second cw plines.
     pub plines_index: StaticAABB2DIndex<T>,
 }
 
+/// Struct to hold options parameters when performing shape offset.
 #[derive(Debug, Clone)]
-pub struct DebugShape<T> {
-    pub slice_point_sets: Vec<SlicePointSet<T>>,
-    pub slice_count: usize,
-    pub slice_start_pts: Vec<Vector2<T>>,
+pub struct ShapeOffsetOptions<T> {
+    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    pub pos_equal_eps: T,
+    /// Fuzzy comparison epsilon used when testing distance of slices to original polyline for
+    /// validity.
+    pub offset_dist_eps: T,
+    /// Fuzzy comparison epsilon used for determining if two positions are equal when stitching
+    /// polyline slices together.
+    pub slice_join_eps: T,
+}
+
+impl<T> ShapeOffsetOptions<T>
+where
+    T: Real,
+{
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            pos_equal_eps: T::from(1e-5).unwrap(),
+            offset_dist_eps: T::from(1e-4).unwrap(),
+            slice_join_eps: T::from(1e-4).unwrap(),
+        }
+    }
+}
+
+impl<T> Default for ShapeOffsetOptions<T>
+where
+    T: Real,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> Shape<T>
 where
     T: Real,
 {
-    fn get_loop<'a>(
-        i: usize,
-        s1: &'a [OffsetLoop<T>],
-        s2: &'a [OffsetLoop<T>],
-    ) -> &'a OffsetLoop<T> {
-        if i < s1.len() {
-            &s1[i]
-        } else {
-            &s2[i - s1.len()]
-        }
-    }
-
     pub fn from_plines<I>(plines: I) -> Self
     where
         I: IntoIterator<Item = Polyline<T>>,
     {
         let mut ccw_plines = Vec::new();
         let mut cw_plines = Vec::new();
-        for pl in plines.into_iter() {
+        // skip empty polylines
+        for pl in plines.into_iter().filter(|p| p.vertex_count() > 1) {
             if pl.orientation() == PlineOrientation::CounterClockwise {
                 ccw_plines.push(IndexedPolyline::new(pl));
             } else {
@@ -148,35 +165,59 @@ where
         }
     }
 
-    pub fn parallel_offset(&self, offset: T) -> Option<(Self, DebugShape<T>)> {
-        // TODO: make part of options parameter.
-        let pos_equal_eps = T::from(1e-5).unwrap();
-        let offset_tol = T::from(1e-4).unwrap();
-        let slice_join_eps = T::from(1e-4).unwrap();
+    /// Return an empty shape (0 polylines).
+    #[inline]
+    pub fn empty() -> Self {
+        Self {
+            ccw_plines: Vec::new(),
+            cw_plines: Vec::new(),
+            plines_index: StaticAABB2DIndexBuilder::new(0).build().unwrap(),
+        }
+    }
+
+    pub fn parallel_offset(&self, offset: T, options: ShapeOffsetOptions<T>) -> Self {
+        let pos_equal_eps = options.pos_equal_eps;
+        let offset_dist_eps = options.offset_dist_eps;
+        let slice_join_eps = options.slice_join_eps;
+
         // generate offset loops
         let mut ccw_offset_loops = Vec::new();
         let mut cw_offset_loops = Vec::new();
         let mut parent_idx = 0;
         for pline in self.ccw_plines.iter() {
-            for offset_pline in pline.parallel_offset(offset) {
-                // must check if orientation inverted (due to collapse of very narrow or small input)
-                if offset_pline.area() < T::zero() {
+            for offset_pline in pline.parallel_offset_for_shape(offset, &options) {
+                // check if orientation inverted (due to collapse of very narrow or small input)
+                // skip if inversion happened (ccw became cw while offsetting inward)
+                let area = offset_pline.area();
+                if offset > T::zero() && area < T::zero() {
                     continue;
                 }
 
-                let ccw_offset_loop = OffsetLoop {
+                let offset_loop = OffsetLoop {
                     parent_loop_idx: parent_idx,
                     indexed_pline: IndexedPolyline::new(offset_pline),
                 };
-                ccw_offset_loops.push(ccw_offset_loop);
+
+                if area < T::zero() {
+                    cw_offset_loops.push(offset_loop);
+                } else {
+                    ccw_offset_loops.push(offset_loop);
+                }
             }
 
             parent_idx += 1;
         }
 
         for pline in self.cw_plines.iter() {
-            for offset_pline in pline.parallel_offset(offset) {
+            for offset_pline in pline.parallel_offset_for_shape(offset, &options) {
                 let area = offset_pline.area();
+
+                // check if orientation inverted (due to collapse of very narrow or small input)
+                // skip if inversion happened (cw became ccw while offsetting inward)
+                if offset < T::zero() && area > T::zero() {
+                    continue;
+                }
+
                 let offset_loop = OffsetLoop {
                     parent_loop_idx: parent_idx,
                     indexed_pline: IndexedPolyline::new(offset_pline),
@@ -194,7 +235,7 @@ where
         let offset_loop_count = ccw_offset_loops.len() + cw_offset_loops.len();
         if offset_loop_count == 0 {
             // no offsets remaining
-            return None;
+            return Self::empty();
         }
 
         // build spatial index of offset loop approximate bounding boxes
@@ -260,8 +301,7 @@ where
 
                 let intrs_opts = FindIntersectsOptions {
                     pline1_aabb_index: Some(spatial_idx1),
-                    // TODO: Use option parameter - pline offset needs to be updated as well?
-                    ..Default::default()
+                    pos_equal_eps,
                 };
 
                 let intersects = loop1
@@ -361,7 +401,7 @@ where
                     midpoint,
                     query_stack,
                     pos_equal_eps,
-                    offset_tol,
+                    offset_dist_eps,
                 ) {
                     return false;
                 }
@@ -469,13 +509,14 @@ where
                     curr_loop.parent_loop_idx,
                     &mut query_stack,
                 ) {
-                    // TODO: for now just cloning polylines to result to avoid complexity
-                    if curr_loop.indexed_pline.polyline.orientation()
-                        == PlineOrientation::CounterClockwise
-                    {
-                        ccw_plines_result.push(curr_loop.indexed_pline.clone());
+                    // Take/consume the loop to avoid allocation and copy required to clone
+                    if loop_idx < ccw_offset_loops.len() {
+                        let r = std::mem::take(&mut ccw_offset_loops[loop_idx]).indexed_pline;
+                        ccw_plines_result.push(r);
                     } else {
-                        cw_plines_result.push(curr_loop.indexed_pline.clone())
+                        let i = loop_idx - ccw_offset_loops.len();
+                        let r = std::mem::take(&mut cw_offset_loops[i]).indexed_pline;
+                        cw_plines_result.push(r)
                     }
                 }
             }
@@ -589,27 +630,25 @@ where
             b.build().unwrap()
         };
 
-        let d = DebugShape {
-            slice_point_sets,
-            slice_count: slices_data.len(),
-            slice_start_pts: slices_data
-                .iter()
-                .map(|s| s.v_data.updated_start.pos())
-                .collect(),
-        };
+        Shape {
+            ccw_plines: ccw_plines_result,
+            cw_plines: cw_plines_result,
+            plines_index,
+        }
+    }
 
-        Some((
-            Shape {
-                ccw_plines: ccw_plines_result,
-                cw_plines: cw_plines_result,
-                plines_index,
-            },
-            d,
-        ))
+    fn get_loop<'a>(
+        i: usize,
+        s1: &'a [OffsetLoop<T>],
+        s2: &'a [OffsetLoop<T>],
+    ) -> &'a OffsetLoop<T> {
+        if i < s1.len() {
+            &s1[i]
+        } else {
+            &s2[i - s1.len()]
+        }
     }
 }
-
-// fn stitch_slices_into_closed_polylines<
 
 // intersects between two offset loops
 #[derive(Debug, Clone)]
@@ -630,27 +669,3 @@ struct DissectedSlice<T> {
     source_idx: usize,
     v_data: PlineViewData<T>,
 }
-
-// fn create_offset_loops<T>(input_set: &ClosedPlineSet<T>, abs_offset: T)
-// where
-//     T: Real,
-// {
-//     let mut result = ClosedPlineSet {
-//         ccw_loops: Vec::new(),
-//         cw_loops: Vec::new(),
-//     };
-
-//     let mut parent_idx = 0;
-//     for pline in input_set.ccw_loops.iter() {
-//         for offset_pline in pline.parallel_offset(abs_offset) {
-//             // must check if orientation inverted (due to collapse of very narrow or small input)
-//             if offset_pline.area() < T::zero() {
-//                 continue;
-//             }
-
-//             let spatial_index = offset_pline.create_approx_aabb_index();
-//         }
-//     }
-
-//     result
-// }

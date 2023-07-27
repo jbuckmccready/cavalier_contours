@@ -111,6 +111,10 @@ mod test_simple {
     use cavalier_contours::{pline_closed, pline_open};
 
     declare_offset_tests!(
+        empty_returns_empty {
+            (Polyline::<f64>::new(), 5.0) =>
+            []
+        }
         circle_collapsed_into_point {
             (pline_closed![ (0.0, 0.0, 1.0), (2.0, 0.0, 1.0)], 1.0) =>
             []
