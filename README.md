@@ -3,10 +3,9 @@
 This project is a continuation of the C++
 [CavalierContours](https://github.com/jbuckmccready/CavalierContours) library rewritten in Rust with
 the goal of building out more functionality, better documentation, and creating a stable C FFI.
-This project has all of the functionality of the C++ repository except for simultaneous/multi
-polyline island offsetting. There is a lot more code documentation, test coverage, and some
-additional functions for working with polylines. For tracking progress and contributing checkout the
-project GitHub issues.
+This project has all of the functionality of the C++ repository. There is a lot more code
+documentation, test coverage, and some additional functions for working with polylines. For tracking
+progress and contributing checkout the project GitHub issues.
 
 This library uses no unsafe code (`#![forbid(unsafe_code)]` is applied) in the main
 `cavalier_contours` crate. Unsafe is used in the `cavalier_contours_ffi` crate for C bindings.

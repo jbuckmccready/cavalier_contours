@@ -4,6 +4,11 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ## Unreleased
 
+### Added ⭐
+
+- Added `Shape` type and parallel offset method on shape type to perform simultaneous multi/island
+  polyline parallel offsetting ([#7](https://github.com/jbuckmccready/cavalier_contours/issues/7)).
+
 ### Changed 🔧
 
 - ⚠️ BREAKING: Removed `slice_join_eps` from `PlineBooleanOptions`. This is breaking for any code
