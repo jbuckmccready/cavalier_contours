@@ -365,15 +365,14 @@ where
                             pt2: &DissectionPoint<T>,
                             offset_loop: &Polyline<T>|
          -> Option<PlineViewData<T>> {
-            let v_data = PlineViewData::from_slice_points(
+            PlineViewData::from_slice_points(
                 offset_loop,
                 pt1.pos,
                 pt1.seg_idx,
                 pt2.pos,
                 pt2.seg_idx,
                 pos_equal_eps,
-            );
-            v_data
+            )
         };
 
         let is_slice_valid = |v_data: &PlineViewData<T>,
