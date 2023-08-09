@@ -14,8 +14,8 @@ This library uses no unsafe code (`#![forbid(unsafe_code)]` is applied) in the m
 
 This project is compiled to wasm to create an interactive web demo page for visualing and testing.
 
-- Interactive hosted page here: https://jbuckmccready.github.io/cavalier_contours_web_demo_page
-- Interactive page source code here: https://github.com/jbuckmccready/cavalier_contours_web_demo
+- Interactive web demo page: https://cavaliercontours.dev/
+- Interactive web demo page repo: https://github.com/jbuckmccready/cavalier_contours_web_demo
 
 ## Why go to Rust?
 
