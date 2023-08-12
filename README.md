@@ -3,12 +3,18 @@
 This project is a continuation of the C++
 [CavalierContours](https://github.com/jbuckmccready/CavalierContours) library rewritten in Rust with
 the goal of building out more functionality, better documentation, and creating a stable C FFI.
-This project has all of the functionality of the C++ repository. There is a lot more code
-documentation, test coverage, and some additional functions for working with polylines. For tracking
-progress and contributing checkout the project GitHub issues.
+This project has all of the functionality of the C++ repository with more code documentation, test
+coverage, and some additional functions for working with polylines. For tracking progress and
+contributing checkout the project GitHub issues. For more information about the parallel offset
+algorithm and background information see the old C++ repository `README.md`
+[here](https://github.com/jbuckmccready/CavalierContours).
 
 This library uses no unsafe code (`#![forbid(unsafe_code)]` is applied) in the main
 `cavalier_contours` crate. Unsafe is used in the `cavalier_contours_ffi` crate for C bindings.
+
+<img src="https://github.com/jbuckmccready/CavalierContoursDoc/blob/master/gifs/PolylineOffsets.gif" width="400"/> <img src="https://github.com/jbuckmccready/CavalierContoursDoc/blob/master/gifs/PolylineCombines.gif" width="400"/>
+
+<img src="https://raw.githubusercontent.com/jbuckmccready/CavalierContoursDoc/master/images/pretty_examples/example1.png" width="400"/> <img src="https://raw.githubusercontent.com/jbuckmccready/CavalierContoursDoc/master/images/pretty_examples/islands_example1.png" width="400"/>
 
 ## Interactive Web Page for Visualizing and Testing
 
