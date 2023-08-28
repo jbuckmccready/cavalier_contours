@@ -899,19 +899,17 @@ fn rotate_start() {
     {
         // empty polyline
         let polyline = Polyline::new_closed();
-        assert!(matches!(
-            polyline.rotate_start(0, Vector2::new(0.0, 0.0), 1e-5),
-            None
-        ));
+        assert!(polyline
+            .rotate_start(0, Vector2::new(0.0, 0.0), 1e-5)
+            .is_none());
     }
 
     {
         // single vertex polyline
         let polyline = pline_closed![(1.0, 0.0, 0.0)];
-        assert!(matches!(
-            polyline.rotate_start(0, Vector2::new(0.0, 0.0), 1e-5),
-            None
-        ));
+        assert!(polyline
+            .rotate_start(0, Vector2::new(0.0, 0.0), 1e-5)
+            .is_none());
     }
 
     {
@@ -922,10 +920,9 @@ fn rotate_start() {
             (1.0, 1.0, 0.2),
             (0.0, 1.0, -0.1),
         ];
-        assert!(matches!(
-            polyline.rotate_start(0, Vector2::new(0.0, 0.0), 1e-5),
-            None
-        ));
+        assert!(polyline
+            .rotate_start(0, Vector2::new(0.0, 0.0), 1e-5)
+            .is_none());
     }
 
     {
