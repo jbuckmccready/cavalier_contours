@@ -373,18 +373,16 @@ where
     slices_remaining.reserve(2 * boolean_info.overlapping_slices.len());
 
     // add pline1 overlapping slices
-    for overlapping_slice in boolean_info.overlapping_slices.iter() {
-        let slice = BooleanPlineSlice::from_overlapping(
-            pline2,
-            overlapping_slice,
-            overlapping_slice.opposing_directions,
-        );
-        slices_remaining.push(slice);
-    }
+    slices_remaining.extend(
+        boolean_info
+            .overlapping_slices
+            .iter()
+            .map(|s| BooleanPlineSlice::from_overlapping(pline2, s, s.opposing_directions)),
+    );
 
     let start_of_pline2_overlapping_slices = slices_remaining.len();
 
-    // add pline2 overlapping slices (note they are already oriented the same as pline2)
+    // add pline2 overlapping slices (note they are already oriented with same direction as pline2)
     slices_remaining.extend(
         boolean_info
             .overlapping_slices

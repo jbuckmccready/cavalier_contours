@@ -854,32 +854,36 @@ pub trait PlineSource {
                 .chain(self.iter_vertexes().take(start))
         };
 
-        let mut result = Self::OutputPolyline::with_capacity(0, true);
-
         let start_v = self.at(start_index);
-        if start_v.pos().fuzzy_eq_eps(point, pos_equal_eps) {
+        // Note: using with_capacity to ensure exact allocation required for the end result (avoids
+        // over allocating and resize allocations)
+        let result = if start_v.pos().fuzzy_eq_eps(point, pos_equal_eps) {
             // point lies on top of start index vertex
-            result.extend_vertexes(wrapping_vertexes_starting_at(start_index))
+            let mut r = Self::OutputPolyline::with_capacity(vc, true);
+            r.extend_vertexes(wrapping_vertexes_starting_at(start_index));
+            r
         } else {
             // check if it's at the end of the segment, if it is then use that next index
             let next_index = self.next_wrapping_index(start_index);
             if point.fuzzy_eq_eps(self.at(next_index).pos(), pos_equal_eps) {
-                result.reserve(vc);
-                result.extend_vertexes(wrapping_vertexes_starting_at(next_index));
+                let mut r = Self::OutputPolyline::with_capacity(vc, true);
+                r.extend_vertexes(wrapping_vertexes_starting_at(next_index));
+                r
             } else {
                 // must split at the point
-                result.reserve(vc + 1);
+                let mut r = Self::OutputPolyline::with_capacity(vc + 1, true);
                 let split = seg_split_at_point(
                     self.at(start_index),
                     self.at(next_index),
                     point,
                     pos_equal_eps,
                 );
-                result.add_vertex(split.split_vertex);
-                result.extend_vertexes(wrapping_vertexes_starting_at(next_index));
-                result.set_last(split.updated_start);
+                r.add_vertex(split.split_vertex);
+                r.extend_vertexes(wrapping_vertexes_starting_at(next_index));
+                r.set_last(split.updated_start);
+                r
             }
-        }
+        };
 
         Some(result)
     }

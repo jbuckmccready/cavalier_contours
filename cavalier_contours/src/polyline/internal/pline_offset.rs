@@ -35,14 +35,6 @@ where
     P: PlineSource<Num = T> + ?Sized,
     T: Real,
 {
-    let mut result = Vec::new();
-    let seg_count = polyline.segment_count();
-    if seg_count == 0 {
-        return result;
-    }
-
-    result.reserve(seg_count);
-
     let process_line_seg = |v1: PlineVertex<T>, v2: PlineVertex<T>| -> RawPlineOffsetSeg<T> {
         let line_v = v2.pos() - v1.pos();
         let offset_v = line_v.unit_perp().scale(offset);
@@ -78,13 +70,21 @@ where
         }
     };
 
-    for (v1, v2) in polyline.iter_segments() {
+    // Note: using with_capacity to ensure exact allocation required for the end result (avoids
+    // over allocating and resize allocations)
+    let mut result = Vec::with_capacity(polyline.segment_count());
+    result.extend(polyline.iter_segments().map(|(v1, v2)| {
         if v1.bulge_is_zero() {
-            result.push(process_line_seg(v1, v2));
+            process_line_seg(v1, v2)
         } else {
-            result.push(process_arc_seg(v1, v2));
+            process_arc_seg(v1, v2)
         }
-    }
+    }));
+
+    debug_assert!(
+        result.capacity() == polyline.segment_count(),
+        "ensure exact allocation"
+    );
 
     result
 }
