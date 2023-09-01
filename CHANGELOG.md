@@ -22,6 +22,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   ([#29](https://github.com/jbuckmccready/cavalier_contours/pull/29))
 - Updated `StaticAABB2DIndex` dependency to version 1.0.
 - Bumped rust edition to 2021.
+- Use `with_capacity` instead of `reserve` in some places to avoid over allocation behavior of Vec
+  (minor performance improvement).
 
 ### Fixed 🐛
 
