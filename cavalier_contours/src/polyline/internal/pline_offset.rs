@@ -81,8 +81,9 @@ where
         }
     }));
 
-    debug_assert!(
-        result.capacity() == polyline.segment_count(),
+    debug_assert_eq!(
+        result.capacity(),
+        polyline.segment_count(),
         "ensure exact allocation"
     );
 
