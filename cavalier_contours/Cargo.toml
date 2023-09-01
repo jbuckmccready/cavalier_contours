@@ -11,7 +11,11 @@ repository = "https://github.com/jbuckmccready/cavalier_contours"
 version = "0.3.0"
 
 [features]
-allow_unsafe = [] # feature has no explicit dependencies
+default = []
+# Enable serde serialize/deserialize for polylines and vertexes
+serde = ["dep:serde"]
+# Enable unsafe optimizations in the static_aabb2d_index dependency
+unsafe_optimizations = ["static_aabb2d_index/unsafe_optimizations"]
 
 [dependencies]
 num-traits = "0.2"
