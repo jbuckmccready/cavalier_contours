@@ -20,4 +20,4 @@ unsafe_optimizations = ["static_aabb2d_index/unsafe_optimizations"]
 [dependencies]
 num-traits = "0.2"
 serde = {version = "1.0", optional = true, features = ["derive"]}
-static_aabb2d_index = "1.0"
+static_aabb2d_index = "2.0"
