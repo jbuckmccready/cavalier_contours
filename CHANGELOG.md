@@ -2,7 +2,7 @@
 
 All notable changes to the cavalier_contours crate will be documented in this file.
 
-## Unreleased
+## 0.4.0 - 2024-02-21
 
 ### Added ⭐
 
