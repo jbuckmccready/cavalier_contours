@@ -1,12 +1,10 @@
 //! This module contains the C foreign function interface for cavalier_contours.
 #![allow(non_camel_case_types)]
 use cavalier_contours::{
-    core::math::Vector2,
-    polyline::{
+    core::math::Vector2, polyline::{
         BooleanOp, PlineBooleanOptions, PlineOffsetOptions, PlineSource, PlineSourceMut,
         PlineVertex, Polyline,
-    },
-    static_aabb2d_index::StaticAABB2DIndex,
+    }, shape_algorithms::{Shape, ShapeOffsetOptions}, static_aabb2d_index::StaticAABB2DIndex
 };
 use core::slice;
 use std::{convert::TryFrom, panic};
@@ -914,6 +912,7 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset(
         0
     })
 }
+
 /// Wraps [PlineSource::boolean_opt].
 ///
 /// `options` is allowed to be null (default options will be used).
@@ -1081,6 +1080,26 @@ pub unsafe extern "C" fn cavc_aabbindex_get_extents(
     })
 }
 
+/// Create a new [cavc_plinelist] object.
+///
+/// `capacity` is the number of plines to pre=allocate space for. May be zero.
+/// `plinelist` is an out parameter to hold the created shape.
+///
+/// # Safety
+///
+/// `plinelist` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_plinelist_create(
+    capacity: usize,
+    plinelist: *mut *const cavc_plinelist,
+) -> i32 {
+    ffi_catch_unwind!({
+        plinelist.write(Box::into_raw(Box::new(cavc_plinelist(Vec::with_capacity(capacity)))));
+        0
+    })
+}
+
 /// Free an existing [cavc_plinelist] object and all [cavc_pline] owned by it.
 ///
 /// Nothing happens if `plinelist` is null.
@@ -1162,6 +1181,33 @@ pub unsafe extern "C" fn cavc_plinelist_get_pline(
     })
 }
 
+/// Append a [cavc_pline] to the end of a [cavc_plinelist].
+///
+/// `plinelist` is the [cavc_plinelist] to append to.
+/// `pline` is the [cavc_pline] to be appended.
+///
+/// ## Specific Error Codes
+/// * 1 = `plinelist` is null.
+///
+/// # Safety
+///
+/// `plinelist` must be a valid [cavc_plinelist] object.
+/// `pline` must be a valid [cavc_pline] object.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_plinelist_push(
+    plinelist: *mut cavc_plinelist,
+    pline: *mut cavc_pline,
+) -> i32 {
+    ffi_catch_unwind!({
+        if plinelist.is_null() {
+            return 1;
+        }
+        (*plinelist).0.push(pline);
+        0
+    })
+}
+
 /// Efficiently release and return the last [cavc_pline] from a [cavc_plinelist].
 ///
 /// `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
@@ -1231,3 +1277,445 @@ pub unsafe extern "C" fn cavc_plinelist_take(
         0
     })
 }
+
+/// FFI representation of [ShapeOffsetOptions].
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct cavc_shape_offset_o {
+    pub pos_equal_eps: f64,
+    pub offset_dist_eps: f64,
+    pub slice_join_eps: f64,
+}
+
+impl cavc_shape_offset_o {
+    /// Convert FFI shape offset options type to internal type.
+    pub unsafe fn to_internal(&self) -> ShapeOffsetOptions<f64> {
+        ShapeOffsetOptions {
+            pos_equal_eps: self.pos_equal_eps,
+            offset_dist_eps: self.offset_dist_eps,
+            slice_join_eps: self.slice_join_eps,
+        }
+    }
+}
+
+impl Default for cavc_shape_offset_o {
+    fn default() -> Self {
+        let d = ShapeOffsetOptions::default();
+        Self {
+            pos_equal_eps: d.pos_equal_eps,
+            offset_dist_eps: d.offset_dist_eps,
+            slice_join_eps: d.slice_join_eps,
+        }
+    }
+}
+
+/// Write default option values to a [cavc_shape_offset_o].
+///
+/// ## Specific Error Codes
+/// * 1 = `options` is null.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_offset_o_init(
+    options: *mut cavc_shape_offset_o,
+) -> i32 {
+    ffi_catch_unwind!({
+        if options.is_null() {
+            return 1;
+        }
+
+        options.write(Default::default());
+        0
+    })
+}
+
+/// Opaque type that wraps a [Shape].
+///
+/// Note the internal member is only public for composing in other Rust libraries wanting to use the
+/// FFI opaque type as part of their FFI API.
+#[derive(Debug, Clone)]
+pub struct cavc_shape(pub Shape<f64>);
+
+/// Create a new [cavc_shape] object.
+///
+/// `plinelist` is a [cavc_plinelist] containing the [cavc_pline] paths to create the shape from.
+/// `shape` is an out parameter to hold the created shape.
+///
+/// ## Specific Error Codes
+/// * 1 = `plinelist` is null.
+///
+/// # Safety
+///
+/// `shape` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_create(
+    plinelist: *const cavc_plinelist,
+    shape: *mut *const cavc_shape,
+) -> i32 {
+    ffi_catch_unwind!({
+        if plinelist.is_null() {
+            return 1;
+        }
+    
+        let count:usize = (*plinelist).0.len();
+        let mut v:Vec<Polyline<f64>> = Vec::with_capacity(count);
+        
+        for pline in (*plinelist).0.iter() {
+            v.push((**pline).0.clone());
+        }
+        
+        let s = Shape::from_plines(v);
+        
+        shape.write(Box::into_raw(Box::new(cavc_shape(s))));
+        0
+    })
+}
+
+/// Free an existing [cavc_shape] object.
+///
+/// Nothing happens if `shape` is null.
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+/// has not already been freed.
+#[no_mangle]
+pub unsafe extern "C" fn cavc_shape_f(shape: *mut cavc_shape) {
+    if !shape.is_null() {
+        drop(Box::from_raw(shape))
+    }
+}
+
+/// Wraps [Shape::parallel_offset].
+///
+/// `options` is allowed to be null (default options will be used).
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `result` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_parallel_offset(
+    shape: *const cavc_shape,
+    offset: f64,
+    options: *const cavc_shape_offset_o,
+    result: *mut *const cavc_shape,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+
+        let results = if options.is_null() {
+            let default_options = ShapeOffsetOptions::new();
+            (*shape).0.parallel_offset(offset, default_options)
+        } else {
+            (*shape).0.parallel_offset(offset, (*options).to_internal())
+        };
+
+        result.write(Box::into_raw(Box::new(cavc_shape(results))));
+        0
+    })
+}
+
+/// Get the count of counter-clockwise polylines in a shape.
+///
+/// `count` used as out parameter to hold the vertex count.
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `count` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_ccw_count(
+    shape: *const cavc_shape,
+    count: *mut u32,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+
+        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        count.write(u32::try_from((*shape).0.ccw_plines.len()).unwrap());
+        0
+    })
+}
+
+/// Get the vertex count of a specific counter-clockwise polyline in a shape.
+///
+/// `count` used as out parameter to hold the vertex count.
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+/// * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `count` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_count(
+    shape: *const cavc_shape,
+    polyline_index: u32,
+    count: *mut u32,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+
+        if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
+            return 2;
+        }
+
+        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        count.write(u32::try_from((*shape).0.ccw_plines[polyline_index as usize].polyline.vertex_data.len()).unwrap());
+        0
+    })
+}
+
+/// Get whether a specific counter-clockwise polyline in a shape is closed.
+///
+/// `is_closed` is used as an out parameter to hold the whether the polyline is closed (non-zero) or not
+/// (zero).
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+/// * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `is_closed` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_is_closed(
+    shape: *const cavc_shape,
+    polyline_index: u32,
+    is_closed: *mut u8,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+
+        if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
+            return 2;
+        }
+
+        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        is_closed.write(u8::try_from((*shape).0.ccw_plines[polyline_index as usize].polyline.is_closed).unwrap());
+        0
+    })
+}
+
+/// Fills the buffer given with the vertex data of a ccw polyline in a shape.
+///
+/// You must use [cavc_shape_get_ccw_polyline_count] to ensure the buffer given has adequate length
+/// to be filled with all vertexes!
+///
+/// `vertex_data` must point to a buffer that can be filled with all `pline` vertexes.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+/// * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
+/// overrun will happen.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_vertex_data(
+    shape: *const cavc_shape,
+    polyline_index: u32,
+    vertex_data: *mut cavc_vertex,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+
+        if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
+            return 2;
+        }
+
+        let pline: *const Polyline<f64> = &((*shape).0.ccw_plines[polyline_index as usize].polyline);
+
+        let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).vertex_count());
+        for (i, v) in (*pline).iter_vertexes().enumerate() {
+            buffer[i] = cavc_vertex::from_internal(v);
+        }
+        0
+    })
+}
+
+/// Get the count of clockwise polylines in a shape.
+///
+/// `count` used as out parameter to hold the vertex count.
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `count` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_cw_count(
+    shape: *const cavc_shape,
+    count: *mut u32,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+
+        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        count.write(u32::try_from((*shape).0.cw_plines.len()).unwrap());
+        0
+    })
+}
+
+/// Get the vertex count of a specific clockwise polyline in a shape.
+///
+/// `count` used as out parameter to hold the vertex count.
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+/// * 2 = `polyline_index` is beyond the bounds of the count of the shape's cw polylines
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `count` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_cw_polyline_count(
+    shape: *const cavc_shape,
+    polyline_index: u32,
+    count: *mut u32,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+
+        if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+            return 2;
+        }
+
+        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        count.write(u32::try_from((*shape).0.cw_plines[polyline_index as usize].polyline.vertex_data.len()).unwrap());
+        0
+    })
+}
+
+/// Get whether a specific clockwise polyline in a shape is closed.
+///
+/// `is_closed` is used as an out parameter to hold the whether the polyline is closed (non-zero) or not
+/// (zero).
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+/// * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `is_closed` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_cw_polyline_is_closed(
+    shape: *const cavc_shape,
+    polyline_index: u32,
+    is_closed: *mut u8,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+
+        if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+            return 2;
+        }
+
+        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        is_closed.write(u8::try_from((*shape).0.cw_plines[polyline_index as usize].polyline.is_closed).unwrap());
+        0
+    })
+}
+
+/// Fills the buffer given with the vertex data of a cw polyline in a shape.
+///
+/// You must use [cavc_shape_get_cw_polyline_count] to ensure the buffer given has adequate length
+/// to be filled with all vertexes!
+///
+/// `vertex_data` must point to a buffer that can be filled with all `pline` vertexes.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+/// * 2 = `polyline_index` is beyond the bounds of the count of the shape's cw polylines
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
+/// overrun will happen.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_cw_polyline_vertex_data(
+    shape: *const cavc_shape,
+    polyline_index: u32,
+    vertex_data: *mut cavc_vertex,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+
+        if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+            return 2;
+        }
+
+        let pline: *const Polyline<f64> = &((*shape).0.cw_plines[polyline_index as usize].polyline);
+
+        let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).vertex_count());
+        for (i, v) in (*pline).iter_vertexes().enumerate() {
+            buffer[i] = cavc_vertex::from_internal(v);
+        }
+        0
+    })
+}
+
