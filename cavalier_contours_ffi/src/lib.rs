@@ -1181,7 +1181,7 @@ pub unsafe extern "C" fn cavc_plinelist_get_pline(
     })
 }
 
-/// Append a [cavc_pline] to the end of a [cavc_plinelist].
+/// Append a [cavc_pline] to the end of a [cavc_plinelist], the [cavc_plinelist] takes ownership of the polyline.
 ///
 /// `plinelist` is the [cavc_plinelist] to append to.
 /// `pline` is the [cavc_pline] to be appended.
