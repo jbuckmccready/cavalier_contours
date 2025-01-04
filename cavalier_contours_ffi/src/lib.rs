@@ -1082,7 +1082,7 @@ pub unsafe extern "C" fn cavc_aabbindex_get_extents(
 
 /// Create a new [cavc_plinelist] object.
 ///
-/// `capacity` is the number of plines to pre=allocate space for. May be zero.
+/// `capacity` is the number of plines to pre-allocate space for. May be zero.
 /// `plinelist` is an out parameter to hold the created shape.
 ///
 /// # Safety
