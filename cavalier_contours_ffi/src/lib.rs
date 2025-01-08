@@ -1,10 +1,12 @@
 //! This module contains the C foreign function interface for cavalier_contours.
 #![allow(non_camel_case_types)]
 use cavalier_contours::{
-    core::math::Vector2, polyline::{
+    core::math::Vector2,
+    polyline::{
         BooleanOp, PlineBooleanOptions, PlineOffsetOptions, PlineSource, PlineSourceMut,
         PlineVertex, Polyline,
-    }, shape_algorithms::{Shape, ShapeOffsetOptions}, static_aabb2d_index::StaticAABB2DIndex
+    },
+    shape_algorithms::{Shape, ShapeOffsetOptions}, static_aabb2d_index::StaticAABB2DIndex
 };
 use core::slice;
 use std::{convert::TryFrom, panic};
@@ -275,6 +277,93 @@ pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
     if !pline.is_null() {
         drop(Box::from_raw(pline))
     }
+}
+
+/// Set the userdata values of a pline
+///
+/// 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `userdata_values` must point to a valid location to read from.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_set_userdata_values(pline: *mut cavc_pline, userdata_values: *const u64, count: u32) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }        
+        
+        (*pline).0.userdata.clear();
+        
+        if !userdata_values.is_null() && count != 0 {
+            let data = slice::from_raw_parts(userdata_values, count as usize);
+            (*pline).0.userdata.extend_from_slice(data);
+        }
+        
+        0
+    })
+}
+
+/// Get the userdata value count of a polyline.
+///
+/// `count` used as out parameter to hold the vertex count.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `count` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_get_userdata_count(
+    pline: *const cavc_pline,
+    count: *mut u32,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+
+        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        count.write(u32::try_from((*pline).0.userdata.len()).unwrap());
+        0
+    })
+}
+
+/// Get the userdata values of a pline
+///
+/// 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
+/// overrun will happen.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_get_userdata_values(pline: *const cavc_pline, userdata_values: *mut u64) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+        
+        std::ptr::copy((*pline).0.userdata.as_ptr(), userdata_values, (*pline).0.userdata.len());
+        0
+    })
 }
 
 /// Reserve space for an `additional` number of vertexes in the [cavc_pline].
@@ -1082,7 +1171,7 @@ pub unsafe extern "C" fn cavc_aabbindex_get_extents(
 
 /// Create a new [cavc_plinelist] object.
 ///
-/// `capacity` is the number of plines to pre=allocate space for. May be zero.
+/// `capacity` is the number of plines to pre-allocate space for. May be zero.
 /// `plinelist` is an out parameter to hold the created shape.
 ///
 /// # Safety
@@ -1092,7 +1181,7 @@ pub unsafe extern "C" fn cavc_aabbindex_get_extents(
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_create(
     capacity: usize,
-    plinelist: *mut *const cavc_plinelist,
+    plinelist: *mut *mut cavc_plinelist,
 ) -> i32 {
     ffi_catch_unwind!({
         plinelist.write(Box::into_raw(Box::new(cavc_plinelist(Vec::with_capacity(capacity)))));
@@ -1188,6 +1277,7 @@ pub unsafe extern "C" fn cavc_plinelist_get_pline(
 ///
 /// ## Specific Error Codes
 /// * 1 = `plinelist` is null.
+/// * 2 = `pline` is null.
 ///
 /// # Safety
 ///
@@ -1202,6 +1292,9 @@ pub unsafe extern "C" fn cavc_plinelist_push(
     ffi_catch_unwind!({
         if plinelist.is_null() {
             return 1;
+        }
+        if pline.is_null() {
+            return 2;
         }
         (*plinelist).0.push(pline);
         0
@@ -1354,7 +1447,7 @@ pub struct cavc_shape(pub Shape<f64>);
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_create(
     plinelist: *const cavc_plinelist,
-    shape: *mut *const cavc_shape,
+    shape: *mut *mut cavc_shape,
 ) -> i32 {
     ffi_catch_unwind!({
         if plinelist.is_null() {
@@ -1408,7 +1501,7 @@ pub unsafe extern "C" fn cavc_shape_parallel_offset(
     shape: *const cavc_shape,
     offset: f64,
     options: *const cavc_shape_offset_o,
-    result: *mut *const cavc_shape,
+    result: *mut *mut cavc_shape,
 ) -> i32 {
     ffi_catch_unwind!({
         if shape.is_null() {
@@ -1573,6 +1666,115 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_vertex_data(
     })
 }
 
+/// Set the userdata values of a CCW polyline in a shape
+///
+/// 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+/// * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+/// has not been freed.
+/// `userdata_values` must point to a valid location to read from.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_set_ccw_pline_userdata_values(
+    shape: *mut cavc_shape,
+    polyline_index: u32, 
+    userdata_values: *const u64,
+    count: u32
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }        
+        
+        if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
+            return 2;
+        }
+
+        let pline: *mut Polyline<f64> = &mut ((*shape).0.ccw_plines[polyline_index as usize].polyline);
+        
+        (*pline).userdata.clear();
+        
+        if !userdata_values.is_null() && count != 0 {
+            let data = slice::from_raw_parts(userdata_values, count as usize);
+            (*pline).userdata.extend_from_slice(data);
+        }
+        
+        0
+    })
+}
+
+/// Get the userdata value count of a CCW polyline in a shape.
+///
+/// `count` used as out parameter to hold the vertex count.
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+/// * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+/// has not been freed.
+/// `count` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_count(
+    shape: *const cavc_shape,
+    polyline_index: u32,
+    count: *mut u32,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+        
+        if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
+            return 2;
+        }
+
+        let pline: *const Polyline<f64> = &((*shape).0.ccw_plines[polyline_index as usize].polyline);
+
+        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        count.write(u32::try_from((*pline).userdata.len()).unwrap());
+        0
+    })
+}
+
+/// Get the userdata values of a CCW pline in a shape
+///
+/// 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
+/// overrun will happen.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_values(shape: *const cavc_shape, polyline_index: u32, userdata_values: *mut u64) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+        
+        let pline: *const Polyline<f64> = &((*shape).0.ccw_plines[polyline_index as usize].polyline);
+        
+        std::ptr::copy((*pline).userdata.as_ptr(), userdata_values, (*pline).userdata.len());
+        0
+    })
+}
+
 /// Get the count of clockwise polylines in a shape.
 ///
 /// `count` used as out parameter to hold the vertex count.
@@ -1719,3 +1921,111 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_vertex_data(
     })
 }
 
+/// Set the userdata values of a CW polyline in a shape
+///
+/// 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+/// * 2 = `polyline_index` is beyond the bounds of the count of the shape's cw polylines
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+/// has not been freed.
+/// `userdata_values` must point to a valid location to read from.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_set_cw_pline_userdata_values(
+    shape: *mut cavc_shape,
+    polyline_index: u32, 
+    userdata_values: *const u64,
+    count: u32
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }        
+        
+        if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+            return 2;
+        }
+
+        let pline: *mut Polyline<f64> = &mut ((*shape).0.cw_plines[polyline_index as usize].polyline);
+        
+        (*pline).userdata.clear();
+        
+        if !userdata_values.is_null() && count != 0 {
+            let data = slice::from_raw_parts(userdata_values, count as usize);
+            (*pline).userdata.extend_from_slice(data);
+        }
+        
+        0
+    })
+}
+
+/// Get the userdata value count of a CW polyline in a shape.
+///
+/// `count` used as out parameter to hold the vertex count.
+///
+/// ## Specific Error Codes
+/// * 1 = `shape` is null.
+/// * 2 = `polyline_index` is beyond the bounds of the count of the shape's cw polylines
+///
+/// # Safety
+///
+/// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+/// has not been freed.
+/// `count` must point to a valid place in memory to be written.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_cw_pline_userdata_count(
+    shape: *const cavc_shape,
+    polyline_index: u32,
+    count: *mut u32,
+) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+        
+        if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+            return 2;
+        }
+
+        let pline: *const Polyline<f64> = &((*shape).0.cw_plines[polyline_index as usize].polyline);
+
+        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+        // prevent memory corruption/access errors but just panic as internal error if it does occur
+        count.write(u32::try_from((*pline).userdata.len()).unwrap());
+        0
+    })
+}
+
+/// Get the userdata values of a CW pline in a shape
+///
+/// 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline` is null.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// has not been freed.
+/// `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
+/// overrun will happen.
+#[no_mangle]
+#[must_use]
+pub unsafe extern "C" fn cavc_shape_get_cw_pline_userdata_values(shape: *const cavc_shape, polyline_index: u32, userdata_values: *mut u64) -> i32 {
+    ffi_catch_unwind!({
+        if shape.is_null() {
+            return 1;
+        }
+        
+        let pline: *const Polyline<f64> = &((*shape).0.cw_plines[polyline_index as usize].polyline);
+        
+        std::ptr::copy((*pline).userdata.as_ptr(), userdata_values, (*pline).userdata.len());
+        0
+    })
+}

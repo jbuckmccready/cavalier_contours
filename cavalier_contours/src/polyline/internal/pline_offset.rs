@@ -1478,6 +1478,7 @@ where
     T: Real,
     O: PlineCreation<Num = T>,
 {
+    let userdata = polyline.get_userdata_values();
     if polyline.vertex_count() < 2 {
         return Vec::new();
     }
@@ -1495,7 +1496,7 @@ where
     };
 
     let raw_offset: O = create_raw_offset_polyline(polyline, offset, options.pos_equal_eps);
-    let result = if raw_offset.is_empty() {
+    let mut result = if raw_offset.is_empty() {
         Vec::new()
     } else if polyline.is_closed() && !options.handle_self_intersects {
         let slices = slices_from_raw_offset(polyline, &raw_offset, index, offset, options);
@@ -1532,6 +1533,10 @@ where
             .all(|p: &O| p.remove_repeat_pos(options.pos_equal_eps).is_none()),
         "bug: result should never have repeat position vertexes"
     );
-
+    
+    for i in result.iter_mut() {
+      i.set_userdata_values(&userdata);
+    }
+    
     result
 }

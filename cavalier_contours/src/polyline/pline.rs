@@ -20,6 +20,10 @@ pub struct Polyline<T = f64> {
     pub vertex_data: Vec<PlineVertex<T>>,
     /// Bool to indicate whether the polyline is closed or open.
     pub is_closed: bool,
+    // Vec of user-provided u64 values. Preserved across offset calls. Note that a Polyline that was
+    // composed out of multiple slices of other Polylines will have userdata values from each source
+    // polyline, and as such userdata values may appear repeatedly.
+    pub userdata: Vec<u64>
 }
 
 impl<T> Default for Polyline<T>
@@ -42,6 +46,7 @@ where
         Polyline {
             vertex_data: Vec::new(),
             is_closed: false,
+            userdata: Vec::new()
         }
     }
 
@@ -51,7 +56,23 @@ where
         Polyline {
             vertex_data: Vec::new(),
             is_closed: true,
+            userdata: Vec::new()
         }
+    }
+
+    #[inline]
+    pub fn get_userdata_values(&self) -> Vec<u64> {
+      self.userdata.clone()
+    }
+    
+    #[inline]
+    pub fn set_userdata_values(&mut self, values: &Vec<u64>) {
+        self.userdata = values.clone();
+    }
+    
+    #[inline]
+    pub fn add_userdata_values(&mut self, values: &Vec<u64>) {
+        self.userdata.extend(values.iter());
     }
 }
 
@@ -79,6 +100,11 @@ where
     type OutputPolyline = Polyline<T>;
 
     #[inline]
+    fn get_userdata_values(&self) -> Vec<u64> {
+      self.userdata.clone()
+    }
+
+    #[inline]
     fn vertex_count(&self) -> usize {
         self.vertex_data.len()
     }
@@ -103,6 +129,16 @@ impl<T> PlineSourceMut for Polyline<T>
 where
     T: Real,
 {
+    #[inline]
+    fn set_userdata_values(&mut self, values: &Vec<u64>) {
+        self.userdata = values.clone();
+    }
+    
+    #[inline]
+    fn add_userdata_values(&mut self, values: &Vec<u64>) {
+        self.userdata.extend(values.iter());
+    }
+
     #[inline]
     fn set_vertex(&mut self, index: usize, vertex: PlineVertex<Self::Num>) {
         self.vertex_data[index] = vertex;
@@ -156,6 +192,7 @@ where
         Polyline {
             vertex_data: Vec::with_capacity(capacity),
             is_closed,
+            userdata: Vec::new()
         }
     }
 
@@ -167,6 +204,7 @@ where
         Polyline {
             vertex_data: iter.collect(),
             is_closed,
+            userdata: Vec::new()
         }
     }
 }

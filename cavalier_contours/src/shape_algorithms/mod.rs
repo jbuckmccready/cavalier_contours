@@ -210,10 +210,9 @@ where
 
         for pline in self.cw_plines.iter() {
             for offset_pline in pline.parallel_offset_for_shape(offset, &options) {
-                let area = offset_pline.area();
-
                 // check if orientation inverted (due to collapse of very narrow or small input)
                 // skip if inversion happened (cw became ccw while offsetting inward)
+                let area = offset_pline.area();
                 if offset < T::zero() && area > T::zero() {
                     continue;
                 }
@@ -514,7 +513,7 @@ where
                         ccw_plines_result.push(r);
                     } else {
                         let i = loop_idx - ccw_offset_loops.len();
-                        let r = std::mem::take(&mut cw_offset_loops[i]).indexed_pline;
+                        let r = std::mem::take(&mut cw_offset_loops[i]).indexed_pline;                        
                         cw_plines_result.push(r)
                     }
                 }
@@ -560,7 +559,9 @@ where
                 let source_loop =
                     Self::get_loop(curr_slice.source_idx, &ccw_offset_loops, &cw_offset_loops);
                 let slice_view = curr_slice.v_data.view(&source_loop.indexed_pline.polyline);
+                let slice_userdata_values = slice_view.get_userdata_values();
                 current_pline.extend_remove_repeat(&slice_view, pos_equal_eps);
+                current_pline.add_userdata_values(&slice_userdata_values);
 
                 query_results.clear();
                 let slice_end_point = curr_slice.v_data.end_point;

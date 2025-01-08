@@ -47,6 +47,8 @@ pub trait PlineSource {
     /// Type used for output when invoking methods that return a new polyline.
     type OutputPolyline: PlineCreation<Num = Self::Num>;
 
+    fn get_userdata_values(&self) -> Vec<u64>;
+    
     /// Total number of vertexes.
     fn vertex_count(&self) -> usize;
 
@@ -1560,6 +1562,11 @@ pub trait PlineSource {
 ///
 /// See other core polyline traits: [PlineSource] and [PlineCreation] for more information.
 pub trait PlineSourceMut: PlineSource {
+    
+    fn set_userdata_values(&mut self, values: &Vec<u64>);
+    
+    fn add_userdata_values(&mut self, values: &Vec<u64>);
+
     /// Set the vertex data at the given `index` position of the polyline.
     fn set_vertex(&mut self, index: usize, vertex: PlineVertex<Self::Num>);
 

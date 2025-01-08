@@ -129,6 +129,58 @@ int32_t cavc_pline_create(const struct cavc_vertex *vertexes,
 void cavc_pline_f(struct cavc_pline *pline);
 
 /**
+ * Set the userdata values of a pline
+ *
+ * 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+ *
+ * ## Specific Error Codes
+ * * 1 = `pline` is null.
+ *
+ * # Safety
+ *
+ * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * has not been freed.
+ * `userdata_values` must point to a valid location to read from.
+ */
+int32_t cavc_pline_set_userdata_values(struct cavc_pline *pline,
+                                       const uint64_t *userdata_values,
+                                       uint32_t count);
+
+/**
+ * Get the userdata value count of a polyline.
+ *
+ * `count` used as out parameter to hold the vertex count.
+ *
+ * ## Specific Error Codes
+ * * 1 = `pline` is null.
+ *
+ * # Safety
+ *
+ * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * has not been freed.
+ * `count` must point to a valid place in memory to be written.
+ */
+int32_t cavc_pline_get_userdata_count(const struct cavc_pline *pline, uint32_t *count);
+
+/**
+ * Get the userdata values of a pline
+ *
+ * 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+ *
+ * ## Specific Error Codes
+ * * 1 = `pline` is null.
+ *
+ * # Safety
+ *
+ * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * has not been freed.
+ * `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
+ * overrun will happen.
+ */
+int32_t cavc_pline_get_userdata_values(const struct cavc_pline *pline,
+                                       uint64_t *userdata_values);
+
+/**
  * Reserve space for an `additional` number of vertexes in the [cavc_pline].
  *
  * This function is used to avoid allocations when adding vertexes to the [cavc_pline].
@@ -573,14 +625,14 @@ int32_t cavc_aabbindex_get_extents(const struct cavc_aabbindex *aabbindex,
 /**
  * Create a new [cavc_plinelist] object.
  *
- * `capacity` is the number of plines to pre=allocate space for. May be zero.
+ * `capacity` is the number of plines to pre-allocate space for. May be zero.
  * `plinelist` is an out parameter to hold the created shape.
  *
  * # Safety
  *
  * `plinelist` must point to a valid place in memory to be written.
  */
-int32_t cavc_plinelist_create(uintptr_t capacity, const struct cavc_plinelist **plinelist);
+int32_t cavc_plinelist_create(uintptr_t capacity, struct cavc_plinelist **plinelist);
 
 /**
  * Free an existing [cavc_plinelist] object and all [cavc_pline] owned by it.
@@ -636,6 +688,7 @@ int32_t cavc_plinelist_get_pline(const struct cavc_plinelist *plinelist,
  *
  * ## Specific Error Codes
  * * 1 = `plinelist` is null.
+ * * 2 = `pline` is null.
  *
  * # Safety
  *
@@ -705,7 +758,7 @@ int32_t cavc_shape_offset_o_init(struct cavc_shape_offset_o *options);
  *
  * `shape` must point to a valid place in memory to be written.
  */
-int32_t cavc_shape_create(const struct cavc_plinelist *plinelist, const struct cavc_shape **shape);
+int32_t cavc_shape_create(const struct cavc_plinelist *plinelist, struct cavc_shape **shape);
 
 /**
  * Free an existing [cavc_shape] object.
@@ -736,7 +789,7 @@ void cavc_shape_f(struct cavc_shape *shape);
 int32_t cavc_shape_parallel_offset(const struct cavc_shape *shape,
                                    double offset,
                                    const struct cavc_shape_offset_o *options,
-                                   const struct cavc_shape **result);
+                                   struct cavc_shape **result);
 
 /**
  * Get the count of counter-clockwise polylines in a shape.
@@ -817,6 +870,64 @@ int32_t cavc_shape_get_ccw_polyline_vertex_data(const struct cavc_shape *shape,
                                                 struct cavc_vertex *vertex_data);
 
 /**
+ * Set the userdata values of a CCW polyline in a shape
+ *
+ * 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+ *
+ * ## Specific Error Codes
+ * * 1 = `shape` is null.
+ * * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
+ *
+ * # Safety
+ *
+ * `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+ * has not been freed.
+ * `userdata_values` must point to a valid location to read from.
+ */
+int32_t cavc_shape_set_ccw_pline_userdata_values(struct cavc_shape *shape,
+                                                 uint32_t polyline_index,
+                                                 const uint64_t *userdata_values,
+                                                 uint32_t count);
+
+/**
+ * Get the userdata value count of a CCW polyline in a shape.
+ *
+ * `count` used as out parameter to hold the vertex count.
+ *
+ * ## Specific Error Codes
+ * * 1 = `shape` is null.
+ * * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
+ *
+ * # Safety
+ *
+ * `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+ * has not been freed.
+ * `count` must point to a valid place in memory to be written.
+ */
+int32_t cavc_shape_get_ccw_pline_userdata_count(const struct cavc_shape *shape,
+                                                uint32_t polyline_index,
+                                                uint32_t *count);
+
+/**
+ * Get the userdata values of a CCW pline in a shape
+ *
+ * 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+ *
+ * ## Specific Error Codes
+ * * 1 = `pline` is null.
+ *
+ * # Safety
+ *
+ * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * has not been freed.
+ * `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
+ * overrun will happen.
+ */
+int32_t cavc_shape_get_ccw_pline_userdata_values(const struct cavc_shape *shape,
+                                                 uint32_t polyline_index,
+                                                 uint64_t *userdata_values);
+
+/**
  * Get the count of clockwise polylines in a shape.
  *
  * `count` used as out parameter to hold the vertex count.
@@ -893,3 +1004,61 @@ int32_t cavc_shape_get_cw_polyline_is_closed(const struct cavc_shape *shape,
 int32_t cavc_shape_get_cw_polyline_vertex_data(const struct cavc_shape *shape,
                                                uint32_t polyline_index,
                                                struct cavc_vertex *vertex_data);
+
+/**
+ * Set the userdata values of a CW polyline in a shape
+ *
+ * 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+ *
+ * ## Specific Error Codes
+ * * 1 = `shape` is null.
+ * * 2 = `polyline_index` is beyond the bounds of the count of the shape's cw polylines
+ *
+ * # Safety
+ *
+ * `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+ * has not been freed.
+ * `userdata_values` must point to a valid location to read from.
+ */
+int32_t cavc_shape_set_cw_pline_userdata_values(struct cavc_shape *shape,
+                                                uint32_t polyline_index,
+                                                const uint64_t *userdata_values,
+                                                uint32_t count);
+
+/**
+ * Get the userdata value count of a CW polyline in a shape.
+ *
+ * `count` used as out parameter to hold the vertex count.
+ *
+ * ## Specific Error Codes
+ * * 1 = `shape` is null.
+ * * 2 = `polyline_index` is beyond the bounds of the count of the shape's cw polylines
+ *
+ * # Safety
+ *
+ * `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+ * has not been freed.
+ * `count` must point to a valid place in memory to be written.
+ */
+int32_t cavc_shape_get_cw_pline_userdata_count(const struct cavc_shape *shape,
+                                               uint32_t polyline_index,
+                                               uint32_t *count);
+
+/**
+ * Get the userdata values of a CW pline in a shape
+ *
+ * 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+ *
+ * ## Specific Error Codes
+ * * 1 = `pline` is null.
+ *
+ * # Safety
+ *
+ * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * has not been freed.
+ * `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
+ * overrun will happen.
+ */
+int32_t cavc_shape_get_cw_pline_userdata_values(const struct cavc_shape *shape,
+                                                uint32_t polyline_index,
+                                                uint64_t *userdata_values);
