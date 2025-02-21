@@ -292,7 +292,6 @@ where
     T: Real,
 {
     #[inline]
-
     fn default() -> Self {
         Self::new()
     }
