@@ -1848,7 +1848,7 @@ where
     }
 }
 
-impl<'a, P> Clone for VertexIter<'a, P>
+impl<P> Clone for VertexIter<'_, P>
 where
     P: ?Sized,
 {
@@ -1862,7 +1862,7 @@ where
     }
 }
 
-impl<'a, P> Iterator for VertexIter<'a, P>
+impl<P> Iterator for VertexIter<'_, P>
 where
     P: PlineSource + ?Sized,
 {
@@ -1885,7 +1885,7 @@ where
     }
 }
 
-impl<'a, P> ExactSizeIterator for VertexIter<'a, P>
+impl<P> ExactSizeIterator for VertexIter<'_, P>
 where
     P: PlineSource,
 {
@@ -1897,7 +1897,7 @@ where
     }
 }
 
-impl<'a, P> DoubleEndedIterator for VertexIter<'a, P>
+impl<P> DoubleEndedIterator for VertexIter<'_, P>
 where
     P: PlineSource + ?Sized,
 {
@@ -1937,7 +1937,7 @@ where
     }
 }
 
-impl<'a, P> Clone for SegmentIter<'a, P>
+impl<P> Clone for SegmentIter<'_, P>
 where
     P: ?Sized,
 {
@@ -1951,7 +1951,7 @@ where
     }
 }
 
-impl<'a, P> Iterator for SegmentIter<'a, P>
+impl<P> Iterator for SegmentIter<'_, P>
 where
     P: PlineSource + ?Sized,
 {
@@ -1993,7 +1993,7 @@ where
     }
 }
 
-impl<'a, P> ExactSizeIterator for SegmentIter<'a, P>
+impl<P> ExactSizeIterator for SegmentIter<'_, P>
 where
     P: PlineSource,
 {

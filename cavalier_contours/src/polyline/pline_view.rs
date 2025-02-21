@@ -44,7 +44,7 @@ where
     }
 }
 
-impl<'a, P> PlineSource for PlineView<'a, P>
+impl<P> PlineSource for PlineView<'_, P>
 where
     P: PlineSource + ?Sized,
 {
