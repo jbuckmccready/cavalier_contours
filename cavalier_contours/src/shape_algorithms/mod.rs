@@ -4,13 +4,13 @@ use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder};
 
 use crate::{
     core::{
-        math::{dist_squared, Vector2},
+        math::{Vector2, dist_squared},
         traits::Real,
     },
     polyline::{
-        internal::pline_offset::point_valid_for_offset, seg_midpoint, FindIntersectsOptions,
-        PlineBasicIntersect, PlineOffsetOptions, PlineOrientation, PlineSource, PlineSourceMut,
-        PlineViewData, Polyline,
+        FindIntersectsOptions, PlineBasicIntersect, PlineOffsetOptions, PlineOrientation,
+        PlineSource, PlineSourceMut, PlineViewData, Polyline,
+        internal::pline_offset::point_valid_for_offset, seg_midpoint,
     },
 };
 

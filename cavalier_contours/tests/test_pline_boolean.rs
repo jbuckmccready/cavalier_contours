@@ -5,8 +5,8 @@ use cavalier_contours::polyline::{
     PlineCreation, PlineSource, PlineSourceMut, Polyline,
 };
 use test_utils::{
-    create_property_set, property_sets_match, property_sets_match_abs_a, ModifiedPlineSet,
-    ModifiedPlineSetVisitor, ModifiedPlineState, PlineProperties,
+    ModifiedPlineSet, ModifiedPlineSetVisitor, ModifiedPlineState, PlineProperties,
+    create_property_set, property_sets_match, property_sets_match_abs_a,
 };
 
 fn create_boolean_property_set(polylines: &[BooleanResultPline<Polyline>]) -> Vec<PlineProperties> {
@@ -239,7 +239,7 @@ struct SameBooleanTestVisitor<'a> {
     other_set: ModifiedPlineSet<'a>,
 }
 
-impl<'a> ModifiedPlineSetVisitor for SameBooleanTestVisitor<'a> {
+impl ModifiedPlineSetVisitor for SameBooleanTestVisitor<'_> {
     fn visit(&mut self, modified_pline: Polyline<f64>, pline_state: ModifiedPlineState) {
         // test every combination of direction and index position cycle
         self.other_set

@@ -1,17 +1,18 @@
 use crate::{
     core::{
         math::{
-            angle, bulge_from_angle, circle_circle_intr, delta_angle, delta_angle_signed,
-            dist_squared, line_circle_intr, line_line_intr, point_from_parametric,
-            point_within_arc_sweep, CircleCircleIntr, LineCircleIntr, LineLineIntr, Vector2,
+            CircleCircleIntr, LineCircleIntr, LineLineIntr, Vector2, angle, bulge_from_angle,
+            circle_circle_intr, delta_angle, delta_angle_signed, dist_squared, line_circle_intr,
+            line_line_intr, point_from_parametric, point_within_arc_sweep,
         },
         traits::Real,
     },
     polyline::{
+        FindIntersectsOptions, PlineCreation, PlineOffsetOptions, PlineSegIntr, PlineSource,
+        PlineSourceMut, PlineVertex, PlineViewData,
         internal::pline_intersects::{all_self_intersects_as_basic, find_intersects},
         pline_seg_intr, seg_arc_radius_and_center, seg_closest_point, seg_fast_approx_bounding_box,
-        seg_midpoint, FindIntersectsOptions, PlineCreation, PlineOffsetOptions, PlineSegIntr,
-        PlineSource, PlineSourceMut, PlineVertex, PlineViewData,
+        seg_midpoint,
     },
 };
 use static_aabb2d_index::{Control, StaticAABB2DIndex, StaticAABB2DIndexBuilder};

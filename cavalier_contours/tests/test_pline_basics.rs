@@ -1,13 +1,13 @@
 use cavalier_contours::{
     assert_fuzzy_eq,
     core::{
-        math::{bulge_from_angle, Vector2},
+        math::{Vector2, bulge_from_angle},
         traits::FuzzyEq,
     },
     pline_closed, pline_open,
     polyline::{
-        seg_length, PlineCreation, PlineSource, PlineSourceMut, PlineVertex, PlineViewData,
-        Polyline,
+        PlineCreation, PlineSource, PlineSourceMut, PlineVertex, PlineViewData, Polyline,
+        seg_length,
     },
 };
 use std::f64::consts::{PI, TAU};
@@ -899,17 +899,21 @@ fn rotate_start() {
     {
         // empty polyline
         let polyline = Polyline::new_closed();
-        assert!(polyline
-            .rotate_start(0, Vector2::new(0.0, 0.0), 1e-5)
-            .is_none());
+        assert!(
+            polyline
+                .rotate_start(0, Vector2::new(0.0, 0.0), 1e-5)
+                .is_none()
+        );
     }
 
     {
         // single vertex polyline
         let polyline = pline_closed![(1.0, 0.0, 0.0)];
-        assert!(polyline
-            .rotate_start(0, Vector2::new(0.0, 0.0), 1e-5)
-            .is_none());
+        assert!(
+            polyline
+                .rotate_start(0, Vector2::new(0.0, 0.0), 1e-5)
+                .is_none()
+        );
     }
 
     {
@@ -920,9 +924,11 @@ fn rotate_start() {
             (1.0, 1.0, 0.2),
             (0.0, 1.0, -0.1),
         ];
-        assert!(polyline
-            .rotate_start(0, Vector2::new(0.0, 0.0), 1e-5)
-            .is_none());
+        assert!(
+            polyline
+                .rotate_start(0, Vector2::new(0.0, 0.0), 1e-5)
+                .is_none()
+        );
     }
 
     {

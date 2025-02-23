@@ -1,4 +1,4 @@
-use super::{base_math::parametric_from_point, Vector2};
+use super::{Vector2, base_math::parametric_from_point};
 use crate::core::traits::Real;
 
 /// Holds the result of finding the intersect between two line segments.

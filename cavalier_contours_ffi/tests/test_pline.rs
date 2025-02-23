@@ -141,7 +141,7 @@ fn pline_data_manipulation() {
 #[test]
 fn pline_eval_path_length() {
     let pline = create_pline(&[(0.0, 0.0, 1.0), (2.0, 0.0, 1.0)], true);
-    let mut l = std::f64::NAN;
+    let mut l = f64::NAN;
     unsafe {
         assert_eq!(cavc_pline_eval_path_length(pline, &mut l), 0);
         assert_eq!(cavc_pline_eval_path_length(ptr::null_mut(), &mut l), 1);
@@ -153,7 +153,7 @@ fn pline_eval_path_length() {
 #[test]
 fn pline_eval_area() {
     let pline = create_pline(&[(0.0, 0.0, 1.0), (2.0, 0.0, 1.0)], true);
-    let mut a = std::f64::NAN;
+    let mut a = f64::NAN;
     unsafe {
         assert_eq!(cavc_pline_eval_area(pline, &mut a), 0);
         assert_eq!(cavc_pline_eval_area(ptr::null_mut(), &mut a), 1);
@@ -338,8 +338,7 @@ fn pline_remove_redundant() {
 #[test]
 fn pline_eval_extents() {
     let pline = create_pline(&[(0.0, 0.0, 1.0), (2.0, 0.0, 1.0)], true);
-    let (mut min_x, mut min_y, mut max_x, mut max_y) =
-        (std::f64::NAN, std::f64::NAN, std::f64::NAN, std::f64::NAN);
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::NAN, f64::NAN, f64::NAN, f64::NAN);
     unsafe {
         assert_eq!(
             cavc_pline_eval_extents(pline, &mut min_x, &mut min_y, &mut max_x, &mut max_y),
@@ -410,9 +409,9 @@ fn pline_eval_parallel_offset() {
         let offset = -1.0;
         let mut options = cavc_pline_parallel_offset_o {
             aabb_index: std::ptr::null(),
-            pos_equal_eps: std::f64::NAN,
-            slice_join_eps: std::f64::NAN,
-            offset_dist_eps: std::f64::NAN,
+            pos_equal_eps: f64::NAN,
+            slice_join_eps: f64::NAN,
+            offset_dist_eps: f64::NAN,
             handle_self_intersects: 0,
         };
 
@@ -554,7 +553,7 @@ fn pline_eval_boolean() {
                 0
             );
 
-            let mut area = std::f64::NAN;
+            let mut area = f64::NAN;
             assert_eq!(cavc_pline_eval_area(output_pline, &mut area), 0);
             assert_fuzzy_eq!(area, 16.0);
 
@@ -637,7 +636,7 @@ fn pline_eval_boolean() {
 
         let mut options = cavc_pline_boolean_o {
             pline1_aabb_index: std::ptr::null(),
-            pos_equal_eps: std::f64::NAN,
+            pos_equal_eps: f64::NAN,
         };
 
         unsafe {
@@ -685,7 +684,7 @@ fn pline_eval_boolean() {
                 0
             );
 
-            let mut area = std::f64::NAN;
+            let mut area = f64::NAN;
             assert_eq!(cavc_pline_eval_area(output_pline, &mut area), 0);
             assert_fuzzy_eq!(area, 16.0);
 

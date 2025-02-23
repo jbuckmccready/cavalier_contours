@@ -1,12 +1,12 @@
 use crate::{
     core::{
-        math::{dist_squared, Vector2},
+        math::{Vector2, dist_squared},
         traits::Real,
     },
     polyline::seg_split_at_point,
 };
 
-use super::{seg_closest_point, PlineSource, PlineVertex, Polyline};
+use super::{PlineSource, PlineVertex, Polyline, seg_closest_point};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -303,7 +303,8 @@ where
     where
         P: PlineSource<Num = T> + ?Sized,
     {
-        assert!(traverse_count != 0,
+        assert!(
+            traverse_count != 0,
             "traverse_count must be greater than 1, use different constructor if view is all on one segment"
         );
 

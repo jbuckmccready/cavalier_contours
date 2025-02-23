@@ -1,14 +1,14 @@
 use crate::{
     core::{
-        math::{dist_squared, Vector2},
-        traits::{ControlFlow, Real},
         Control,
+        math::{Vector2, dist_squared},
+        traits::{ControlFlow, Real},
     },
     polyline::{
-        pline_seg_intr, seg_fast_approx_bounding_box, seg_split_at_point, seg_tangent_vector,
         FindIntersectsOptions, PlineBasicIntersect, PlineIntersectVisitor,
         PlineIntersectsCollection, PlineOverlappingIntersect, PlineSegIntr, PlineSource, PlineView,
-        PlineViewData,
+        PlineViewData, pline_seg_intr, seg_fast_approx_bounding_box, seg_split_at_point,
+        seg_tangent_vector,
     },
 };
 use static_aabb2d_index as aabb_index;

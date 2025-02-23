@@ -1,6 +1,6 @@
 //! Supporting public types used in the core polyline trait methods.
 
-use super::{internal::pline_intersects::OverlappingSlice, PlineVertex, PlineView, PlineViewData};
+use super::{PlineVertex, PlineView, PlineViewData, internal::pline_intersects::OverlappingSlice};
 use crate::{
     core::{
         math::Vector2,

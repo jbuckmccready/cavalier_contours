@@ -2,8 +2,8 @@ mod test_utils;
 
 use cavalier_contours::polyline::{PlineOffsetOptions, PlineSource, Polyline};
 use test_utils::{
-    create_property_set, property_sets_match, ModifiedPlineSet, ModifiedPlineSetVisitor,
-    ModifiedPlineState, PlineProperties,
+    ModifiedPlineSet, ModifiedPlineSetVisitor, ModifiedPlineState, PlineProperties,
+    create_property_set, property_sets_match,
 };
 
 fn offset_into_properties_set(
@@ -33,7 +33,7 @@ struct PlineOffsetTestVisitor<'a> {
     handle_self_intersects: bool,
 }
 
-impl<'a> ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'a> {
+impl ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'_> {
     fn visit(&mut self, modified_pline: Polyline<f64>, pline_state: ModifiedPlineState) {
         let offset_results = offset_into_properties_set(
             &modified_pline,
@@ -55,10 +55,10 @@ impl<'a> ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'a> {
                 true,
             );
             assert!(
-            property_sets_match(&offset_results, self.expected_properties_set),
-            "property sets do not match with handle_self_intersects set to true, modified state: {:?}",
-            pline_state
-        );
+                property_sets_match(&offset_results, self.expected_properties_set),
+                "property sets do not match with handle_self_intersects set to true, modified state: {:?}",
+                pline_state
+            );
         }
     }
 }

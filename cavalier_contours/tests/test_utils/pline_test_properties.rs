@@ -52,11 +52,7 @@ impl PlineProperties {
         let pline = rr.as_ref().unwrap_or(pline);
         let area = {
             let a = pline.area();
-            if invert_area {
-                -a
-            } else {
-                a
-            }
+            if invert_area { -a } else { a }
         };
 
         Self {

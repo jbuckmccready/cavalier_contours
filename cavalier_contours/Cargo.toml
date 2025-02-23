@@ -2,7 +2,7 @@
 authors = ["Buck McCready <jbuckmccready@gmail.com>"]
 categories = ["algorithms", "data-structures", "graphics", "mathematics"]
 description = "2D polyline/shape library for offsetting, combining, etc."
-edition = "2021"
+edition = "2024"
 keywords = ["algorithm", "2d", "computational", "geometry", "spatial"]
 license = "MIT OR Apache-2.0"
 name = "cavalier_contours"

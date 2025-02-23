@@ -1,5 +1,5 @@
 use cavalier_contours::core::{
-    math::{line_circle_intr, LineCircleIntr::*, Vector2},
+    math::{LineCircleIntr::*, Vector2, line_circle_intr},
     traits::FuzzyEq,
 };
 

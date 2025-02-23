@@ -34,7 +34,7 @@ where
 #[cfg(feature = "serde")]
 mod serde_impl {
     use super::PlineVertex;
-    use serde::{ser::SerializeTuple, Deserialize, Serialize};
+    use serde::{Deserialize, Serialize, ser::SerializeTuple};
 
     impl<T> Serialize for PlineVertex<T>
     where

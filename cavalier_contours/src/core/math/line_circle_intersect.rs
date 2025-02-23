@@ -1,5 +1,5 @@
-use super::base_math::min_max;
 use super::Vector2;
+use super::base_math::min_max;
 use crate::core::math::parametric_from_point;
 use crate::core::traits::Real;
 

@@ -16,11 +16,7 @@ pub fn min_max<T>(v1: T, v2: T) -> (T, T)
 where
     T: PartialOrd,
 {
-    if v1 < v2 {
-        (v1, v2)
-    } else {
-        (v2, v1)
-    }
+    if v1 < v2 { (v1, v2) } else { (v2, v1) }
 }
 
 /// Normalize radians to be between `0` and `2PI`, e.g. `-PI/4` becomes `7PI/4` and `5PI` becomes
@@ -96,11 +92,7 @@ where
     T: Real,
 {
     let diff = delta_angle(angle1, angle2);
-    if negative {
-        -diff.abs()
-    } else {
-        diff.abs()
-    }
+    if negative { -diff.abs() } else { diff.abs() }
 }
 
 /// Tests if `test_angle` is between a `start_angle` and `end_angle`.
