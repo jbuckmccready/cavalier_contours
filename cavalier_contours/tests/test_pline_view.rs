@@ -2,7 +2,7 @@ use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, PI};
 
 use cavalier_contours::{
     assert_fuzzy_eq,
-    core::math::{bulge_from_angle, point_on_circle, Vector2},
+    core::math::{Vector2, bulge_from_angle, point_on_circle},
     pline_closed, pline_open,
     polyline::{PlineCreation, PlineSource, PlineSourceMut, PlineVertex, PlineViewData, Polyline},
 };

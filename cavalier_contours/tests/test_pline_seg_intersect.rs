@@ -1,6 +1,6 @@
 use cavalier_contours::{
-    core::math::{bulge_from_angle, Vector2},
-    polyline::{pline_seg_intr, PlineSegIntr::*, PlineVertex},
+    core::math::{Vector2, bulge_from_angle},
+    polyline::{PlineSegIntr::*, PlineVertex, pline_seg_intr},
 };
 use std::f64::consts::FRAC_PI_2;
 

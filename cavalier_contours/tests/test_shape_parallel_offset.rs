@@ -1,7 +1,7 @@
 mod test_utils;
 
 use cavalier_contours::{polyline::Polyline, shape_algorithms::Shape};
-use test_utils::{create_property_set, PlineProperties};
+use test_utils::{PlineProperties, create_property_set};
 
 use crate::test_utils::property_sets_match;
 

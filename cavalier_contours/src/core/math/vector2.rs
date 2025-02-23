@@ -114,7 +114,7 @@ where
 #[cfg(feature = "serde")]
 mod serde_impl {
     use super::Vector2;
-    use serde::{ser::SerializeTuple, Deserialize, Serialize};
+    use serde::{Deserialize, Serialize, ser::SerializeTuple};
 
     impl<T> Serialize for Vector2<T>
     where

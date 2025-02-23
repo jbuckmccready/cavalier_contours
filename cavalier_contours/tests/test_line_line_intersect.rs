@@ -1,5 +1,5 @@
 use cavalier_contours::core::{
-    math::{line_line_intr, LineLineIntr::*, Vector2},
+    math::{LineLineIntr::*, Vector2, line_line_intr},
     traits::FuzzyEq,
 };
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_4, FRAC_PI_6, FRAC_PI_8};

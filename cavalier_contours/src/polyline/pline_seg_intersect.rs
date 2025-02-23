@@ -1,11 +1,11 @@
-use super::pline_seg::seg_arc_radius_and_center;
 use super::PlineVertex;
+use super::pline_seg::seg_arc_radius_and_center;
 use crate::core::{
     math::Vector2,
     math::{
-        angle, angle_from_bulge, angle_is_within_sweep, circle_circle_intr, delta_angle,
-        dist_squared, line_circle_intr, line_line_intr, normalize_radians, point_from_parametric,
-        point_within_arc_sweep, CircleCircleIntr, LineCircleIntr, LineLineIntr,
+        CircleCircleIntr, LineCircleIntr, LineLineIntr, angle, angle_from_bulge,
+        angle_is_within_sweep, circle_circle_intr, delta_angle, dist_squared, line_circle_intr,
+        line_line_intr, normalize_radians, point_from_parametric, point_within_arc_sweep,
     },
     traits::Real,
 };
@@ -126,11 +126,7 @@ where
                 p,
                 pos_equal_eps,
             );
-            if within_sweep {
-                Some(p)
-            } else {
-                None
-            }
+            if within_sweep { Some(p) } else { None }
         };
 
         // Note if intersect is detected we check if the line segment starts or ends on the arc

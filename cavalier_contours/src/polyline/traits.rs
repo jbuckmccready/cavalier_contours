@@ -1,20 +1,22 @@
 use static_aabb2d_index::{
-    IndexableNum, StaticAABB2DIndex, StaticAABB2DIndexBuildError, StaticAABB2DIndexBuilder, AABB,
+    AABB, IndexableNum, StaticAABB2DIndex, StaticAABB2DIndexBuildError, StaticAABB2DIndexBuilder,
 };
 
 use crate::{
     core::{
         math::{
-            angle, angle_from_bulge, bulge_from_angle, delta_angle, dist_squared, is_left,
-            is_left_or_equal, point_on_circle, Vector2,
+            Vector2, angle, angle_from_bulge, bulge_from_angle, delta_angle, dist_squared, is_left,
+            is_left_or_equal, point_on_circle,
         },
         traits::{ControlFlow, FuzzyEq, FuzzyOrd, Real},
     },
-    polyline::{seg_arc_radius_and_center, SelfIntersectsInclude},
+    polyline::{SelfIntersectsInclude, seg_arc_radius_and_center},
 };
 
 use super::{
-    arc_seg_bounding_box,
+    BooleanOp, BooleanResult, ClosestPointResult, FindIntersectsOptions, PlineBooleanOptions,
+    PlineIntersectVisitor, PlineIntersectsCollection, PlineOffsetOptions, PlineOrientation,
+    PlineSelfIntersectOptions, PlineVertex, arc_seg_bounding_box,
     internal::{
         pline_boolean::polyline_boolean,
         pline_intersects::{
@@ -23,14 +25,12 @@ use super::{
         pline_offset::parallel_offset,
     },
     seg_bounding_box, seg_closest_point, seg_fast_approx_bounding_box, seg_length,
-    seg_split_at_point, BooleanOp, BooleanResult, ClosestPointResult, FindIntersectsOptions,
-    PlineBooleanOptions, PlineIntersectVisitor, PlineIntersectsCollection, PlineOffsetOptions,
-    PlineOrientation, PlineSelfIntersectOptions, PlineVertex,
+    seg_split_at_point,
 };
-use num_traits::cast::NumCast;
 use num_traits::One;
 use num_traits::ToPrimitive;
 use num_traits::Zero;
+use num_traits::cast::NumCast;
 
 /// Trait representing a readonly source of polyline data. This trait has all the methods and
 /// operations that can be performed on a readonly polyline.
@@ -141,11 +141,7 @@ pub trait PlineSource {
     #[inline]
     fn next_wrapping_index(&self, i: usize) -> usize {
         let next = i + 1;
-        if next >= self.vertex_count() {
-            0
-        } else {
-            next
-        }
+        if next >= self.vertex_count() { 0 } else { next }
     }
 
     /// Returns the previous wrapping vertex index for the polyline.
@@ -223,11 +219,7 @@ pub trait PlineSource {
         debug_assert!(offset <= vc, "offset wraps multiple times");
 
         let sum = start_index + offset;
-        if sum < vc {
-            sum
-        } else {
-            sum - vc
-        }
+        if sum < vc { sum } else { sum - vc }
     }
 
     /// Compute the XY extents of the polyline.
