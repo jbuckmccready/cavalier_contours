@@ -8,7 +8,7 @@ use crate::{
         traits::Real,
     },
     polyline::{
-        FindIntersectsOptions, PlineBasicIntersect, PlineOffsetOptions, PlineOrientation,
+        FindIntersectsOptions, PlineBasicIntersect, PlineOffsetOptions, PlineOrientation, BooleanOp,
         PlineSource, PlineSourceMut, PlineViewData, Polyline,
         internal::pline_offset::point_valid_for_offset, seg_midpoint,
     },
@@ -646,6 +646,108 @@ where
         } else {
             &s2[i - s1.len()]
         }
+    }
+    
+    /// Perform a boolean operation between `self` and `other` producing a new `Shape<T>`.
+    /// The `op` can be `BooleanOp::Or`, `BooleanOp::And`, `BooleanOp::Not`, or `BooleanOp::Xor`.
+    pub fn boolean(&self, other: &Self, op: BooleanOp) -> Self {
+        // 1) Collect all polylines from self & other in a "signed" fashion:
+        //    - ccw_plines => "positive"
+        //    - cw_plines => "negative" or invert them, depending on how
+        //      the library’s polyline boolean expects holes.
+        // (We can do a naive approach: treat CW as simply "inverted" polylines.)
+
+        let mut all_results = Vec::new();
+
+        // For example: for each "loop" in self.ccw_plines vs. other.ccw_plines:
+        for ip in &self.ccw_plines {
+            for jp in &other.ccw_plines {
+                // Both are "positive" loops in orientation, so we can do:
+                let boolean_res =
+                    ip.polyline.boolean(&jp.polyline, op);
+
+                // boolean_res.pos_plines => loops with + orientation
+                // boolean_res.neg_plines => loops with - orientation
+                all_results.push(boolean_res);
+            }
+        }
+
+        // Also handle "cw vs ccw" and "cw vs cw" pairs. For a "cw" loop, we typically
+        // invert it or treat it as negative. For example:
+        for ip in &self.cw_plines {
+            for jp in &other.ccw_plines {
+                // Invert ip to become “positive? negative?” depending on your approach:
+                let mut pline_cpy = ip.polyline.clone();
+                pline_cpy.invert_direction_mut(); // now it's oriented ccw
+                let boolean_res =
+                    pline_cpy.boolean(&jp.polyline, op);
+                all_results.push(boolean_res);
+            }
+        }
+
+        // same for self.ccw vs other.cw, and self.cw vs other.cw, etc.
+
+        // 2) Merge the resulting polylines from all pairwise calls:
+        //    all_results is a Vec<BooleanResult<Polyline<T>>>
+        //    each BooleanResult has pos_plines and neg_plines: 
+        //      .pos_plines => loops that are "positive" 
+        //      .neg_plines => loops that are "negative"
+
+        let mut final_ccw = Vec::new();
+        let mut final_cw = Vec::new();
+
+        // We can simply collect them, then do a geometry-level merge if needed:
+        for boolean_res in all_results {
+            // In `pos_plines`, we expect them to be oriented ccw if they are "positive"
+            for rp in boolean_res.pos_plines {
+                // orientation check
+                let mut poly = rp.pline;
+                // if we see it’s not oriented ccw, invert:
+                if poly.orientation() == PlineOrientation::Clockwise {
+                    poly.invert_direction_mut();
+                }
+                final_ccw.push(poly);
+            }
+            // In `neg_plines`, we expect them to be oriented ccw but actually negative region
+            for rp in boolean_res.neg_plines {
+                let mut poly = rp.pline;
+                // Could store as cw, so invert if it’s ccw:
+                if poly.orientation() == PlineOrientation::CounterClockwise {
+                    poly.invert_direction_mut();
+                }
+                final_cw.push(poly);
+            }
+        }
+
+        // 3) Optionally combine/merge identical or overlapping loops if necessary
+        //    (Implementation detail depends on your usage)
+
+        // 4) Build new shape from these final CCW / CW polylines:
+        Shape::from_plines(
+            final_ccw
+                .into_iter()
+                .chain(final_cw.into_iter())
+        )
+    }
+
+    /// Union
+    pub fn union(&self, other: &Self) -> Self {
+        self.boolean(other, BooleanOp::Or)
+    }
+
+    /// Intersection
+    pub fn intersection(&self, other: &Self) -> Self {
+        self.boolean(other, BooleanOp::And)
+    }
+
+    /// Difference: shape1 minus shape2
+    pub fn difference(&self, other: &Self) -> Self {
+        self.boolean(other, BooleanOp::Not)
+    }
+
+    /// Symmetric difference (xor)
+    pub fn xor(&self, other: &Self) -> Self {
+        self.boolean(other, BooleanOp::Xor)
     }
 }
 
