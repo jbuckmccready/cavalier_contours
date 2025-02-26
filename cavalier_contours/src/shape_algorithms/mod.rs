@@ -749,6 +749,157 @@ where
     pub fn xor(&self, other: &Self) -> Self {
         self.boolean(other, BooleanOp::Xor)
     }
+    
+    /// Translates all polylines by `(dx, dy)`.
+    pub fn translate_mut(&mut self, dx: T, dy: T) {
+        for loop_poly in &mut self.ccw_plines {
+            loop_poly.polyline.translate_mut(dx, dy);
+            // rebuild each loop's index
+            loop_poly.spatial_index = loop_poly.polyline.create_aabb_index();
+        }
+        for loop_poly in &mut self.cw_plines {
+            loop_poly.polyline.translate_mut(dx, dy);
+            loop_poly.spatial_index = loop_poly.polyline.create_aabb_index();
+        }
+        // rebuild the shape’s overall index
+        self.plines_index = self.build_plines_index();
+    }
+
+    /// Scales all polylines by `scale_factor` about the origin `(0, 0)`.
+    /// (You might want an overload that takes an `origin` parameter.)
+    pub fn scale_mut(&mut self, scale_factor: T) {
+        for loop_poly in &mut self.ccw_plines {
+            loop_poly.polyline.scale_mut(scale_factor);
+            loop_poly.spatial_index = loop_poly.polyline.create_aabb_index();
+        }
+        for loop_poly in &mut self.cw_plines {
+            loop_poly.polyline.scale_mut(scale_factor);
+            loop_poly.spatial_index = loop_poly.polyline.create_aabb_index();
+        }
+        self.plines_index = self.build_plines_index();
+    }
+
+    /// Rotates all polylines by `theta` radians about `(0, 0)`.
+    /// (You might want an overload for a custom center.)
+    pub fn rotate_mut(&mut self, theta: T) {
+        // We treat rotation as: (x, y) -> (x cos θ – y sin θ, x sin θ + y cos θ)
+        // Each polyline's `translate_mut` or manual iteration can do that.
+        let cos_theta = theta.cos();
+        let sin_theta = theta.sin();
+        for loop_poly in &mut self.ccw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                let (px, py) = (v.x, v.y);
+                let rx = px * cos_theta - py * sin_theta;
+                let ry = px * sin_theta + py * cos_theta;
+                v.x = rx;
+                v.y = ry;
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        for loop_poly in &mut self.cw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                let (px, py) = (v.x, v.y);
+                let rx = px * cos_theta - py * sin_theta;
+                let ry = px * sin_theta + py * cos_theta;
+                v.x = rx;
+                v.y = ry;
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        self.plines_index = self.build_plines_index();
+    }
+
+    /// Mirrors (reflects) all polylines about the X-axis (example).
+    /// For a more general "mirror across a line," you can parameterize the reflection formula.
+    /// This example just flips `y -> -y`.
+    pub fn mirror_x_mut(&mut self) {
+        for loop_poly in &mut self.ccw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                // reflect y about the x-axis
+                v.y = -v.y;
+                // if you want to invert bulge as well, do so if it's an arc:
+                // (since reflection can flip arc orientation)
+                v.bulge = -v.bulge;
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        for loop_poly in &mut self.cw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                v.y = -v.y;
+                v.bulge = -v.bulge;
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        self.plines_index = self.build_plines_index();
+    }
+
+    /// Re-centers the shape to place its bounding box center at the origin (0, 0).
+    pub fn center_mut(&mut self) {
+        if let Some(shape_aabb) = self.plines_index.bounds() {
+            let cx = (shape_aabb.min_x + shape_aabb.max_x) / T::two();
+            let cy = (shape_aabb.min_y + shape_aabb.max_y) / T::two();
+            // Translate the shape so that bounding box center -> (0, 0)
+            self.translate_mut(-cx, -cy);
+        }
+    }
+
+    /// Applies a full 2D transform if you want a custom matrix approach.
+    /// transform matrix is `[ [a, b], [c, d] ]` plus a translation `(tx, ty)`.
+    /// the mapping is: (x, y) -> (a x + b y + tx, c x + d y + ty).
+    pub fn transform_mut(&mut self, a: T, b: T, c: T, d: T, tx: T, ty: T) {
+        for loop_poly in &mut self.ccw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                let (px, py) = (v.x, v.y);
+                v.x = a * px + b * py + tx;
+                v.y = c * px + d * py + ty;
+                // If arcs are used, you might need more logic to handle orientation, etc.
+                // But for simple transform, bulge isn't changed, though reflection inverts sign, etc.
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        for loop_poly in &mut self.cw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                let (px, py) = (v.x, v.y);
+                v.x = a * px + b * py + tx;
+                v.y = c * px + d * py + ty;
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        self.plines_index = self.build_plines_index();
+    }
+
+    /// Helper to rebuild the shape’s own bounding index after polylines are mutated.
+    fn build_plines_index(&self) -> StaticAABB2DIndex<T> {
+        let total_len = self.ccw_plines.len() + self.cw_plines.len();
+        let mut builder = StaticAABB2DIndexBuilder::new(total_len);
+        for loop_poly in &self.ccw_plines {
+            let bounds = loop_poly.spatial_index.bounds().expect("empty pline unexpected");
+            builder.add(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
+        }
+        for loop_poly in &self.cw_plines {
+            let bounds = loop_poly.spatial_index.bounds().expect("empty pline unexpected");
+            builder.add(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
+        }
+        builder.build().unwrap()
+    }
 }
 
 // intersects between two offset loops
