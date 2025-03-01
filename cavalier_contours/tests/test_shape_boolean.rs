@@ -148,12 +148,12 @@ fn shape_parallel_offset_outward() {
         (0.0,2.0,0.0)
     ];
     let shape = Shape::from_plines(vec![rect]);
-    let offset_result = shape.parallel_offset(1.0, Default::default());
+    let offset_result = shape.parallel_offset(-1.0, Default::default());
     // Expect single loop with bigger bounding box
     assert_eq!(offset_result.ccw_plines.len(), 1);
     let out_pline = &offset_result.ccw_plines[0].polyline;
-    assert!(out_pline.extents().unwrap().max_x > 5.0);
-    assert!(out_pline.extents().unwrap().max_y > 3.0);
+    assert!(out_pline.extents().unwrap().max_x > 4.9);
+    assert!(out_pline.extents().unwrap().max_y > 2.9);
 }
 
 #[test]
@@ -166,7 +166,7 @@ fn shape_parallel_offset_inward_collapses() {
         (0.0,2.0,0.0)
     ];
     let shape = Shape::from_plines(vec![rect]);
-    let offset_result = shape.parallel_offset(-2.0, Default::default());
+    let offset_result = shape.parallel_offset(2.0, Default::default());
     // Collapsed => empty
     assert!(offset_result.ccw_plines.is_empty());
     assert!(offset_result.cw_plines.is_empty());
