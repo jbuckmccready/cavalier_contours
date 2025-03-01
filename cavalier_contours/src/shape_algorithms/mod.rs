@@ -9,7 +9,7 @@ use crate::{
     },
     polyline::{
         FindIntersectsOptions, PlineBasicIntersect, PlineOffsetOptions, PlineOrientation, BooleanOp,
-        PlineSource, PlineSourceMut, PlineViewData, Polyline,
+        PlineSource, PlineSourceMut, PlineViewData, Polyline, PlineInversionView,
         internal::pline_offset::point_valid_for_offset, seg_midpoint,
     },
 };
@@ -663,8 +663,7 @@ where
         for ip in &self.ccw_plines {
             for jp in &other.ccw_plines {
                 // Both are "positive" loops in orientation, so we can do:
-                let boolean_res =
-                    ip.polyline.boolean(&jp.polyline, op);
+                let boolean_res = ip.polyline.boolean(&jp.polyline, op);
 
                 // boolean_res.pos_plines => loops with + orientation
                 // boolean_res.neg_plines => loops with - orientation
@@ -676,11 +675,9 @@ where
         // invert it or treat it as negative. For example:
         for ip in &self.cw_plines {
             for jp in &other.ccw_plines {
-                // Invert ip to become “positive? negative?” depending on your approach:
-                let mut pline_cpy = ip.polyline.clone();
-                pline_cpy.invert_direction_mut(); // now it's oriented ccw
-                let boolean_res =
-                    pline_cpy.boolean(&jp.polyline, op);
+                // Invert ip to become negative
+                let ip_view = PlineInversionView::new(&ip.polyline);
+                let boolean_res = ip_view.boolean(&jp.polyline, op);
                 all_results.push(boolean_res);
             }
         }
