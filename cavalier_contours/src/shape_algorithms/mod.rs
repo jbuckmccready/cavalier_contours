@@ -811,29 +811,49 @@ where
         }
 
         // For union or XOR, also include any "unused" loops from self & other
-        if op == BooleanOp::Or || op == BooleanOp::Xor {
-            // all self.ccw that never overlapped anything
-            for (i, used) in self_used_ccw.iter().enumerate() {
-                if !used {
-                    // Add it as-is (ccw stays ccw)
-                    final_ccw.push(self.ccw_plines[i].polyline.clone());
+        match op {
+            BooleanOp::Or | BooleanOp::Xor => {
+                // all self.ccw that never overlapped anything
+                for (i, used) in self_used_ccw.iter().enumerate() {
+                    if !used {
+                        // Add it as-is (ccw stays ccw)
+                        final_ccw.push(self.ccw_plines[i].polyline.clone());
+                    }
                 }
-            }
-            // all self.cw that never overlapped anything
-            for (i, used) in self_used_cw.iter().enumerate() {
-                if !used {
-                    final_cw.push(self.cw_plines[i].polyline.clone());
+                // all self.cw that never overlapped anything
+                for (i, used) in self_used_cw.iter().enumerate() {
+                    if !used {
+                        final_cw.push(self.cw_plines[i].polyline.clone());
+                    }
                 }
-            }
-            // same for other
-            for (j, used) in othr_used_ccw.iter().enumerate() {
-                if !used {
-                    final_ccw.push(other.ccw_plines[j].polyline.clone());
+                // same for other
+                for (j, used) in othr_used_ccw.iter().enumerate() {
+                    if !used {
+                        final_ccw.push(other.ccw_plines[j].polyline.clone());
+                    }
                 }
-            }
-            for (j, used) in othr_used_cw.iter().enumerate() {
-                if !used {
-                    final_cw.push(other.cw_plines[j].polyline.clone());
+                for (j, used) in othr_used_cw.iter().enumerate() {
+                    if !used {
+                        final_cw.push(other.cw_plines[j].polyline.clone());
+                    }
+                }
+            },
+            BooleanOp::And => {
+            // For intersection, leftover loops do not appear
+            // ...
+            },
+            BooleanOp::Not => {
+                // For difference: leftover loops from self remain,
+                // leftover loops from other do NOT appear.
+                for (i, used) in self_used_ccw.iter().enumerate() {
+                    if !used {
+                        final_ccw.push(self.ccw_plines[i].polyline.clone());
+                    }
+                }
+                for (i, used) in self_used_cw.iter().enumerate() {
+                    if !used {
+                        final_cw.push(self.cw_plines[i].polyline.clone());
+                    }
                 }
             }
         }
