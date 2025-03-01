@@ -1,5 +1,3 @@
-use crate::core::math::Vector2;
-use crate::core::traits::Real;
 use crate::polyline::{
     PlineSource, PlineVertex,
 };

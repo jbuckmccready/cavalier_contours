@@ -659,60 +659,67 @@ where
 
         let mut all_results = Vec::new();
 
-        // For example: for each "loop" in self.ccw_plines vs. other.ccw_plines:
+        // For each loop in self vs each loop in other, we run the boolean operation,
+        // wrapping clockwise polylines in a PlineInversionView (instead of mutating them).
+
+        // 1) ccw vs ccw
         for ip in &self.ccw_plines {
             for jp in &other.ccw_plines {
-                // Both are "positive" loops in orientation, so we can do:
-                let boolean_res = ip.polyline.boolean(&jp.polyline, op);
-
-                // boolean_res.pos_plines => loops with + orientation
-                // boolean_res.neg_plines => loops with - orientation
-                all_results.push(boolean_res);
+                let res = ip.polyline.boolean(&jp.polyline, op);
+                all_results.push(res);
             }
         }
-
-        // Also handle "cw vs ccw" and "cw vs cw" pairs. For a "cw" loop, we typically
-        // invert it or treat it as negative. For example:
+        // 2) ccw vs cw
+        for ip in &self.ccw_plines {
+            for jp in &other.cw_plines {
+                let jp_inverted = PlineInversionView::new(&jp.polyline);
+                let res = ip.polyline.boolean(&jp_inverted, op);
+                all_results.push(res);
+            }
+        }
+        // 3) cw vs ccw
         for ip in &self.cw_plines {
+            let ip_inverted = PlineInversionView::new(&ip.polyline);
             for jp in &other.ccw_plines {
-                // Invert ip to become negative
-                let ip_view = PlineInversionView::new(&ip.polyline);
-                let boolean_res = ip_view.boolean(&jp.polyline, op);
-                all_results.push(boolean_res);
+                let res = ip_inverted.boolean(&jp.polyline, op);
+                all_results.push(res);
+            }
+        }
+        // 4) cw vs cw
+        for ip in &self.cw_plines {
+            let ip_inverted = PlineInversionView::new(&ip.polyline);
+            for jp in &other.cw_plines {
+                let jp_inverted = PlineInversionView::new(&jp.polyline);
+                let res = ip_inverted.boolean(&jp_inverted, op);
+                all_results.push(res);
             }
         }
 
-        // same for self.ccw vs other.cw, and self.cw vs other.cw, etc.
-
-        // 2) Merge the resulting polylines from all pairwise calls:
-        //    all_results is a Vec<BooleanResult<Polyline<T>>>
-        //    each BooleanResult has pos_plines and neg_plines: 
-        //      .pos_plines => loops that are "positive" 
-        //      .neg_plines => loops that are "negative"
-
+        // At this point, we have a bunch of BooleanResult<Pline<_>>.
+        // We'll classify each returned polyline by its signed area
+        // to figure out which are ccw (outer loops) vs cw (holes).
         let mut final_ccw = Vec::new();
         let mut final_cw = Vec::new();
 
-        // We can simply collect them, then do a geometry-level merge if needed:
-        for boolean_res in all_results {
-            // In `pos_plines`, we expect them to be oriented ccw if they are "positive"
-            for rp in boolean_res.pos_plines {
-                // orientation check
-                let mut poly = rp.pline;
-                // if we see it’s not oriented ccw, invert:
-                if poly.orientation() == PlineOrientation::Clockwise {
-                    poly.invert_direction_mut();
+        for boolean_result in all_results {
+            // each BooleanResult can have pos_plines or neg_plines
+            for rp in boolean_result.pos_plines {
+                let area = rp.pline.area();
+                if area < T::zero() {
+                    // negative area → cw loop
+                    final_cw.push(rp.pline);
+                } else {
+                    // zero or positive area → ccw loop
+                    final_ccw.push(rp.pline);
                 }
-                final_ccw.push(poly);
             }
-            // In `neg_plines`, we expect them to be oriented ccw but actually negative region
-            for rp in boolean_res.neg_plines {
-                let mut poly = rp.pline;
-                // Could store as cw, so invert if it’s ccw:
-                if poly.orientation() == PlineOrientation::CounterClockwise {
-                    poly.invert_direction_mut();
+            for rp in boolean_result.neg_plines {
+                let area = rp.pline.area();
+                if area < T::zero() {
+                    final_cw.push(rp.pline);
+                } else {
+                    final_ccw.push(rp.pline);
                 }
-                final_cw.push(poly);
             }
         }
 
