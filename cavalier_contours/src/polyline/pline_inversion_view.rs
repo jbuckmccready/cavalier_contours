@@ -53,7 +53,7 @@ where
         if vc > 1 {
             // The bulge for segment in reversed direction is that of the "next" in original,
             // which is the "previous" in reversed order.
-            let next_reversed = reversed_i.saturating_sub(1);
+            let _next_reversed = reversed_i.saturating_sub(1);
             let is_last_in_closed = self.is_closed() && reversed_i == 0;
             if !is_last_in_closed {
                 let neg_bulge = -maybe_v.bulge;

@@ -658,37 +658,111 @@ where
         // (We can do a naive approach: treat CW as simply "inverted" polylines.)
 
         let mut all_results = Vec::new();
+        
+        // Helper for checking bounding-box overlap
+        #[inline]
+        fn boxes_overlap<T: Real>(b1: &static_aabb2d_index::AABB<T>, 
+                                  b2: &static_aabb2d_index::AABB<T>) -> bool 
+        {
+            b1.min_x <= b2.max_x &&
+            b1.max_x >= b2.min_x &&
+            b1.min_y <= b2.max_y &&
+            b1.max_y >= b2.min_y
+        }
 
         // For each loop in self vs each loop in other, we run the boolean operation,
-        // wrapping clockwise polylines in a PlineInversionView (instead of mutating them).
+        // wrapping clockwise polylines in a PlineInversionView (instead of mutating them)
 
-        // 1) ccw vs ccw
+        // 1) ccw_plines vs ccw_plines
         for ip in &self.ccw_plines {
+            // bounding box for this polyline in self
+            let b1 = match ip.spatial_index.bounds() {
+                Some(bb) => bb,
+                None => continue, // skip empty or invalid
+            };
+
             for jp in &other.ccw_plines {
+                // bounding box for the other polyline
+                let b2 = match jp.spatial_index.bounds() {
+                    Some(bb) => bb,
+                    None => continue,
+                };
+
+                // Skip unless bounding boxes actually overlap
+                if !boxes_overlap(&b1, &b2) {
+                    continue;
+                }
+
+                // Now do the expensive boolean operation only if boxes do overlap
                 let res = ip.polyline.boolean(&jp.polyline, op);
                 all_results.push(res);
             }
         }
-        // 2) ccw vs cw
+        
+        // 2) ccw_plines vs cw_plines
         for ip in &self.ccw_plines {
+            let b1 = match ip.spatial_index.bounds() {
+                Some(bb) => bb,
+                None => continue,
+            };
+    
             for jp in &other.cw_plines {
+                let b2 = match jp.spatial_index.bounds() {
+                    Some(bb) => bb,
+                    None => continue,
+                };
+    
+                if !boxes_overlap(&b1, &b2) {
+                    continue;
+                }
+    
                 let jp_inverted = PlineInversionView::new(&jp.polyline);
                 let res = ip.polyline.boolean(&jp_inverted, op);
                 all_results.push(res);
             }
         }
-        // 3) cw vs ccw
+    
+        // 3) cw_plines vs ccw_plines
         for ip in &self.cw_plines {
+            let b1 = match ip.spatial_index.bounds() {
+                Some(bb) => bb,
+                None => continue,
+            };
             let ip_inverted = PlineInversionView::new(&ip.polyline);
+    
             for jp in &other.ccw_plines {
+                let b2 = match jp.spatial_index.bounds() {
+                    Some(bb) => bb,
+                    None => continue,
+                };
+    
+                if !boxes_overlap(&b1, &b2) {
+                    continue;
+                }
+    
                 let res = ip_inverted.boolean(&jp.polyline, op);
                 all_results.push(res);
             }
         }
-        // 4) cw vs cw
+    
+        // 4) cw_plines vs cw_plines
         for ip in &self.cw_plines {
+            let b1 = match ip.spatial_index.bounds() {
+                Some(bb) => bb,
+                None => continue,
+            };
             let ip_inverted = PlineInversionView::new(&ip.polyline);
+    
             for jp in &other.cw_plines {
+                let b2 = match jp.spatial_index.bounds() {
+                    Some(bb) => bb,
+                    None => continue,
+                };
+    
+                if !boxes_overlap(&b1, &b2) {
+                    continue;
+                }
+    
                 let jp_inverted = PlineInversionView::new(&jp.polyline);
                 let res = ip_inverted.boolean(&jp_inverted, op);
                 all_results.push(res);
@@ -724,7 +798,6 @@ where
         }
 
         // 3) Optionally combine/merge identical or overlapping loops if necessary
-        //    (Implementation detail depends on your usage)
 
         // 4) Build new shape from these final CCW / CW polylines:
         Shape::from_plines(
