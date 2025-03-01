@@ -7,7 +7,7 @@ use cavalier_contours::shape_algorithms::{
 use cavalier_contours::{assert_fuzzy_eq, pline_closed, pline_open};
 
 #[test]
-fn shape_empty_union_returns_none() {
+fn shape_empty_union_returns_self() {
     let shape_empty = Shape::<f64>::empty();
     let shape_nonempty = {
         let mut p = Polyline::new_closed();
@@ -18,9 +18,9 @@ fn shape_empty_union_returns_none() {
         Shape::from_plines(vec![p])
     };
     let union_result = shape_empty.union(&shape_nonempty);
-    // Expect same shape as `shape_empty`:
-    assert_eq!(union_result.ccw_plines.len(), shape_empty.ccw_plines.len());
-    assert_eq!(union_result.cw_plines.len(), shape_empty.cw_plines.len());
+    // Expect same shape as `shape_nonempty`:
+    assert_eq!(union_result.ccw_plines.len(), shape_nonempty.ccw_plines.len());
+    assert_eq!(union_result.cw_plines.len(), shape_nonempty.cw_plines.len());
 }
 
 #[test]

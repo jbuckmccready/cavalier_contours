@@ -669,44 +669,48 @@ where
             b1.min_y <= b2.max_y &&
             b1.max_y >= b2.min_y
         }
+        
+        // Bookkeeping: track which polylines from self/other participated
+        let mut self_used_ccw = vec![false; self.ccw_plines.len()];
+        let mut self_used_cw  = vec![false; self.cw_plines.len()];
+        let mut othr_used_ccw = vec![false; other.ccw_plines.len()];
+        let mut othr_used_cw  = vec![false; other.cw_plines.len()];
 
         // For each loop in self vs each loop in other, we run the boolean operation,
         // wrapping clockwise polylines in a PlineInversionView (instead of mutating them)
 
         // 1) ccw_plines vs ccw_plines
-        for ip in &self.ccw_plines {
-            // bounding box for this polyline in self
+        for (i, ip) in self.ccw_plines.iter().enumerate() {
             let b1 = match ip.spatial_index.bounds() {
                 Some(bb) => bb,
-                None => continue, // skip empty or invalid
+                None => continue,
             };
-
-            for jp in &other.ccw_plines {
-                // bounding box for the other polyline
+            for (j, jp) in other.ccw_plines.iter().enumerate() {
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
                 };
-
-                // Skip unless bounding boxes actually overlap
                 if !boxes_overlap(&b1, &b2) {
                     continue;
                 }
-
-                // Now do the expensive boolean operation only if boxes do overlap
+                // If they do overlap, mark them used
+                self_used_ccw[i] = true;
+                othr_used_ccw[j] = true;
+    
+                // Now do boolean clip
                 let res = ip.polyline.boolean(&jp.polyline, op);
                 all_results.push(res);
             }
         }
         
         // 2) ccw_plines vs cw_plines
-        for ip in &self.ccw_plines {
+        for (i, ip) in self.ccw_plines.iter().enumerate() {
             let b1 = match ip.spatial_index.bounds() {
                 Some(bb) => bb,
                 None => continue,
             };
     
-            for jp in &other.cw_plines {
+            for (j, jp) in other.ccw_plines.iter().enumerate() {
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
@@ -715,6 +719,9 @@ where
                 if !boxes_overlap(&b1, &b2) {
                     continue;
                 }
+                // If they do overlap, mark them used
+                self_used_ccw[i] = true;
+                othr_used_cw[j] = true;
     
                 let jp_inverted = PlineInversionView::new(&jp.polyline);
                 let res = ip.polyline.boolean(&jp_inverted, op);
@@ -723,14 +730,14 @@ where
         }
     
         // 3) cw_plines vs ccw_plines
-        for ip in &self.cw_plines {
+        for (i, ip) in self.ccw_plines.iter().enumerate() {
             let b1 = match ip.spatial_index.bounds() {
                 Some(bb) => bb,
                 None => continue,
             };
             let ip_inverted = PlineInversionView::new(&ip.polyline);
     
-            for jp in &other.ccw_plines {
+            for (j, jp) in other.ccw_plines.iter().enumerate() {
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
@@ -739,6 +746,9 @@ where
                 if !boxes_overlap(&b1, &b2) {
                     continue;
                 }
+                // If they do overlap, mark them used
+                self_used_cw[i] = true;
+                othr_used_ccw[j] = true;
     
                 let res = ip_inverted.boolean(&jp.polyline, op);
                 all_results.push(res);
@@ -746,14 +756,14 @@ where
         }
     
         // 4) cw_plines vs cw_plines
-        for ip in &self.cw_plines {
+        for (i, ip) in self.ccw_plines.iter().enumerate() {
             let b1 = match ip.spatial_index.bounds() {
                 Some(bb) => bb,
                 None => continue,
             };
             let ip_inverted = PlineInversionView::new(&ip.polyline);
     
-            for jp in &other.cw_plines {
+            for (j, jp) in other.ccw_plines.iter().enumerate() {
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
@@ -762,6 +772,9 @@ where
                 if !boxes_overlap(&b1, &b2) {
                     continue;
                 }
+                // If they do overlap, mark them used
+                self_used_cw[i] = true;
+                othr_used_cw[j] = true;
     
                 let jp_inverted = PlineInversionView::new(&jp.polyline);
                 let res = ip_inverted.boolean(&jp_inverted, op);
@@ -793,6 +806,34 @@ where
                     final_cw.push(rp.pline);
                 } else {
                     final_ccw.push(rp.pline);
+                }
+            }
+        }
+
+        // For union or XOR, also include any "unused" loops from self & other
+        if op == BooleanOp::Or || op == BooleanOp::Xor {
+            // all self.ccw that never overlapped anything
+            for (i, used) in self_used_ccw.iter().enumerate() {
+                if !used {
+                    // Add it as-is (ccw stays ccw)
+                    final_ccw.push(self.ccw_plines[i].polyline.clone());
+                }
+            }
+            // all self.cw that never overlapped anything
+            for (i, used) in self_used_cw.iter().enumerate() {
+                if !used {
+                    final_cw.push(self.cw_plines[i].polyline.clone());
+                }
+            }
+            // same for other
+            for (j, used) in othr_used_ccw.iter().enumerate() {
+                if !used {
+                    final_ccw.push(other.ccw_plines[j].polyline.clone());
+                }
+            }
+            for (j, used) in othr_used_cw.iter().enumerate() {
+                if !used {
+                    final_cw.push(other.cw_plines[j].polyline.clone());
                 }
             }
         }
