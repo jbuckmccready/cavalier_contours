@@ -710,7 +710,7 @@ where
                 None => continue,
             };
     
-            for (j, jp) in other.ccw_plines.iter().enumerate() {
+            for (j, jp) in other.cw_plines.iter().enumerate() {
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
@@ -730,7 +730,7 @@ where
         }
     
         // 3) cw_plines vs ccw_plines
-        for (i, ip) in self.ccw_plines.iter().enumerate() {
+        for (i, ip) in self.cw_plines.iter().enumerate() {
             let b1 = match ip.spatial_index.bounds() {
                 Some(bb) => bb,
                 None => continue,
@@ -756,14 +756,14 @@ where
         }
     
         // 4) cw_plines vs cw_plines
-        for (i, ip) in self.ccw_plines.iter().enumerate() {
+        for (i, ip) in self.cw_plines.iter().enumerate() {
             let b1 = match ip.spatial_index.bounds() {
                 Some(bb) => bb,
                 None => continue,
             };
             let ip_inverted = PlineInversionView::new(&ip.polyline);
     
-            for (j, jp) in other.ccw_plines.iter().enumerate() {
+            for (j, jp) in other.cw_plines.iter().enumerate() {
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
