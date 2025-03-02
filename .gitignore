@@ -2,3 +2,4 @@
 .vscode
 Cargo.lock
 .idea
+cavalier_contours_ui/dist
