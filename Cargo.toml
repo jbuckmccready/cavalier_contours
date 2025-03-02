@@ -1,6 +1,28 @@
+[workspace.package]
+authors = ["Buck McCready <jbuckmccready@gmail.com>"]
+categories = ["algorithms", "data-structures", "graphics", "mathematics"]
+edition = "2024"
+homepage = "https://wwww.cavaliercontours.dev"
+keywords = ["algorithm", "2d", "computational", "geometry", "spatial"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+rust-version = "1.85"
+repository = "https://github.com/jbuckmccready/cavalier_contours"
+version = "0.4.0"
+
 [workspace]
 members = [
   "cavalier_contours",
   "cavalier_contours_ffi",
+  "cavalier_contours_ui",
 ]
 resolver = "2"
+
+[profile.web-release]
+inherits = "release"
+opt-level = 2 # fast and small wasm
+
+# Optimize all dependencies even in debug builds:
+[profile.dev.package."*"]
+opt-level = 2
+
