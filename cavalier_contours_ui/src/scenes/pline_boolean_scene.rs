@@ -235,43 +235,6 @@ fn plot_area(
                     }
 
                     *dragging = grabbed_vertex.is_none();
-                    for (i, pt) in pline1
-                        .iter_vertexes()
-                        .map(|v| plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y)))
-                        .enumerate()
-                    {
-                        let hit_size =
-                            2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
-
-                        let hit_box = Rect::from_center_size(pt, Vec2::splat(hit_size));
-
-                        if hit_box.contains(coord) {
-                            // update grabbed point
-                            *grabbed_vertex = Some((0, i));
-                            break;
-                        }
-                    }
-
-                    if grabbed_vertex.is_none() {
-                        for (i, pt) in pline2
-                            .iter_vertexes()
-                            .map(|v| plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y)))
-                            .enumerate()
-                        {
-                            let hit_size = 2.0
-                                * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
-
-                            let hit_box = Rect::from_center_size(pt, Vec2::splat(hit_size));
-
-                            if hit_box.contains(coord) {
-                                // update grabbed point
-                                *grabbed_vertex = Some((1, i));
-                                break;
-                            }
-                        }
-                    }
-
-                    *dragging = grabbed_vertex.is_none();
                 }
             }
 
