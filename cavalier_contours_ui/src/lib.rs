@@ -1,4 +1,4 @@
 mod app;
 pub use app::MainApp;
-mod plotting;
+pub mod plotting;
 mod scenes;

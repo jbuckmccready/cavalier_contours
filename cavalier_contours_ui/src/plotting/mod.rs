@@ -4,7 +4,7 @@ mod raw_pline_offset_segs;
 pub use pline::*;
 pub use raw_pline_offset_segs::*;
 
-use cavalier_contours::core::math::Vector2;
+use cavalier_contours::{core::math::Vector2, static_aabb2d_index::AABB};
 use egui::epaint;
 use egui_plot::PlotTransform;
 use lyon::tessellation::{FillVertexConstructor, StrokeVertexConstructor};
@@ -18,6 +18,10 @@ fn lyon_point(v: Vector2, transform: &PlotTransform) -> lyon::math::Point {
         transform.position_from_point_x(v.x),
         transform.position_from_point_y(v.y),
     )
+}
+
+fn aabb_to_plotbounds(aabb: &AABB) -> egui_plot::PlotBounds {
+    egui_plot::PlotBounds::from_min_max([aabb.min_x, aabb.min_y], [aabb.max_x, aabb.max_y])
 }
 
 struct VertexConstructor {

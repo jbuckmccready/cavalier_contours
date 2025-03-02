@@ -14,13 +14,14 @@ use lyon::{
     },
 };
 
-use super::{PLOT_VERTEX_RADIUS, VertexConstructor, lyon_point};
+use super::{PLOT_VERTEX_RADIUS, VertexConstructor, aabb_to_plotbounds, lyon_point};
 
 pub struct PlinePlotItem<'a> {
     pub polyline: &'a Polyline,
     pub vertex_color: epaint::Color32,
     pub stroke_color: epaint::Color32,
     pub fill_color: epaint::Color32,
+    id: Option<egui::Id>,
 }
 
 impl<'a> PlinePlotItem<'a> {
@@ -30,6 +31,7 @@ impl<'a> PlinePlotItem<'a> {
             vertex_color: epaint::Color32::TRANSPARENT,
             stroke_color: epaint::Color32::TRANSPARENT,
             fill_color: epaint::Color32::TRANSPARENT,
+            id: None,
         }
     }
 
@@ -45,6 +47,11 @@ impl<'a> PlinePlotItem<'a> {
 
     pub fn fill_color(mut self, color: epaint::Color32) -> Self {
         self.fill_color = color;
+        self
+    }
+
+    pub fn id(mut self, id: egui::Id) -> Self {
+        self.id = Some(id);
         self
     }
 }
@@ -181,10 +188,14 @@ impl PlotItem for PlinePlotItem<'_> {
     }
 
     fn bounds(&self) -> egui_plot::PlotBounds {
-        egui_plot::PlotBounds::NOTHING
+        if let Some(aabb) = self.polyline.extents() {
+            aabb_to_plotbounds(&aabb)
+        } else {
+            egui_plot::PlotBounds::NOTHING
+        }
     }
 
     fn id(&self) -> Option<egui::Id> {
-        None
+        self.id
     }
 }

@@ -3,11 +3,11 @@ use cavalier_contours::{
     polyline::{BooleanOp, BooleanResult, PlineSource, PlineSourceMut, Polyline},
 };
 use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Ui, Vec2};
-use egui_plot::{Plot, PlotBounds, PlotPoint};
+use egui_plot::{Plot, PlotPoint};
 
 use super::{
     super::plotting::{PLOT_VERTEX_RADIUS, PlinePlotItem},
-    Scene, total_bounds,
+    Scene,
 };
 
 pub struct PlineBooleanScene {
@@ -321,19 +321,7 @@ fn plot_area(
             }
 
             if *zoom_to_fit {
-                let extents =
-                    total_bounds([pline1.extents(), pline2.extents()].into_iter().flatten());
-
-                if let Some(extents) = extents {
-                    let mut bounds = PlotBounds::from_min_max(
-                        [extents.min_x, extents.min_y],
-                        [extents.max_x, extents.max_y],
-                    );
-                    let margin = egui::vec2(0.05, 0.05);
-                    bounds.add_relative_margin_x(margin);
-                    bounds.add_relative_margin_y(margin);
-                    plot_ui.set_plot_bounds(bounds);
-                }
+                plot_ui.set_auto_bounds([true, true]);
             }
         });
     });

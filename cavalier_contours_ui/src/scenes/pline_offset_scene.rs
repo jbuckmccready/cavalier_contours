@@ -6,17 +6,16 @@ use cavalier_contours::{
             RawPlineOffsetSeg, create_raw_offset_polyline, create_untrimmed_raw_offset_segs,
         },
     },
-    static_aabb2d_index::AABB,
 };
 use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Slider, Ui, Vec2};
 use egui::Id;
-use egui_plot::{Plot, PlotBounds, PlotPoint};
+use egui_plot::{Plot, PlotPoint};
 
 use crate::plotting::RawPlineOffsetSegsPlotItem;
 
 use super::{
     super::plotting::{PLOT_VERTEX_RADIUS, PlinePlotItem},
-    Scene, total_bounds,
+    Scene,
 };
 
 pub struct PlineOffsetScene {
@@ -292,7 +291,7 @@ fn plot_area(
             }
 
             // TODO: color pickers
-            let zoom_to_bounds = match &scene_state {
+            match &scene_state {
                 SceneState::Offset { all_offset_plines } => {
                     for (pl, same_orientation) in all_offset_plines.iter() {
                         let color = if *same_orientation {
@@ -303,31 +302,11 @@ fn plot_area(
 
                         plot_ui.add(PlinePlotItem::new(pl).stroke_color(color));
                     }
-
-                    zoom_to_fit
-                        .then(|| {
-                            let all_extents = all_offset_plines
-                                .iter()
-                                .map(|(pl, _)| pl.extents())
-                                .chain(std::iter::once(pline.extents()));
-                            total_bounds(all_extents.flatten())
-                        })
-                        .flatten()
                 }
                 SceneState::RawOffset { raw_offset_pline } => {
                     plot_ui.add(
                         PlinePlotItem::new(raw_offset_pline).stroke_color(Color32::LIGHT_GRAY),
                     );
-
-                    zoom_to_fit
-                        .then(|| {
-                            total_bounds(
-                                [pline.extents(), raw_offset_pline.extents()]
-                                    .into_iter()
-                                    .flatten(),
-                            )
-                        })
-                        .flatten()
                 }
                 SceneState::RawOffsetSegments { segments } => {
                     plot_ui.add(
@@ -335,34 +314,11 @@ fn plot_area(
                             .color(Color32::MAGENTA)
                             .collapsed_color(Color32::LIGHT_RED),
                     );
-
-                    zoom_to_fit
-                        .then(|| {
-                            let seg_extents = segments.iter().map(|s| AABB {
-                                min_x: s.v1.x.min(s.v2.x),
-                                min_y: s.v1.y.min(s.v2.y),
-                                max_x: s.v1.x.max(s.v2.x),
-                                max_y: s.v1.y.max(s.v2.y),
-                            });
-
-                            let all_extents =
-                                seg_extents.chain(std::iter::once(pline.extents()).flatten());
-
-                            total_bounds(all_extents)
-                        })
-                        .flatten()
                 }
             };
 
-            if let Some(extents) = zoom_to_bounds {
-                let mut bounds = PlotBounds::from_min_max(
-                    [extents.min_x, extents.min_y],
-                    [extents.max_x, extents.max_y],
-                );
-                let margin = egui::vec2(0.05, 0.05);
-                bounds.add_relative_margin_x(margin);
-                bounds.add_relative_margin_y(margin);
-                plot_ui.set_plot_bounds(bounds);
+            if *zoom_to_fit {
+                plot_ui.set_auto_bounds([true, true]);
             }
         });
     });

@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use cavalier_contours::{
     core::math::angle_from_bulge,
-    polyline::{internal::pline_offset::RawPlineOffsetSeg, seg_arc_radius_and_center},
+    polyline::{
+        internal::pline_offset::RawPlineOffsetSeg, seg_arc_radius_and_center, seg_bounding_box,
+    },
 };
 use egui::epaint;
 use egui_plot::PlotItem;
@@ -11,12 +13,13 @@ use lyon::{
     tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, VertexBuffers},
 };
 
-use super::{VertexConstructor, lyon_point};
+use super::{VertexConstructor, aabb_to_plotbounds, lyon_point};
 
 pub struct RawPlineOffsetSegsPlotItem<'a> {
     pub segs: &'a [RawPlineOffsetSeg<f64>],
     pub color: epaint::Color32,
     pub collapsed_color: epaint::Color32,
+    id: Option<egui::Id>,
 }
 
 impl<'a> RawPlineOffsetSegsPlotItem<'a> {
@@ -25,6 +28,7 @@ impl<'a> RawPlineOffsetSegsPlotItem<'a> {
             segs,
             color: epaint::Color32::PURPLE,
             collapsed_color: epaint::Color32::LIGHT_RED,
+            id: None,
         }
     }
 
@@ -35,6 +39,11 @@ impl<'a> RawPlineOffsetSegsPlotItem<'a> {
 
     pub fn collapsed_color(mut self, color: epaint::Color32) -> Self {
         self.collapsed_color = color;
+        self
+    }
+
+    pub fn id(mut self, id: egui::Id) -> Self {
+        self.id = Some(id);
         self
     }
 }
@@ -143,10 +152,16 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
     }
 
     fn bounds(&self) -> egui_plot::PlotBounds {
-        egui_plot::PlotBounds::NOTHING
+        self.segs
+            .iter()
+            .map(|s| aabb_to_plotbounds(&seg_bounding_box(s.v1, s.v2)))
+            .fold(egui_plot::PlotBounds::NOTHING, |mut acc, bounds| {
+                acc.merge(&bounds);
+                acc
+            })
     }
 
     fn id(&self) -> Option<egui::Id> {
-        None
+        self.id
     }
 }
