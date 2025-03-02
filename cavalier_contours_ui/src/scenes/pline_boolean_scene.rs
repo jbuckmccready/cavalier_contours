@@ -129,8 +129,8 @@ fn controls_panel(
     interaction_state: &mut InteractionState,
 ) {
     SidePanel::right("pline_offset_panel")
-        .min_width(150.0)
-        .default_width(150.0)
+        .min_width(200.0)
+        .default_width(200.0)
         .show_inside(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
