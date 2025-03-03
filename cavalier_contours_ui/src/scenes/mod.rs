@@ -1,4 +1,5 @@
 mod demo_scenes_pane;
+mod multi_pline_offset_scene;
 mod pline_boolean_scene;
 mod pline_offset_scene;
 

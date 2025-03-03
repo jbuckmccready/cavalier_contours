@@ -82,7 +82,6 @@ impl Default for PlineOffsetScene {
             (39.0, 21.0, 0.0),
             (28.0, 12.0, 0.5),
         ];
-        //let pline = serde_json::from_str(DEER_PATH_STR).unwrap();
 
         Self {
             pline,
@@ -106,12 +105,6 @@ impl Scene for PlineOffsetScene {
     }
 
     fn ui(&mut self, ui: &mut Ui, init: bool) {
-        self.ui(ui, init)
-    }
-}
-
-impl PlineOffsetScene {
-    pub fn ui(&mut self, ui: &mut Ui, init: bool) {
         let PlineOffsetScene {
             pline,
             mode,
