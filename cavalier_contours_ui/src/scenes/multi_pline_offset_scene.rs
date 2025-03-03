@@ -239,7 +239,7 @@ fn plot_area(
             );
 
             for shape in offset_shapes.iter() {
-                plot_ui.add(ShapePlotItem::new(&shape).stroke_color(Color32::LIGHT_BLUE));
+                plot_ui.add(ShapePlotItem::new(shape).stroke_color(Color32::LIGHT_BLUE));
             }
 
             if *zoom_to_fit {

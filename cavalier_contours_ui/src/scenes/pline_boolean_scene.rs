@@ -277,7 +277,7 @@ fn plot_area(
                     let all_plines = result
                         .pos_plines
                         .into_iter()
-                        .chain(result.neg_plines.into_iter())
+                        .chain(result.neg_plines)
                         .map(|pl| pl.pline);
 
                     shape = Shape::from_plines(all_plines);
