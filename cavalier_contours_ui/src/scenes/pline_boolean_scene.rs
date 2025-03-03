@@ -11,6 +11,7 @@ use crate::plotting::ShapePlotItem;
 use super::{
     super::plotting::{PLOT_VERTEX_RADIUS, PlinePlotItem},
     Scene,
+    scene_settings::SceneSettings,
 };
 
 pub struct PlineBooleanScene {
@@ -101,7 +102,7 @@ impl Scene for PlineBooleanScene {
         "Polyline Boolean"
     }
 
-    fn ui(&mut self, ui: &mut Ui, init: bool) {
+    fn ui(&mut self, ui: &mut Ui, settings: &SceneSettings, init: bool) {
         let PlineBooleanScene {
             pline1,
             pline2,
@@ -116,6 +117,7 @@ impl Scene for PlineBooleanScene {
         interaction_state.zoom_to_fit |= init;
         plot_area(
             ui,
+            settings,
             pline1,
             pline2,
             mode,
@@ -143,15 +145,21 @@ fn controls_panel(
                 egui::ComboBox::from_label("Mode")
                     .selected_text(mode.label())
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(mode, Mode::None, "None");
-                        ui.selectable_value(mode, Mode::Or, "Or");
-                        ui.selectable_value(mode, Mode::And, "And");
-                        ui.selectable_value(mode, Mode::Not, "Not");
-                        ui.selectable_value(mode, Mode::Xor, "Xor");
+                        ui.selectable_value(mode, Mode::None, "None")
+                            .on_hover_text("No boolean operation performed");
+                        ui.selectable_value(mode, Mode::Or, "Or")
+                            .on_hover_text("Union (OR) the closed polylines, keeping both areas");
+                        ui.selectable_value(mode, Mode::And, "And").on_hover_text(
+                            "Intersection (AND) the closed polylines, keeping only the overlapping area",
+                        );
+                        ui.selectable_value(mode, Mode::Not, "Not")
+                            .on_hover_text("Difference (NOT) the closed polylines, keeping only the area of the first polyline not overlapped by the second polyline");
+                        ui.selectable_value(mode, Mode::Xor, "Xor")
+                            .on_hover_text("Symmetric Difference (XOR) the closed polylines, keeping only the areas not overlapped by both polylines");
                     });
 
-                ui.checkbox(fill, "Fill");
-                ui.checkbox(show_vertexes, "Show Vertexes");
+                ui.checkbox(fill, "Fill").on_hover_text("Fill resulting polyline areas");
+                ui.checkbox(show_vertexes, "Show Vertexes").on_hover_text("Show polyline vertexes");
 
                 interaction_state.zoom_to_fit = ui
                     .button("Zoom to Fit")
@@ -161,8 +169,10 @@ fn controls_panel(
         });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn plot_area(
     ui: &mut Ui,
+    settings: &SceneSettings,
     pline1: &mut Polyline,
     pline2: &mut Polyline,
     mode: &Mode,
@@ -180,7 +190,10 @@ fn plot_area(
     let scene_state = build_boolean_result(pline1, pline2, mode);
 
     CentralPanel::default().show_inside(ui, |ui| {
-        let plot = Plot::new("plot_area").data_aspect(1.0).allow_drag(false);
+        let plot = settings
+            .apply_to_plot(Plot::new("pline_boolean_scene"))
+            .data_aspect(1.0)
+            .allow_drag(false);
 
         // stack variable for shape used for plot item (required for lifetime)
         let mut shape = Shape::empty();

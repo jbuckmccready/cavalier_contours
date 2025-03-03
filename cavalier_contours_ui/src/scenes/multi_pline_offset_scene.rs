@@ -9,7 +9,7 @@ use egui_plot::{Plot, PlotPoint};
 
 use crate::plotting::ShapePlotItem;
 
-use super::{super::plotting::PLOT_VERTEX_RADIUS, Scene};
+use super::{super::plotting::PLOT_VERTEX_RADIUS, Scene, scene_settings::SceneSettings};
 
 pub struct MultiPlineOffsetScene {
     plines: Vec<Polyline>,
@@ -76,7 +76,7 @@ impl Scene for MultiPlineOffsetScene {
         "Multi Polyline Offset"
     }
 
-    fn ui(&mut self, ui: &mut Ui, init: bool) {
+    fn ui(&mut self, ui: &mut Ui, settings: &SceneSettings, init: bool) {
         let MultiPlineOffsetScene {
             plines,
             max_offset_count,
@@ -87,7 +87,14 @@ impl Scene for MultiPlineOffsetScene {
         controls_panel(ui, max_offset_count, offset, interaction_state);
 
         interaction_state.zoom_to_fit |= init;
-        plot_area(ui, plines, max_offset_count, offset, interaction_state);
+        plot_area(
+            ui,
+            settings,
+            plines,
+            max_offset_count,
+            offset,
+            interaction_state,
+        );
     }
 }
 
@@ -120,7 +127,7 @@ fn controls_panel(
                     .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
                     .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
                     .show(ui, |ui| {
-                        ui.label("Offset");
+                        ui.label("Offset").on_hover_text("Parallel offset distance, positive value will offset to the left of curve direction");
                         ui.add(Slider::new(offset, -100.0..=100.0).step_by(0.5));
                     });
 
@@ -129,7 +136,7 @@ fn controls_panel(
                     .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
                     .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
                     .show(ui, |ui| {
-                        ui.label("Max Offset Count");
+                        ui.label("Max Offset Count").on_hover_text("Maximum number of parallel offsets to generate (stops early when orientation changes)");
                         ui.add(
                             Slider::new(max_offset_count, 0..=100)
                                 .integer()
@@ -154,6 +161,7 @@ fn controls_panel(
 
 fn plot_area(
     ui: &mut Ui,
+    settings: &SceneSettings,
     plines: &mut [Polyline],
     max_offset_count: &usize,
     offset: &f64,
@@ -169,7 +177,10 @@ fn plot_area(
     let (shape, offset_shapes) = build_offsets(plines, offset, max_offset_count);
 
     CentralPanel::default().show_inside(ui, |ui| {
-        let plot = Plot::new("plot_area").data_aspect(1.0).allow_drag(false);
+        let plot = settings
+            .apply_to_plot(Plot::new("multi_pline_offset_scene"))
+            .data_aspect(1.0)
+            .allow_drag(false);
 
         plot.show(ui, |plot_ui| {
             plot_ui.set_auto_bounds([false, false]);

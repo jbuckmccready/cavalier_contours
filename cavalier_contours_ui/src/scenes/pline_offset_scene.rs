@@ -16,6 +16,7 @@ use crate::plotting::RawPlineOffsetSegsPlotItem;
 use super::{
     super::plotting::{PLOT_VERTEX_RADIUS, PlinePlotItem},
     Scene,
+    scene_settings::SceneSettings,
 };
 
 pub struct PlineOffsetScene {
@@ -104,7 +105,7 @@ impl Scene for PlineOffsetScene {
         "Polyline Offset"
     }
 
-    fn ui(&mut self, ui: &mut Ui, init: bool) {
+    fn ui(&mut self, ui: &mut Ui, settings: &SceneSettings, init: bool) {
         let PlineOffsetScene {
             pline,
             mode,
@@ -115,7 +116,7 @@ impl Scene for PlineOffsetScene {
         controls_panel(ui, mode, offset, interaction_state);
 
         interaction_state.zoom_to_fit |= init;
-        plot_area(ui, pline, mode, offset, interaction_state);
+        plot_area(ui, settings, pline, mode, offset, interaction_state);
     }
 }
 
@@ -135,9 +136,9 @@ fn controls_panel(
                 egui::ComboBox::from_label("Mode")
                     .selected_text(mode.label())
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(mode, Mode::offset_default(), "Offset");
-                        ui.selectable_value(mode, Mode::RawOffset, "Raw Offset");
-                        ui.selectable_value(mode, Mode::RawOffsetSegments, "Raw Offset Segments");
+                        ui.selectable_value(mode, Mode::offset_default(), "Offset").on_hover_text("Generate parallel offsets");
+                        ui.selectable_value(mode, Mode::RawOffset, "Raw Offset").on_hover_text("Generate single raw offset polyline");
+                        ui.selectable_value(mode, Mode::RawOffsetSegments, "Raw Offset Segments").on_hover_text("Generate the raw offset polyline segments");
                     });
 
                 // state used to fill available width within the scroll area
@@ -156,7 +157,7 @@ fn controls_panel(
                     .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
                     .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
                     .show(ui, |ui| {
-                        ui.label("Offset");
+                        ui.label("Offset").on_hover_text("Parallel offset distance, positive value will offset to the left of curve direction");
                         ui.add(Slider::new(offset, -100.0..=100.0).step_by(0.5));
                     });
 
@@ -170,7 +171,7 @@ fn controls_panel(
                         .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
                         .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
                         .show(ui, |ui| {
-                            ui.label("Max Offset Count");
+                            ui.label("Max Offset Count").on_hover_text("Maximum number of parallel offsets to generate (stops early when orientation changes)");
                             ui.add(
                                 Slider::new(max_offset_count, 0..=100)
                                     .integer()
@@ -179,7 +180,7 @@ fn controls_panel(
                         });
 
                     ui.add_space(ui.spacing().item_spacing.y);
-                    ui.checkbox(handle_self_intersects, "Handle Self Intersects");
+                    ui.checkbox(handle_self_intersects, "Handle Self Intersects").on_hover_text("Handle self-intersecting polylines or not (small performance hit)");
                 }
 
                 interaction_state.zoom_to_fit = ui
@@ -199,6 +200,7 @@ fn controls_panel(
 
 fn plot_area(
     ui: &mut Ui,
+    settings: &SceneSettings,
     pline: &mut Polyline,
     mode: &Mode,
     offset: &f64,
@@ -221,7 +223,10 @@ fn plot_area(
     };
 
     CentralPanel::default().show_inside(ui, |ui| {
-        let plot = Plot::new("plot_area").data_aspect(1.0).allow_drag(false);
+        let plot = settings
+            .apply_to_plot(Plot::new("pline_offset_scene"))
+            .data_aspect(1.0)
+            .allow_drag(false);
 
         plot.show(ui, |plot_ui| {
             plot_ui.set_auto_bounds([false, false]);
