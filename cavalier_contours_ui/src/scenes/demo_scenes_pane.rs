@@ -14,6 +14,7 @@ impl Default for DemoScenes {
         Self::from_scenes(vec![
             Box::new(super::pline_offset_scene::PlineOffsetScene::default()),
             Box::new(super::pline_boolean_scene::PlineBooleanScene::default()),
+            Box::new(super::multi_pline_offset_scene::MultiPlineOffsetScene::default()),
         ])
     }
 }

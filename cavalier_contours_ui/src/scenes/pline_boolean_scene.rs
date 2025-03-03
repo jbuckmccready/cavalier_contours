@@ -1,9 +1,12 @@
 use cavalier_contours::{
     pline_closed,
     polyline::{BooleanOp, BooleanResult, PlineSource, PlineSourceMut, Polyline},
+    shape_algorithms::Shape,
 };
 use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint};
+
+use crate::plotting::ShapePlotItem;
 
 use super::{
     super::plotting::{PLOT_VERTEX_RADIUS, PlinePlotItem},
@@ -65,7 +68,7 @@ impl Default for PlineBooleanScene {
             (28.0, 12.0, 0.5),
         ];
 
-        let pline2 = pline_closed![
+        let mut pline2 = pline_closed![
             (10.0, 10.0, -0.5),
             (8.0, 9.0, 0.374794619217547),
             (21.0, 0.0, 0.0),
@@ -75,6 +78,8 @@ impl Default for PlineBooleanScene {
             (38.0, 19.0, 0.0),
             (28.0, 12.0, 0.5),
         ];
+
+        pline2.scale_mut(0.5);
 
         Self {
             pline1,
@@ -129,8 +134,8 @@ fn controls_panel(
     interaction_state: &mut InteractionState,
 ) {
     SidePanel::right("pline_offset_panel")
-        .min_width(150.0)
-        .default_width(150.0)
+        .min_width(200.0)
+        .default_width(200.0)
         .show_inside(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
@@ -177,6 +182,8 @@ fn plot_area(
     CentralPanel::default().show_inside(ui, |ui| {
         let plot = Plot::new("plot_area").data_aspect(1.0).allow_drag(false);
 
+        // stack variable for shape used for plot item (required for lifetime)
+        let mut shape = Shape::empty();
         plot.show(ui, |plot_ui| {
             plot_ui.set_auto_bounds(false);
             if plot_ui.ctx().input(|i| i.pointer.any_released()) {
@@ -235,43 +242,6 @@ fn plot_area(
                     }
 
                     *dragging = grabbed_vertex.is_none();
-                    for (i, pt) in pline1
-                        .iter_vertexes()
-                        .map(|v| plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y)))
-                        .enumerate()
-                    {
-                        let hit_size =
-                            2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
-
-                        let hit_box = Rect::from_center_size(pt, Vec2::splat(hit_size));
-
-                        if hit_box.contains(coord) {
-                            // update grabbed point
-                            *grabbed_vertex = Some((0, i));
-                            break;
-                        }
-                    }
-
-                    if grabbed_vertex.is_none() {
-                        for (i, pt) in pline2
-                            .iter_vertexes()
-                            .map(|v| plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y)))
-                            .enumerate()
-                        {
-                            let hit_size = 2.0
-                                * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
-
-                            let hit_box = Rect::from_center_size(pt, Vec2::splat(hit_size));
-
-                            if hit_box.contains(coord) {
-                                // update grabbed point
-                                *grabbed_vertex = Some((1, i));
-                                break;
-                            }
-                        }
-                    }
-
-                    *dragging = grabbed_vertex.is_none();
                 }
             }
 
@@ -290,7 +260,7 @@ fn plot_area(
                 plot_item2 = plot_item2.vertex_color(fill_color2);
             }
 
-            match &scene_state {
+            match scene_state {
                 SceneState::NoOp => {
                     if *fill {
                         plot_ui.add(plot_item1.fill_color(fill_color1));
@@ -303,20 +273,20 @@ fn plot_area(
                 SceneState::BooleanResult(result) => {
                     plot_ui.add(plot_item1);
                     plot_ui.add(plot_item2);
-                    if *fill {
-                        for pl in result.pos_plines.iter() {
-                            plot_ui.add(PlinePlotItem::new(&pl.pline).fill_color(fill_color1));
-                        }
 
-                        // TODO: plot item for shapes with holes
-                        for pl in result.neg_plines.iter() {
-                            plot_ui.add(PlinePlotItem::new(&pl.pline).fill_color(fill_color2));
-                        }
-                    } else {
-                        for pl in result.pos_plines.iter() {
-                            plot_ui.add(PlinePlotItem::new(&pl.pline).stroke_color(color1));
-                        }
-                    }
+                    let all_plines = result
+                        .pos_plines
+                        .into_iter()
+                        .chain(result.neg_plines)
+                        .map(|pl| pl.pline);
+
+                    shape = Shape::from_plines(all_plines);
+
+                    plot_ui.add(
+                        ShapePlotItem::new(&shape)
+                            .fill_color(fill_color1)
+                            .stroke_color(color1),
+                    );
                 }
             }
 

@@ -1,8 +1,10 @@
 mod pline;
 mod raw_pline_offset_segs;
+mod shape;
 
 pub use pline::*;
 pub use raw_pline_offset_segs::*;
+pub use shape::*;
 
 use cavalier_contours::{core::math::Vector2, static_aabb2d_index::AABB};
 use egui::epaint;

@@ -82,7 +82,6 @@ impl Default for PlineOffsetScene {
             (39.0, 21.0, 0.0),
             (28.0, 12.0, 0.5),
         ];
-        //let pline = serde_json::from_str(DEER_PATH_STR).unwrap();
 
         Self {
             pline,
@@ -106,12 +105,6 @@ impl Scene for PlineOffsetScene {
     }
 
     fn ui(&mut self, ui: &mut Ui, init: bool) {
-        self.ui(ui, init)
-    }
-}
-
-impl PlineOffsetScene {
-    pub fn ui(&mut self, ui: &mut Ui, init: bool) {
         let PlineOffsetScene {
             pline,
             mode,
@@ -133,8 +126,8 @@ fn controls_panel(
     interaction_state: &mut InteractionState,
 ) {
     SidePanel::right("pline_offset_panel")
-        .min_width(150.0)
-        .default_width(150.0)
+        .min_width(200.0)
+        .default_width(200.0)
         .show_inside(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
