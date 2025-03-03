@@ -44,8 +44,17 @@ impl DemoScenes {
         let selected_before = *selected;
         let mut sel = selected.unwrap_or(0);
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            ui.toggle_value(settings_open, "🔧 Settings");
-            settings.show(ctx, settings_open);
+            ui.horizontal(|ui| {
+                use egui::special_emojis::GITHUB;
+                ui.hyperlink_to(
+                    RichText::new(format!("{GITHUB} Repo")),
+                    "https://github.com/jbuckmccready/cavalier_contours",
+                );
+
+                ui.toggle_value(settings_open, "🔧 Settings");
+                settings.show(ctx, settings_open);
+            });
+            ui.separator();
             ui.horizontal(|ui| {
                 for (i, scene) in scenes.iter().enumerate() {
                     ui.selectable_value(&mut sel, i, RichText::new(scene.name()).heading());
