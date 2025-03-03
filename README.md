@@ -9,6 +9,8 @@ contributing checkout the project GitHub issues. For more information about the 
 algorithm and background information see the old C++ repository `README.md`
 [here](https://github.com/jbuckmccready/CavalierContours).
 
+[👉 Click to run the web demo 👈](https://jbuckmccready.github.io/cavalier_contours/)
+
 This library uses no unsafe code (`#![forbid(unsafe_code)]` is applied) in the main
 `cavalier_contours` crate. Unsafe is used in the `cavalier_contours_ffi` crate for C bindings.
 
@@ -17,6 +19,10 @@ This library uses no unsafe code (`#![forbid(unsafe_code)]` is applied) in the m
 <img src="https://raw.githubusercontent.com/jbuckmccready/CavalierContoursDoc/master/images/pretty_examples/example1.png" width="400"/> <img src="https://raw.githubusercontent.com/jbuckmccready/CavalierContoursDoc/master/images/pretty_examples/islands_example1.png" width="400"/>
 
 ## Interactive Web Page for Visualizing and Testing
+
+
+> [!NOTE]  
+> This is the old web demo ui page. The new page built with egui is [here](https://jbuckmccready.github.io/cavalier_contours/).
 
 This project is compiled to wasm to create an interactive web demo page for visualing and testing.
 
