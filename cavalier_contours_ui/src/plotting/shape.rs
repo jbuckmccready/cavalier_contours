@@ -4,18 +4,22 @@ use cavalier_contours::{
     core::math::angle_from_bulge,
     polyline::{PlineSource as _, seg_arc_radius_and_center},
     shape_algorithms::Shape,
+    static_aabb2d_index::AABB,
 };
 use egui::epaint;
 use egui_plot::{PlotItem, PlotPoint, PlotTransform};
 use lyon::{
-    path::builder::WithSvg,
+    path::Path,
     tessellation::{
         BuffersBuilder, FillOptions, FillTessellator, StrokeOptions, StrokeTessellator,
         VertexBuffers,
     },
 };
 
-use super::{PLOT_VERTEX_RADIUS, VertexConstructor, aabb_to_plotbounds, lyon_point};
+use super::{
+    PLOT_VERTEX_RADIUS, VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point,
+    plotbounds_to_aabb,
+};
 
 pub struct ShapePlotItem<'a> {
     pub shape: &'a Shape<f64>,
@@ -63,10 +67,12 @@ impl PlotItem for ShapePlotItem<'_> {
             return;
         }
 
+        let plot_bounds = plotbounds_to_aabb(transform.bounds());
+
         // scale using x value (assuming uniform scaling)
         let scaling = transform.dpos_dvalue_x();
 
-        let mut builder = WithSvg::<lyon::path::Builder>::new(lyon::path::Builder::new());
+        let mut builder = Path::svg_builder();
 
         if self.stroke_color != epaint::Color32::TRANSPARENT
             || self.fill_color != epaint::Color32::TRANSPARENT
@@ -75,7 +81,17 @@ impl PlotItem for ShapePlotItem<'_> {
                 .shape
                 .ccw_plines
                 .iter()
-                .chain(self.shape.cw_plines.iter());
+                .chain(self.shape.cw_plines.iter())
+                .enumerate()
+                .filter_map(|(i, pl)| {
+                    // cull plines that are not visible
+                    let pl_aabb = self.shape.plines_index.item_boxes()[i];
+                    if pl_aabb.overlaps_aabb(&plot_bounds) {
+                        Some(pl)
+                    } else {
+                        None
+                    }
+                });
 
             for pline in iter {
                 let mut initial = true;
@@ -107,10 +123,6 @@ impl PlotItem for ShapePlotItem<'_> {
                         );
                     }
                 }
-
-                if !initial {
-                    builder.close();
-                }
             }
         }
 
@@ -141,13 +153,35 @@ impl PlotItem for ShapePlotItem<'_> {
         }
 
         if self.stroke_color != epaint::Color32::TRANSPARENT {
+            // screen bounds of the plot for culling
+            let screen_plot_bounds = {
+                let min_pt = transform.position_from_point(&PlotPoint::new(
+                    plot_bounds.min_x as f64,
+                    plot_bounds.min_y as f64,
+                ));
+                let max_pt = transform.position_from_point(&PlotPoint::new(
+                    plot_bounds.max_x as f64,
+                    plot_bounds.max_y as f64,
+                ));
+
+                // NOTE: y axis is flipped as ui coordinates have y positive going down
+                AABB::new(
+                    min_pt.x, max_pt.y, // y axis is flipped
+                    max_pt.x, min_pt.y, // y axis is flipped
+                )
+            };
+
+            // cull path to only include segments within the plot bounds, this is performance
+            // benefit as it avoids tessellating stroke segments that are not visible which is
+            // significant when zooming in as the number of triangles generated can be very large
+            let stroke_path = cull_path(&path, &screen_plot_bounds);
             let mut lyon_mesh: VertexBuffers<_, u32> = VertexBuffers::new();
             let mut stroke_tess = StrokeTessellator::new();
             let line_width = 1.0;
 
             stroke_tess
-                .tessellate_path(
-                    path.as_slice(),
+                .tessellate(
+                    stroke_path,
                     &StrokeOptions::DEFAULT.with_line_width(line_width),
                     &mut BuffersBuilder::new(
                         &mut lyon_mesh,
@@ -174,6 +208,14 @@ impl PlotItem for ShapePlotItem<'_> {
                 .flat_map(|p| p.polyline.iter_vertexes());
 
             for v in iter {
+                if v.x < plot_bounds.min_x
+                    || v.x > plot_bounds.max_x
+                    || v.y < plot_bounds.min_y
+                    || v.y > plot_bounds.max_y
+                {
+                    // out of plot bounds cull from plotting
+                    continue;
+                }
                 shapes.push(egui::Shape::circle_filled(
                     transform.position_from_point(&PlotPoint::new(v.x, v.y)),
                     PLOT_VERTEX_RADIUS,

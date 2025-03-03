@@ -3,18 +3,21 @@ use std::sync::Arc;
 use cavalier_contours::{
     core::math::angle_from_bulge,
     polyline::{PlineSource as _, Polyline, seg_arc_radius_and_center},
+    static_aabb2d_index::AABB,
 };
 use egui::epaint;
 use egui_plot::{PlotItem, PlotPoint, PlotTransform};
 use lyon::{
-    path::builder::WithSvg,
+    path::Path,
     tessellation::{
         BuffersBuilder, FillOptions, FillTessellator, StrokeOptions, StrokeTessellator,
         VertexBuffers,
     },
 };
 
-use super::{PLOT_VERTEX_RADIUS, VertexConstructor, aabb_to_plotbounds, lyon_point};
+use crate::plotting::plotbounds_to_aabb;
+
+use super::{PLOT_VERTEX_RADIUS, VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point};
 
 pub struct PlinePlotItem<'a> {
     pub polyline: &'a Polyline,
@@ -65,7 +68,9 @@ impl PlotItem for PlinePlotItem<'_> {
         // scale using x value (assuming uniform scaling)
         let scaling = transform.dpos_dvalue_x();
 
-        let mut builder = WithSvg::<lyon::path::Builder>::new(lyon::path::Builder::new());
+        let mut builder = Path::svg_builder();
+
+        let plot_bounds = plotbounds_to_aabb(transform.bounds());
 
         if self.stroke_color != epaint::Color32::TRANSPARENT
             || self.fill_color != epaint::Color32::TRANSPARENT
@@ -128,13 +133,35 @@ impl PlotItem for PlinePlotItem<'_> {
         }
 
         if self.stroke_color != epaint::Color32::TRANSPARENT {
+            // screen bounds of the plot for culling
+            let screen_plot_bounds = {
+                let min_pt = transform.position_from_point(&PlotPoint::new(
+                    plot_bounds.min_x as f64,
+                    plot_bounds.min_y as f64,
+                ));
+                let max_pt = transform.position_from_point(&PlotPoint::new(
+                    plot_bounds.max_x as f64,
+                    plot_bounds.max_y as f64,
+                ));
+
+                // NOTE: y axis is flipped as ui coordinates have y positive going down
+                AABB::new(
+                    min_pt.x, max_pt.y, // y axis is flipped
+                    max_pt.x, min_pt.y, // y axis is flipped
+                )
+            };
+
+            // cull path to only include segments within the plot bounds, this is performance
+            // benefit as it avoids tessellating stroke segments that are not visible which is
+            // significant when zooming in as the number of triangles generated can be very large
+            let stroke_path = cull_path(&path, &screen_plot_bounds);
             let mut lyon_mesh: VertexBuffers<_, u32> = VertexBuffers::new();
             let mut stroke_tess = StrokeTessellator::new();
             let line_width = 1.0;
 
             stroke_tess
-                .tessellate_path(
-                    path.as_slice(),
+                .tessellate(
+                    stroke_path,
                     &StrokeOptions::DEFAULT.with_line_width(line_width),
                     &mut BuffersBuilder::new(
                         &mut lyon_mesh,
@@ -154,6 +181,14 @@ impl PlotItem for PlinePlotItem<'_> {
 
         if self.vertex_color != epaint::Color32::TRANSPARENT {
             for v in self.polyline.iter_vertexes() {
+                if v.x < plot_bounds.min_x
+                    || v.x > plot_bounds.max_x
+                    || v.y < plot_bounds.min_y
+                    || v.y > plot_bounds.max_y
+                {
+                    // out of plot bounds cull from plotting
+                    continue;
+                }
                 shapes.push(egui::Shape::circle_filled(
                     transform.position_from_point(&PlotPoint::new(v.x, v.y)),
                     PLOT_VERTEX_RADIUS,
