@@ -295,11 +295,12 @@ fn plot_area(
 
                     shape = Shape::from_plines(all_plines);
 
-                    plot_ui.add(
-                        ShapePlotItem::new(&shape)
-                            .fill_color(fill_color1)
-                            .stroke_color(color1),
-                    );
+                    let mut plot_item = ShapePlotItem::new(&shape).stroke_color(color1);
+                    if *fill {
+                        plot_item = plot_item.fill_color(fill_color1);
+                    }
+
+                    plot_ui.add(plot_item);
                 }
             }
 
