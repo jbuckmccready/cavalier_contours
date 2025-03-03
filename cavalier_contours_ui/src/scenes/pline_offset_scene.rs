@@ -284,10 +284,6 @@ fn plot_area(
                     .vertex_color(Color32::LIGHT_GREEN),
             );
 
-            if *offset == 0.0 {
-                return;
-            }
-
             // TODO: color pickers
             match &scene_state {
                 SceneState::Offset { all_offset_plines } => {
