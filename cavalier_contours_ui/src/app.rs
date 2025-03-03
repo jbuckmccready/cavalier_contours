@@ -14,6 +14,13 @@ impl MainApp {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
+        // bump overall font style size up as default is a bit small
+        cc.egui_ctx.style_mut(|style| {
+            for v in style.text_styles.values_mut() {
+                v.size += 2.0;
+            }
+        });
+
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         if let Some(storage) = cc.storage {
