@@ -6,13 +6,9 @@ use cavalier_contours::{
 use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint};
 
-use crate::plotting::ShapePlotItem;
+use crate::plotting::{PlinePlotData, PlinesPlotItem};
 
-use super::{
-    super::plotting::{PLOT_VERTEX_RADIUS, PlinePlotItem},
-    Scene,
-    scene_settings::SceneSettings,
-};
+use super::{super::plotting::PLOT_VERTEX_RADIUS, Scene, scene_settings::SceneSettings};
 
 pub struct PlineBooleanScene {
     pline1: Polyline,
@@ -265,8 +261,8 @@ fn plot_area(
             let fill_color1 = color1.gamma_multiply(opacity);
             let fill_color2 = color2.gamma_multiply(opacity);
 
-            let mut plot_item1 = PlinePlotItem::new(pline1);
-            let mut plot_item2 = PlinePlotItem::new(pline2);
+            let mut plot_item1 = PlinesPlotItem::new(PlinePlotData::new(pline1));
+            let mut plot_item2 = PlinesPlotItem::new(PlinePlotData::new(pline2));
 
             if *show_vertexes {
                 plot_item1 = plot_item1.vertex_color(fill_color1);
@@ -295,7 +291,7 @@ fn plot_area(
 
                     shape = Shape::from_plines(all_plines);
 
-                    let mut plot_item = ShapePlotItem::new(&shape).stroke_color(color1);
+                    let mut plot_item = PlinesPlotItem::new(&shape).stroke_color(color1);
                     if *fill {
                         plot_item = plot_item.fill_color(fill_color1);
                     }

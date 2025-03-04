@@ -11,13 +11,9 @@ use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Slider, U
 use egui::Id;
 use egui_plot::{Plot, PlotPoint};
 
-use crate::plotting::RawPlineOffsetSegsPlotItem;
+use crate::plotting::{PlinePlotData, PlinesPlotItem, RawPlineOffsetSegsPlotItem};
 
-use super::{
-    super::plotting::{PLOT_VERTEX_RADIUS, PlinePlotItem},
-    Scene,
-    scene_settings::SceneSettings,
-};
+use super::{super::plotting::PLOT_VERTEX_RADIUS, Scene, scene_settings::SceneSettings};
 
 pub struct PlineOffsetScene {
     pline: Polyline,
@@ -278,15 +274,11 @@ fn plot_area(
             }
 
             plot_ui.add(
-                PlinePlotItem::new(pline)
+                PlinesPlotItem::new(PlinePlotData::new(pline))
                     .stroke_color(Color32::GOLD)
                     //.fill_color(Color32::LIGHT_YELLOW)
                     .vertex_color(Color32::LIGHT_GREEN),
             );
-
-            if *offset == 0.0 {
-                return;
-            }
 
             // TODO: color pickers
             match &scene_state {
@@ -298,12 +290,14 @@ fn plot_area(
                             Color32::LIGHT_RED
                         };
 
-                        plot_ui.add(PlinePlotItem::new(pl).stroke_color(color));
+                        plot_ui
+                            .add(PlinesPlotItem::new(PlinePlotData::new(pl)).stroke_color(color));
                     }
                 }
                 SceneState::RawOffset { raw_offset_pline } => {
                     plot_ui.add(
-                        PlinePlotItem::new(raw_offset_pline).stroke_color(Color32::LIGHT_GRAY),
+                        PlinesPlotItem::new(PlinePlotData::new(raw_offset_pline))
+                            .stroke_color(Color32::LIGHT_GRAY),
                     );
                 }
                 SceneState::RawOffsetSegments { segments } => {
