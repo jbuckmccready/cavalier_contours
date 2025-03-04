@@ -43,7 +43,7 @@ fn empty_aabb() -> AABB {
 }
 
 /// Cull path events to only include those that are within the given bounds.
-fn cull_path(path: &Path, bounds: &AABB<f32>) -> impl Iterator<Item = PathEvent> {
+fn cull_path(path: &Path, bounds: &egui::Rect) -> impl Iterator<Item = PathEvent> {
     let mut path_events = path.iter();
     let mut event_queued = None;
 
@@ -56,12 +56,9 @@ fn cull_path(path: &Path, bounds: &AABB<f32>) -> impl Iterator<Item = PathEvent>
         match event {
             PathEvent::Begin { .. } => Some(event),
             PathEvent::Line { from, to } => {
-                let min_x = from.x.min(to.x);
-                let min_y = from.y.min(to.y);
-                let max_x = from.x.max(to.x);
-                let max_y = from.y.max(to.y);
-                let line_aabb = AABB::new(min_x, min_y, max_x, max_y);
-                let keep = bounds.overlaps_aabb(&line_aabb);
+                let line_bounds =
+                    egui::Rect::from_two_pos(egui::pos2(from.x, from.y), egui::pos2(to.x, to.y));
+                let keep = bounds.intersects(line_bounds);
                 if !keep {
                     event_queued = Some(PathEvent::Begin { at: to });
                     return Some(PathEvent::End {
@@ -78,8 +75,11 @@ fn cull_path(path: &Path, bounds: &AABB<f32>) -> impl Iterator<Item = PathEvent>
                 let min_y = from.y.min(ctrl.y).min(to.y);
                 let max_x = from.x.max(ctrl.x).max(to.x);
                 let max_y = from.y.max(ctrl.y).max(to.y);
-                let quad_aabb = AABB::new(min_x, min_y, max_x, max_y);
-                let keep = bounds.overlaps_aabb(&quad_aabb);
+
+                let quad_bounds =
+                    egui::Rect::from_min_max(egui::pos2(min_x, min_y), egui::pos2(max_x, max_y));
+
+                let keep = bounds.intersects(quad_bounds);
                 if !keep {
                     event_queued = Some(PathEvent::Begin { at: to });
                     return Some(PathEvent::End {
@@ -101,8 +101,12 @@ fn cull_path(path: &Path, bounds: &AABB<f32>) -> impl Iterator<Item = PathEvent>
                 let min_y = from.y.min(ctrl1.y).min(ctrl2.y).min(to.y);
                 let max_x = from.x.max(ctrl1.x).max(ctrl2.x).max(to.x);
                 let max_y = from.y.max(ctrl1.y).max(ctrl2.y).max(to.y);
-                let quad_aabb = AABB::new(min_x, min_y, max_x, max_y);
-                let keep = bounds.overlaps_aabb(&quad_aabb);
+
+                let cubic_bounds =
+                    egui::Rect::from_min_max(egui::pos2(min_x, min_y), egui::pos2(max_x, max_y));
+
+                let keep = bounds.intersects(cubic_bounds);
+
                 if !keep {
                     event_queued = Some(PathEvent::Begin { at: to });
                     return Some(PathEvent::End {

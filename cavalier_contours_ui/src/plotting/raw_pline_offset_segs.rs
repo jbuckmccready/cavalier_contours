@@ -5,16 +5,15 @@ use cavalier_contours::{
     polyline::{
         internal::pline_offset::RawPlineOffsetSeg, seg_arc_radius_and_center, seg_bounding_box,
     },
-    static_aabb2d_index::AABB,
 };
 use egui::epaint;
-use egui_plot::{PlotItem, PlotPoint};
+use egui_plot::PlotItem;
 use lyon::{
     path::builder::WithSvg,
     tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, VertexBuffers},
 };
 
-use super::{VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point, plotbounds_to_aabb};
+use super::{VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point};
 
 pub struct RawPlineOffsetSegsPlotItem<'a> {
     pub segs: &'a [RawPlineOffsetSeg<f64>],
@@ -110,29 +109,10 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
 
             let path = builder.build();
 
-            let plot_bounds = plotbounds_to_aabb(transform.bounds());
-            // screen bounds of the plot for culling
-            let screen_plot_bounds = {
-                let min_pt = transform.position_from_point(&PlotPoint::new(
-                    plot_bounds.min_x as f64,
-                    plot_bounds.min_y as f64,
-                ));
-                let max_pt = transform.position_from_point(&PlotPoint::new(
-                    plot_bounds.max_x as f64,
-                    plot_bounds.max_y as f64,
-                ));
-
-                // NOTE: y axis is flipped as ui coordinates have y positive going down
-                AABB::new(
-                    min_pt.x, max_pt.y, // y axis is flipped
-                    max_pt.x, min_pt.y, // y axis is flipped
-                )
-            };
-
             // cull path to only include segments within the plot bounds, this is performance
             // benefit as it avoids tessellating stroke segments that are not visible which is
             // significant when zooming in as the number of triangles generated can be very large
-            let stroke_path = cull_path(&path, &screen_plot_bounds);
+            let stroke_path = cull_path(&path, transform.frame());
             stroke_tess
                 .tessellate(
                     stroke_path,

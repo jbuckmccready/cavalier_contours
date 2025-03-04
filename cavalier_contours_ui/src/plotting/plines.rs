@@ -242,28 +242,10 @@ where
         }
 
         if self.stroke_color != epaint::Color32::TRANSPARENT {
-            // screen bounds of the plot for culling
-            let screen_plot_bounds = {
-                let min_pt = transform.position_from_point(&PlotPoint::new(
-                    plot_bounds.min_x as f64,
-                    plot_bounds.min_y as f64,
-                ));
-                let max_pt = transform.position_from_point(&PlotPoint::new(
-                    plot_bounds.max_x as f64,
-                    plot_bounds.max_y as f64,
-                ));
-
-                // NOTE: y axis is flipped as ui coordinates have y positive going down
-                AABB::new(
-                    min_pt.x, max_pt.y, // y axis is flipped
-                    max_pt.x, min_pt.y, // y axis is flipped
-                )
-            };
-
             // cull path to only include segments within the plot bounds, this is performance
             // benefit as it avoids tessellating stroke segments that are not visible which is
             // significant when zooming in as the number of triangles generated can be very large
-            let stroke_path = cull_path(&path, &screen_plot_bounds);
+            let stroke_path = cull_path(&path, transform.frame());
             let mut lyon_mesh: VertexBuffers<_, u32> = VertexBuffers::new();
             let mut stroke_tess = StrokeTessellator::new();
             let line_width = 1.0;
