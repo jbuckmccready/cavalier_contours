@@ -235,21 +235,23 @@ fn plot_area(
                 }
             }
 
-            // draw shapes
-            // 1) shape1
-            plot_ui.add(
-                ShapePlotItem::new(&shape1)
-                    .stroke_color(Color32::BLUE)
-                    .fill_color(fill_color1)
-                    .vertex_color(Color32::LIGHT_BLUE),
-            );
-            // 2) shape2
-            plot_ui.add(
-                ShapePlotItem::new(&shape2)
-                    .stroke_color(Color32::RED)
-                    .fill_color(fill_color2)
-                    .vertex_color(Color32::LIGHT_RED),
-            );
+            if boolean_op.is_none() {
+                // draw shapes
+                // 1) shape1
+                plot_ui.add(
+                    ShapePlotItem::new(&shape1)
+                        .stroke_color(Color32::BLUE)
+                        .fill_color(fill_color1)
+                        .vertex_color(Color32::LIGHT_BLUE),
+                );
+                // 2) shape2
+                plot_ui.add(
+                    ShapePlotItem::new(&shape2)
+                        .stroke_color(Color32::RED)
+                        .fill_color(fill_color2)
+                        .vertex_color(Color32::LIGHT_RED),
+                );
+            }
 
             if boolean_op.is_some() {
                 // next: compute the shape boolean
