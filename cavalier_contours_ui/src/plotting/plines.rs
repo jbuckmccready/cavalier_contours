@@ -99,7 +99,7 @@ impl PlinesPlotData for PlinePlotData<'_> {
 impl PlinesPlotData for Shape<f64> {
     type Source = Polyline;
 
-    fn plines<F>(&self, mut f: F)
+    fn plines<F>(&self, mut visitor: F)
     where
         F: FnMut(&Self::Source, AABB),
     {
@@ -110,7 +110,7 @@ impl PlinesPlotData for Shape<f64> {
                 .bounds()
                 .unwrap_or_else(empty_aabb);
 
-            f(pline, bounds);
+            visitor(pline, bounds);
         }
     }
 
