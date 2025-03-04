@@ -26,7 +26,7 @@ struct InteractionState {
     grabbed_vertex: Option<(usize, usize)>,
     dragging: bool,
     zoom_to_fit: bool,
-    boolean_op: BooleanOp,
+    boolean_op: Option<BooleanOp>,
 }
 
 /// Provide a default starting scene with two shapes that partially overlap.
@@ -57,8 +57,8 @@ impl Default for ShapeBooleanScene {
                 (250.0, 100.0, -1.0),
             ],
             pline_closed![
-                (320.5065990423979, 76.14222955572362, -1.0),
                 (320.2986109239592, 103.52378781211337, 0.0),
+                (320.5065990423979, 76.14222955572362, -1.0),
             ],
             pline_closed![
                 (273.6131273938006, -13.968608715397636, -0.3),
@@ -80,7 +80,7 @@ impl Default for ShapeBooleanScene {
                 grabbed_vertex: None,
                 dragging: false,
                 zoom_to_fit: false,
-                boolean_op: BooleanOp::Or,
+                boolean_op: None,
             },
         }
     }
@@ -126,10 +126,11 @@ fn controls_panel(
 
                 // pick boolean op
                 ui.label("Boolean Operation");
-                ui.radio_value(&mut interaction_state.boolean_op, BooleanOp::Or, "Or");
-                ui.radio_value(&mut interaction_state.boolean_op, BooleanOp::And, "And");
-                ui.radio_value(&mut interaction_state.boolean_op, BooleanOp::Not, "Not");
-                ui.radio_value(&mut interaction_state.boolean_op, BooleanOp::Xor, "Xor");
+                ui.radio_value(&mut interaction_state.boolean_op, None, "None");
+                ui.radio_value(&mut interaction_state.boolean_op, Some(BooleanOp::Or), "Or");
+                ui.radio_value(&mut interaction_state.boolean_op, Some(BooleanOp::And), "And");
+                ui.radio_value(&mut interaction_state.boolean_op, Some(BooleanOp::Not), "Not");
+                ui.radio_value(&mut interaction_state.boolean_op, Some(BooleanOp::Xor), "Xor");
 
                 // "Zoom to Fit" button
                 if ui.button("Zoom to Fit").clicked() {
@@ -240,38 +241,40 @@ fn plot_area(
                 ShapePlotItem::new(&shape1)
                     .stroke_color(Color32::BLUE)
                     .fill_color(fill_color1)
-                    .vertex_color(Color32::PURPLE),
+                    .vertex_color(Color32::LIGHT_BLUE),
             );
             // 2) shape2
             plot_ui.add(
                 ShapePlotItem::new(&shape2)
                     .stroke_color(Color32::RED)
                     .fill_color(fill_color2)
-                    .vertex_color(Color32::LIGHT_YELLOW),
+                    .vertex_color(Color32::LIGHT_RED),
             );
 
-            // next: compute the shape boolean
-            let bool_result = shape1.boolean(shape2, *boolean_op);
-            // build a shape from the boolean result for plotting
-            let all_plines = bool_result
-                .ccw_plines
-                .into_iter()
-                .chain(bool_result.cw_plines)
-                .map(|rp| rp.polyline); // ignoring sign for demonstration
-            shape_result = Shape::from_plines(all_plines);
-
-            // add the shape result to the plot as well
-            plot_ui.add(
-                ShapePlotItem::new(&shape_result)
-                    .stroke_color(Color32::GREEN)
-                    .fill_color(fill_color3)
-                    .vertex_color(Color32::WHITE),
-            );
+            if boolean_op.is_some() {
+                // next: compute the shape boolean
+                let bool_result = shape1.boolean(shape2, boolean_op.unwrap());
+                // build a shape from the boolean result for plotting
+                let all_plines = bool_result
+                    .ccw_plines
+                    .into_iter()
+                    .chain(bool_result.cw_plines)
+                    .map(|rp| rp.polyline); // ignoring sign for demonstration
+                shape_result = Shape::from_plines(all_plines);
+    
+                // add the shape result to the plot as well
+                plot_ui.add(
+                    ShapePlotItem::new(&shape_result)
+                        .stroke_color(Color32::GREEN)
+                        .fill_color(fill_color3)
+                        .vertex_color(Color32::LIGHT_GREEN),
+                );
+            }
 
             // if user asked "zoom to fit," we do it
-            if *zoom_to_fit {
-                plot_ui.set_auto_bounds([true, true]);
-            }
+            //if *zoom_to_fit {
+            //    plot_ui.set_auto_bounds([true, true]);
+            //}
         });
     });
 }
