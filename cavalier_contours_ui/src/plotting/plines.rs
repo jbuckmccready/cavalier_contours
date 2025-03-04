@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use cavalier_contours::{
     core::math::angle_from_bulge,
-    polyline::{PlineSource as _, seg_arc_radius_and_center},
+    polyline::{PlineSource, Polyline, seg_arc_radius_and_center},
     shape_algorithms::Shape,
     static_aabb2d_index::AABB,
 };
@@ -16,23 +16,122 @@ use lyon::{
     },
 };
 
+use crate::plotting::plotbounds_to_aabb;
+
 use super::{
-    PLOT_VERTEX_RADIUS, VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point,
-    plotbounds_to_aabb,
+    PLOT_VERTEX_RADIUS, VertexConstructor, aabb_to_plotbounds, cull_path, empty_aabb, lyon_point,
 };
 
-pub struct ShapePlotItem<'a> {
-    pub shape: &'a Shape<f64>,
-    pub vertex_color: epaint::Color32,
-    pub stroke_color: epaint::Color32,
-    pub fill_color: epaint::Color32,
+/// Core trait for plotting polylines data, supports plotting multiple polylines.
+pub trait PlinesPlotData {
+    type Source: PlineSource<Num = f64>;
+
+    // `visitor` is a closure that takes a polyline and its bounds used to plot the polyline (bounds used
+    // to cull from scene). When implementing this trait, the visitor should be called for each
+    // polyline (along with its bounds) to be plotted.
+    fn plines<F>(&self, visitor: F)
+    where
+        F: FnMut(&Self::Source, AABB);
+
+    // Total bounds of all polylines (used for zoom to fit and culling from scene).
+    fn bounds(&self) -> AABB;
+}
+
+// blanket impl for references to PlinesPlotData (allows passing in both owned and borrowed data)
+impl<T> PlinesPlotData for &T
+where
+    T: PlinesPlotData,
+{
+    type Source = T::Source;
+
+    fn plines<F>(&self, visitor: F)
+    where
+        F: FnMut(&Self::Source, AABB),
+    {
+        (*self).plines(visitor);
+    }
+
+    fn bounds(&self) -> AABB {
+        (*self).bounds()
+    }
+}
+
+/// Simple wrapper to create plot data for a single polyline.
+pub struct PlinePlotData<'a> {
+    /// Reference to the polyline.
+    pub pline: &'a Polyline,
+    /// Bounds of the polyline.
+    pub bounds: AABB,
+}
+
+impl<'a> PlinePlotData<'a> {
+    pub fn new(pline: &'a Polyline) -> Self {
+        let bounds = match pline.vertex_count() {
+            0 => empty_aabb(),
+            1 => {
+                let v = pline[0];
+                AABB::new(v.x, v.y, v.x, v.y)
+            }
+            _ => {
+                let bounds = pline.extents();
+                bounds.unwrap_or_else(empty_aabb)
+            }
+        };
+        Self { pline, bounds }
+    }
+}
+
+impl PlinesPlotData for PlinePlotData<'_> {
+    type Source = Polyline;
+
+    fn plines<F>(&self, mut visitor: F)
+    where
+        F: FnMut(&Self::Source, AABB),
+    {
+        visitor(self.pline, self.bounds);
+    }
+
+    fn bounds(&self) -> AABB {
+        self.bounds
+    }
+}
+
+impl PlinesPlotData for Shape<f64> {
+    type Source = Polyline;
+
+    fn plines<F>(&self, mut f: F)
+    where
+        F: FnMut(&Self::Source, AABB),
+    {
+        for indexed_pline in self.ccw_plines.iter().chain(self.cw_plines.iter()) {
+            let pline = &indexed_pline.polyline;
+            let bounds = indexed_pline
+                .spatial_index
+                .bounds()
+                .unwrap_or_else(empty_aabb);
+
+            f(pline, bounds);
+        }
+    }
+
+    fn bounds(&self) -> AABB {
+        self.plines_index.bounds().unwrap_or_else(empty_aabb)
+    }
+}
+
+/// Plot item for plotting multiple polylines.
+pub struct PlinesPlotItem<T> {
+    data: T,
+    vertex_color: epaint::Color32,
+    stroke_color: epaint::Color32,
+    fill_color: epaint::Color32,
     id: Option<egui::Id>,
 }
 
-impl<'a> ShapePlotItem<'a> {
-    pub fn new(shape: &'a Shape<f64>) -> Self {
+impl<T> PlinesPlotItem<T> {
+    pub fn new(data: T) -> Self {
         Self {
-            shape,
+            data,
             vertex_color: epaint::Color32::TRANSPARENT,
             stroke_color: epaint::Color32::TRANSPARENT,
             fill_color: epaint::Color32::TRANSPARENT,
@@ -61,13 +160,15 @@ impl<'a> ShapePlotItem<'a> {
     }
 }
 
-impl PlotItem for ShapePlotItem<'_> {
+impl<T> PlotItem for PlinesPlotItem<T>
+where
+    T: PlinesPlotData,
+{
     fn shapes(&self, _ui: &egui::Ui, transform: &PlotTransform, shapes: &mut Vec<egui::Shape>) {
-        if self.shape.ccw_plines.is_empty() && self.shape.cw_plines.is_empty() {
+        let plot_bounds = plotbounds_to_aabb(transform.bounds());
+        if !plot_bounds.overlaps_aabb(&self.data.bounds()) {
             return;
         }
-
-        let plot_bounds = plotbounds_to_aabb(transform.bounds());
 
         // scale using x value (assuming uniform scaling)
         let scaling = transform.dpos_dvalue_x();
@@ -77,25 +178,13 @@ impl PlotItem for ShapePlotItem<'_> {
         if self.stroke_color != epaint::Color32::TRANSPARENT
             || self.fill_color != epaint::Color32::TRANSPARENT
         {
-            let iter = self
-                .shape
-                .ccw_plines
-                .iter()
-                .chain(self.shape.cw_plines.iter())
-                .enumerate()
-                .filter_map(|(i, pl)| {
-                    // cull plines that are not visible
-                    let pl_aabb = self.shape.plines_index.item_boxes()[i];
-                    if pl_aabb.overlaps_aabb(&plot_bounds) {
-                        Some(pl)
-                    } else {
-                        None
-                    }
-                });
-
-            for pline in iter {
+            self.data.plines(|pline, bounds| {
+                // cull plines that are not visible
+                if !bounds.overlaps_aabb(&plot_bounds) {
+                    return;
+                }
                 let mut initial = true;
-                for (v1, v2) in pline.polyline.iter_segments() {
+                for (v1, v2) in pline.iter_segments() {
                     let p1 = lyon_point(v1.pos(), transform);
                     let p2 = lyon_point(v2.pos(), transform);
 
@@ -123,7 +212,7 @@ impl PlotItem for ShapePlotItem<'_> {
                         );
                     }
                 }
-            }
+            });
         }
 
         let path = builder.build();
@@ -200,35 +289,30 @@ impl PlotItem for ShapePlotItem<'_> {
         }
 
         if self.vertex_color != epaint::Color32::TRANSPARENT {
-            let iter = self
-                .shape
-                .ccw_plines
-                .iter()
-                .chain(self.shape.cw_plines.iter())
-                .flat_map(|p| p.polyline.iter_vertexes());
-
-            for v in iter {
-                if v.x < plot_bounds.min_x
-                    || v.x > plot_bounds.max_x
-                    || v.y < plot_bounds.min_y
-                    || v.y > plot_bounds.max_y
-                {
-                    // out of plot bounds cull from plotting
-                    continue;
+            self.data.plines(|pline, _| {
+                for v in pline.iter_vertexes() {
+                    if v.x < plot_bounds.min_x
+                        || v.x > plot_bounds.max_x
+                        || v.y < plot_bounds.min_y
+                        || v.y > plot_bounds.max_y
+                    {
+                        // out of plot bounds cull from plotting
+                        continue;
+                    }
+                    shapes.push(egui::Shape::circle_filled(
+                        transform.position_from_point(&PlotPoint::new(v.x, v.y)),
+                        PLOT_VERTEX_RADIUS,
+                        self.vertex_color,
+                    ));
                 }
-                shapes.push(egui::Shape::circle_filled(
-                    transform.position_from_point(&PlotPoint::new(v.x, v.y)),
-                    PLOT_VERTEX_RADIUS,
-                    self.vertex_color,
-                ));
-            }
+            });
         }
     }
 
     fn initialize(&mut self, _x_range: std::ops::RangeInclusive<f64>) {}
 
     fn name(&self) -> &str {
-        "Polyline"
+        "Polylines"
     }
 
     fn color(&self) -> egui::Color32 {
@@ -250,11 +334,7 @@ impl PlotItem for ShapePlotItem<'_> {
     }
 
     fn bounds(&self) -> egui_plot::PlotBounds {
-        if let Some(aabb) = self.shape.plines_index.bounds() {
-            aabb_to_plotbounds(&aabb)
-        } else {
-            egui_plot::PlotBounds::NOTHING
-        }
+        aabb_to_plotbounds(&self.data.bounds())
     }
 
     fn id(&self) -> Option<egui::Id> {

@@ -1,10 +1,8 @@
-mod pline;
+mod plines;
 mod raw_pline_offset_segs;
-mod shape;
 
-pub use pline::*;
+pub use plines::*;
 pub use raw_pline_offset_segs::*;
-pub use shape::*;
 
 use cavalier_contours::{core::math::Vector2, static_aabb2d_index::AABB};
 use egui::epaint;
@@ -33,6 +31,15 @@ fn plotbounds_to_aabb(bounds: &egui_plot::PlotBounds) -> AABB {
     let [min_x, min_y] = bounds.min();
     let [max_x, max_y] = bounds.max();
     AABB::new(min_x, min_y, max_x, max_y)
+}
+
+fn empty_aabb() -> AABB {
+    AABB::new(
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    )
 }
 
 /// Cull path events to only include those that are within the given bounds.
