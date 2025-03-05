@@ -13,7 +13,7 @@ use lyon::{
     tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, VertexBuffers},
 };
 
-use super::{VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point};
+use super::{VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point, plot_bounds_valid};
 
 pub struct RawPlineOffsetSegsPlotItem<'a> {
     pub segs: &'a [RawPlineOffsetSeg<f64>],
@@ -55,6 +55,10 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
         transform: &egui_plot::PlotTransform,
         shapes: &mut Vec<egui::Shape>,
     ) {
+        if !plot_bounds_valid(transform.bounds()) {
+            return;
+        }
+
         if self.segs.is_empty() {
             return;
         }

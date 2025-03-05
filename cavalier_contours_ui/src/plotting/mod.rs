@@ -15,6 +15,13 @@ use lyon::{
 /// Plot vertex radius (in pixels) for drawing vertices.
 pub const PLOT_VERTEX_RADIUS: f32 = 4.0;
 
+/// Minimum plot width/height for drawing. This avoids degenerate behavior when super zoomed in.
+const MIN_PLOT_SIZE: f64 = 1e-5;
+
+fn plot_bounds_valid(bounds: &egui_plot::PlotBounds) -> bool {
+    bounds.width() >= MIN_PLOT_SIZE && bounds.height() >= MIN_PLOT_SIZE
+}
+
 /// Convert cavalier contours Vector2 to lyon Point adjusted for plot using plo transform.
 fn lyon_point(v: Vector2, transform: &PlotTransform) -> lyon::math::Point {
     lyon::math::point(
