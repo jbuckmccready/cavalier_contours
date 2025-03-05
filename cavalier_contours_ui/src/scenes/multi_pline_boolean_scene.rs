@@ -5,6 +5,7 @@ use cavalier_contours::{
 };
 use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint};
+use egui::Pos2;
 
 use crate::plotting::PlinesPlotItem;
 use crate::scenes::SceneSettings;
@@ -23,7 +24,7 @@ pub struct MultiPlineBooleanScene {
 
 /// Simple container for our user interaction (dragging, etc.).
 struct InteractionState {
-    grabbed_vertex: Option<(usize, usize)>,
+    grabbed_vertex: Option<(usize, bool, usize, usize)>,
     dragging: bool,
     zoom_to_fit: bool,
     boolean_op: Option<BooleanOp>,
@@ -150,6 +151,63 @@ fn controls_panel(ui: &mut Ui, interaction_state: &mut InteractionState) {
         });
 }
 
+/// A helper function to search for any vertex in the provided shape's CCW or CW polylines that
+/// lies "near" a given screen coordinate. If found, returns `(shape_index, orientation, pline_idx, vertex_idx)`.
+fn find_near_vertex(
+    ui_coord: Pos2,
+    plot_ui: &egui_plot::PlotUi,
+    shape_index: usize,
+    shape: &Shape<f64>,
+) -> Option<(usize, bool, usize, usize)> {
+    let pointer_pos = plot_ui.plot_from_screen(ui_coord);
+
+    // We'll check CCW polylines first (orientation = true), then CW polylines (orientation = false).
+    // If you want the opposite priority, simply reverse the checks.
+    // The first match we find, we return immediately (so we pick the "topmost" or first found).
+    for (pline_idx, rpline) in shape.ccw_plines.iter().enumerate() {
+        let pline = &rpline.polyline;
+        for v_idx in 0..pline.vertex_count() {
+            let v = pline.at(v_idx);
+            let screen_v = plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y));
+            let hit_size =
+                2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
+            let rect = Rect::from_center_size(screen_v, Vec2::splat(hit_size));
+            if rect.contains(ui_coord) {
+                return Some((shape_index, true, pline_idx, v_idx));
+            }
+        }
+    }
+
+    for (pline_idx, rpline) in shape.cw_plines.iter().enumerate() {
+        let pline = &rpline.polyline;
+        for v_idx in 0..pline.vertex_count() {
+            let v = pline.at(v_idx);
+            let screen_v = plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y));
+            let hit_size =
+                2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
+            let rect = Rect::from_center_size(screen_v, Vec2::splat(hit_size));
+            if rect.contains(ui_coord) {
+                return Some((shape_index, false, pline_idx, v_idx));
+            }
+        }
+    }
+
+    None
+}
+
+/// Return a mutable reference to shape1 or shape2, based on `shape_idx`.
+fn pick_shape_mut<'a>(
+    shape_idx: usize,
+    shape1: &'a mut Shape<f64>,
+    shape2: &'a mut Shape<f64>,
+) -> &'a mut Shape<f64> {
+    if shape_idx == 0 {
+        shape1
+    } else {
+        shape2
+    }
+}
+
 /// The center "plot" area where we draw our shapes and do user interactions.
 fn plot_area(
     ui: &mut Ui,
@@ -165,11 +223,12 @@ fn plot_area(
         boolean_op,
     } = interaction_state;
 
+    let mut shape_result = Shape::empty();
+
     CentralPanel::default().show_inside(ui, |ui| {
         // set up the Plot widget
         let plot =
             settings.apply_to_plot(Plot::new("plot_area").data_aspect(1.0).allow_drag(false));
-        let mut shape_result = Shape::empty();
 
         // TODO: color pickers
         let color1 = Color32::LIGHT_BLUE;
@@ -195,55 +254,36 @@ fn plot_area(
                 }
             }
 
-            // If we have grabbed a vertex, we move it by the pointer delta
-            if let Some((grabbed_pl, grabbed_idx)) = *grabbed_vertex {
-                // compute how much the pointer has moved
+            if let Some((shape_idx, is_ccw, pline_idx, v_idx)) = *grabbed_vertex {
+                let shape = pick_shape_mut(shape_idx, shape1, shape2);
+                let rpline = if is_ccw {
+                    &mut shape.ccw_plines[pline_idx]
+                } else {
+                    &mut shape.cw_plines[pline_idx]
+                };
+                let pline = &mut rpline.polyline;
+            
+                // Apply the pointer delta
                 let delta = plot_ui.pointer_coordinate_drag_delta();
-                // decide which shape and which polylines we can move. We'll move shape1's first polyline for demonstration
-                // For simplicity, let's just say we move shape1's first CCW pline:
-                if grabbed_pl == 0 && !shape1.ccw_plines.is_empty() {
-                    let pline = &mut shape1.ccw_plines[0].polyline;
-                    if grabbed_idx < pline.vertex_count() {
-                        let v = pline.at(grabbed_idx);
-                        pline.set(
-                            grabbed_idx,
-                            v.x + delta.x as f64,
-                            v.y + delta.y as f64,
-                            v.bulge,
-                        );
-                    }
-                    // after mutating, we must rebuild shape indices
-                    shape1.ccw_plines[0].spatial_index =
-                        shape1.ccw_plines[0].polyline.create_aabb_index();
-                    // and the shape's overall index
-                    //shape1.plines_index = shape1.build_plines_index();
+                if v_idx < pline.vertex_count() {
+                    let v = pline.at(v_idx);
+                    pline.set(v_idx, v.x + delta.x as f64, v.y + delta.y as f64, v.bulge);
                 }
+                rpline.spatial_index = pline.create_aabb_index();
             } else if *dragging {
-                // if not dragging a vertex, we are panning the entire plot
+                // if we're not dragging a vertex, but the user is dragging the mouse, pan the plot
                 plot_ui.translate_bounds(-plot_ui.pointer_coordinate_drag_delta());
             } else if plot_ui.ctx().input(|i| i.pointer.any_pressed()) {
-                // pointer pressed, see if we clicked near a vertex in shape1
+                // pointer pressed, see if we clicked near any vertex from shape1 or shape2
                 if let Some(coord) = plot_ui.ctx().pointer_interact_pos() {
-                    let plot_pos = plot_ui.plot_from_screen(coord);
-                    let x = plot_pos.x as f64;
-                    let y = plot_pos.y as f64;
-                    // check shape1's first CCW pline for a close vertex
-                    if !shape1.ccw_plines.is_empty() {
-                        let pline = &shape1.ccw_plines[0].polyline;
-                        for i in 0..pline.vertex_count() {
-                            let v = pline.at(i);
-                            let screen_v = plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y));
-                            // compute distance
-                            let hit_size = 2.0
-                                * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
-                            let rect = Rect::from_center_size(screen_v, Vec2::splat(hit_size));
-                            if rect.contains(coord) {
-                                *grabbed_vertex = Some((0, i));
-                                break;
-                            }
-                        }
+                    let mut found_vertex = find_near_vertex(coord, plot_ui, 0, &*shape1)
+                        .or_else(|| find_near_vertex(coord, plot_ui, 1, &*shape2));
+
+                    if let Some(gv) = found_vertex {
+                        *grabbed_vertex = Some(gv);
                     }
-                    // if we did not set grabbed_vertex, then we are panning
+
+                    // If we didn't grab a vertex, treat the drag as a plot pan.
                     *dragging = grabbed_vertex.is_none();
                 }
             }
@@ -264,10 +304,8 @@ fn plot_area(
                         .fill_color(fill_color2)
                         .vertex_color(Color32::LIGHT_RED),
                 );
-            }
-
-            if boolean_op.is_some() {
-                // next: compute the shape boolean
+            } else {
+                // We have a boolean op; compute the shape and draw the result
                 let bool_result = shape1.boolean(shape2, boolean_op.unwrap());
                 // build a shape from the boolean result for plotting
                 let all_plines = bool_result
