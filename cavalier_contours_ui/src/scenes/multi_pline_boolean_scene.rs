@@ -159,7 +159,7 @@ fn find_near_vertex(
     shape_index: usize,
     shape: &Shape<f64>,
 ) -> Option<(usize, bool, usize, usize)> {
-    let pointer_pos = plot_ui.plot_from_screen(ui_coord);
+    let _pointer_pos = plot_ui.plot_from_screen(ui_coord);
 
     // We'll check CCW polylines first (orientation = true), then CW polylines (orientation = false).
     // If you want the opposite priority, simply reverse the checks.
@@ -276,7 +276,7 @@ fn plot_area(
             } else if plot_ui.ctx().input(|i| i.pointer.any_pressed()) {
                 // pointer pressed, see if we clicked near any vertex from shape1 or shape2
                 if let Some(coord) = plot_ui.ctx().pointer_interact_pos() {
-                    let mut found_vertex = find_near_vertex(coord, plot_ui, 0, &*shape1)
+                    let found_vertex = find_near_vertex(coord, plot_ui, 0, &*shape1)
                         .or_else(|| find_near_vertex(coord, plot_ui, 1, &*shape2));
 
                     if let Some(gv) = found_vertex {
