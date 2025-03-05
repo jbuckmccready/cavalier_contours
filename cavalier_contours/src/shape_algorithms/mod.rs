@@ -720,9 +720,7 @@ where
                     Some(bb) => bb,
                     None => continue,
                 };
-                if !boxes_overlap(&b1, &b2) {
-                    continue;
-                } else {
+                if boxes_overlap(&b1, &b2) {
                     // bounding box says "maybe they intersect"
 
                     // Actually do the boolean op to confirm real intersection:
@@ -755,9 +753,7 @@ where
                     None => continue,
                 };
 
-                if !boxes_overlap(&b1, &b2) {
-                    continue;
-                } else {
+                if boxes_overlap(&b1, &b2) {
                     // bounding box says "maybe they intersect"
 
                     // Actually do the boolean op to confirm real intersection:
@@ -792,9 +788,7 @@ where
                     None => continue,
                 };
 
-                if !boxes_overlap(&b1, &b2) {
-                    continue;
-                } else {
+                if boxes_overlap(&b1, &b2) {
                     // bounding box says "maybe they intersect"
 
                     // Actually do the boolean op to confirm real intersection:
@@ -828,9 +822,7 @@ where
                     None => continue,
                 };
 
-                if !boxes_overlap(&b1, &b2) {
-                    continue;
-                } else {
+                if boxes_overlap(&b1, &b2) {
                     // bounding box says "maybe they intersect"
 
                     // Actually do the boolean op to confirm real intersection:
@@ -866,6 +858,7 @@ where
                 final_cw.push(rp.pline);
             }
         }
+        
 
         // For union or XOR, also include any "unused" loops from self & other
         match op {
