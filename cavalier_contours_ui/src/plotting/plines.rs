@@ -20,6 +20,7 @@ use crate::plotting::plotbounds_to_aabb;
 
 use super::{
     PLOT_VERTEX_RADIUS, VertexConstructor, aabb_to_plotbounds, cull_path, empty_aabb, lyon_point,
+    plot_bounds_valid,
 };
 
 /// Core trait for plotting polylines data, supports plotting multiple polylines.
@@ -165,6 +166,9 @@ where
     T: PlinesPlotData,
 {
     fn shapes(&self, _ui: &egui::Ui, transform: &PlotTransform, shapes: &mut Vec<egui::Shape>) {
+        if !plot_bounds_valid(transform.bounds()) {
+            return;
+        }
         let plot_bounds = plotbounds_to_aabb(transform.bounds());
         if !plot_bounds.overlaps_aabb(&self.data.bounds()) {
             return;
