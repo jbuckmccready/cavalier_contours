@@ -22,8 +22,13 @@ cargo run
 
 > [!IMPORTANT]  
 > You need to have trunk installed to run the web ui locally (install docs [here](https://trunkrs.dev/guide/getting-started/installation.html)).
+> Compiling from source:
 > ```sh
 > cargo install trunk --locked
+> ```
+> You will also need the rust wasm target installed, using rustup:
+> ```sh
+> rustup target add wasm32-unknown-unknown
 > ```
 
 ```sh 

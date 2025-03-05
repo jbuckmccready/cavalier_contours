@@ -13,3 +13,10 @@ pub trait Scene {
 
     fn ui(&mut self, ui: &mut egui::Ui, settings: &SceneSettings, init: bool);
 }
+
+fn controls_side_panel(id: impl Into<egui::Id>) -> egui::SidePanel {
+    egui::SidePanel::right(id)
+        .min_width(100.0)
+        .default_width(200.0)
+        .max_width(400.0)
+}
