@@ -107,7 +107,7 @@ impl Scene for ShapeBooleanScene {
         interaction_state.zoom_to_fit |= init;
 
         // next, render the "plot" area
-        plot_area(ui, shape1, shape2, interaction_state);
+        plot_area(ui, settings, shape1, shape2, interaction_state);
     }
 }
 
@@ -153,6 +153,7 @@ fn controls_panel(ui: &mut Ui, interaction_state: &mut InteractionState) {
 /// The center "plot" area where we draw our shapes and do user interactions.
 fn plot_area(
     ui: &mut Ui,
+    settings: &SceneSettings,
     shape1: &mut Shape<f64>,
     shape2: &mut Shape<f64>,
     interaction_state: &mut InteractionState,
@@ -166,7 +167,8 @@ fn plot_area(
 
     CentralPanel::default().show_inside(ui, |ui| {
         // set up the Plot widget
-        let plot = Plot::new("plot_area").data_aspect(1.0).allow_drag(false);
+        let plot =
+            settings.apply_to_plot(Plot::new("plot_area").data_aspect(1.0).allow_drag(false));
         let mut shape_result = Shape::empty();
 
         // TODO: color pickers
