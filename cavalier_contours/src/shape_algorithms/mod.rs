@@ -726,15 +726,12 @@ where
                     // Actually do the boolean op to confirm real intersection:
                     let result = ip.polyline.boolean(&jp.polyline, op);
 
-                    // If the result is disjoint or empty, we consider them not used
-                    if !matches!(result.result_info, BooleanResultInfo::Disjoint)
-                        || !result.pos_plines.is_empty()
-                        || !result.neg_plines.is_empty()
-                    {
-                        // If they do overlap, mark them used
+                    // If the boolean operation actually produced any output polylines,
+                    // we mark them as used and push them. Otherwise we skip them.
+                    if !result.pos_plines.is_empty() || !result.neg_plines.is_empty() {
                         self_used_ccw[i] = true;
                         othr_used_ccw[j] = true;
-                        all_results.push(result); // all of result?
+                        all_results.push(result);
                     }
                 }
             }
@@ -760,15 +757,12 @@ where
                     let jp_inverted = PlineInversionView::new(&jp.polyline);
                     let result = ip.polyline.boolean(&jp_inverted, op);
 
-                    // If the result is disjoint or empty, we consider them not used
-                    if !matches!(result.result_info, BooleanResultInfo::Disjoint)
-                        || !result.pos_plines.is_empty()
-                        || !result.neg_plines.is_empty()
-                    {
-                        // If they do overlap, mark them used
+                    // If the boolean operation actually produced any output polylines,
+                    // we mark them as used and push them. Otherwise we skip them.
+                    if !result.pos_plines.is_empty() || !result.neg_plines.is_empty() {
                         self_used_ccw[i] = true;
                         othr_used_cw[j] = true;
-                        all_results.push(result); // all of result?
+                        all_results.push(result);
                     }
                 }
             }
@@ -794,15 +788,12 @@ where
                     // Actually do the boolean op to confirm real intersection:
                     let result = ip_inverted.boolean(&jp.polyline, op);
 
-                    // If the result is disjoint or empty, we consider them not used
-                    if !matches!(result.result_info, BooleanResultInfo::Disjoint)
-                        || !result.pos_plines.is_empty()
-                        || !result.neg_plines.is_empty()
-                    {
-                        // If they do overlap, mark them used
+                    // If the boolean operation actually produced any output polylines,
+                    // we mark them as used and push them. Otherwise we skip them.
+                    if !result.pos_plines.is_empty() || !result.neg_plines.is_empty() {
                         self_used_cw[i] = true;
                         othr_used_ccw[j] = true;
-                        all_results.push(result); // all of result?
+                        all_results.push(result);
                     }
                 }
             }
@@ -829,15 +820,12 @@ where
                     let jp_inverted = PlineInversionView::new(&jp.polyline);
                     let result = ip_inverted.boolean(&jp_inverted, op);
 
-                    // If the result is disjoint or empty, we consider them not used
-                    if !matches!(result.result_info, BooleanResultInfo::Disjoint)
-                        || !result.pos_plines.is_empty()
-                        || !result.neg_plines.is_empty()
-                    {
-                        // If they do overlap, mark them used
+                    // If the boolean operation actually produced any output polylines,
+                    // we mark them as used and push them. Otherwise we skip them.
+                    if !result.pos_plines.is_empty() || !result.neg_plines.is_empty() {
                         self_used_cw[i] = true;
                         othr_used_cw[j] = true;
-                        all_results.push(result); // all of result?
+                        all_results.push(result);
                     }
                 }
             }
