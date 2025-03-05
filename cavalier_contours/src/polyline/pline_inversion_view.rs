@@ -1,6 +1,4 @@
-use crate::polyline::{
-    PlineSource, PlineVertex,
-};
+use crate::polyline::{PlineSource, PlineVertex};
 
 /// A read-only "view" of another polyline but with inverted (reversed) direction
 /// so that you do not need to clone and call `invert_direction_mut`.

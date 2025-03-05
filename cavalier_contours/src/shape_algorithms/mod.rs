@@ -8,8 +8,8 @@ use crate::{
         traits::Real,
     },
     polyline::{
-        FindIntersectsOptions, PlineBasicIntersect, PlineOffsetOptions, PlineOrientation, BooleanOp,
-        PlineSource, PlineSourceMut, PlineViewData, Polyline, PlineInversionView,
+        BooleanOp, FindIntersectsOptions, PlineBasicIntersect, PlineInversionView,
+        PlineOffsetOptions, PlineOrientation, PlineSource, PlineSourceMut, PlineViewData, Polyline,
         internal::pline_offset::point_valid_for_offset, seg_midpoint,
     },
 };
@@ -119,7 +119,6 @@ pub struct ShapeTransformBuilder<T: Real> {
 
     // If we want to invert direction or do multiple times, we only need to track an invert bool:
     invert_direction: bool,
-
     // Possibly track repeated rotates or merges them. But let's keep it simple:
     // We'll just store these as "accumulated transformations" for scale/rotate/translate,
     // plus a boolean for invert direction. More complicated steps can be added if needed.
@@ -677,7 +676,7 @@ where
             &s2[i - s1.len()]
         }
     }
-    
+
     /// Perform a boolean operation between `self` and `other` producing a new `Shape<T>`.
     /// The `op` can be `BooleanOp::Or`, `BooleanOp::And`, `BooleanOp::Not`, or `BooleanOp::Xor`.
     pub fn boolean(&self, other: &Self, op: BooleanOp) -> Self {
@@ -688,23 +687,24 @@ where
         // (We can do a naive approach: treat CW as simply "inverted" polylines.)
 
         let mut all_results = Vec::new();
-        
+
         // Helper for checking bounding-box overlap
         #[inline]
-        fn boxes_overlap<T: Real>(b1: &static_aabb2d_index::AABB<T>, 
-                                  b2: &static_aabb2d_index::AABB<T>) -> bool 
-        {
-            b1.min_x <= b2.max_x &&
-            b1.max_x >= b2.min_x &&
-            b1.min_y <= b2.max_y &&
-            b1.max_y >= b2.min_y
+        fn boxes_overlap<T: Real>(
+            b1: &static_aabb2d_index::AABB<T>,
+            b2: &static_aabb2d_index::AABB<T>,
+        ) -> bool {
+            b1.min_x <= b2.max_x
+                && b1.max_x >= b2.min_x
+                && b1.min_y <= b2.max_y
+                && b1.max_y >= b2.min_y
         }
-        
+
         // Bookkeeping: track which polylines from self/other participated
         let mut self_used_ccw = vec![false; self.ccw_plines.len()];
-        let mut self_used_cw  = vec![false; self.cw_plines.len()];
+        let mut self_used_cw = vec![false; self.cw_plines.len()];
         let mut othr_used_ccw = vec![false; other.ccw_plines.len()];
-        let mut othr_used_cw  = vec![false; other.cw_plines.len()];
+        let mut othr_used_cw = vec![false; other.cw_plines.len()];
 
         // For each loop in self vs each loop in other, we run the boolean operation,
         // wrapping clockwise polylines in a PlineInversionView (instead of mutating them)
@@ -726,39 +726,39 @@ where
                 // If they do overlap, mark them used
                 self_used_ccw[i] = true;
                 othr_used_ccw[j] = true;
-    
+
                 // Now do boolean clip
                 let res = ip.polyline.boolean(&jp.polyline, op);
                 all_results.push(res);
             }
         }
-        
+
         // 2) ccw_plines vs cw_plines
         for (i, ip) in self.ccw_plines.iter().enumerate() {
             let b1 = match ip.spatial_index.bounds() {
                 Some(bb) => bb,
                 None => continue,
             };
-    
+
             for (j, jp) in other.cw_plines.iter().enumerate() {
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
                 };
-    
+
                 if !boxes_overlap(&b1, &b2) {
                     continue;
                 }
                 // If they do overlap, mark them used
                 self_used_ccw[i] = true;
                 othr_used_cw[j] = true;
-    
+
                 let jp_inverted = PlineInversionView::new(&jp.polyline);
                 let res = ip.polyline.boolean(&jp_inverted, op);
                 all_results.push(res);
             }
         }
-    
+
         // 3) cw_plines vs ccw_plines
         for (i, ip) in self.cw_plines.iter().enumerate() {
             let b1 = match ip.spatial_index.bounds() {
@@ -766,25 +766,25 @@ where
                 None => continue,
             };
             let ip_inverted = PlineInversionView::new(&ip.polyline);
-    
+
             for (j, jp) in other.ccw_plines.iter().enumerate() {
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
                 };
-    
+
                 if !boxes_overlap(&b1, &b2) {
                     continue;
                 }
                 // If they do overlap, mark them used
                 self_used_cw[i] = true;
                 othr_used_ccw[j] = true;
-    
+
                 let res = ip_inverted.boolean(&jp.polyline, op);
                 all_results.push(res);
             }
         }
-    
+
         // 4) cw_plines vs cw_plines
         for (i, ip) in self.cw_plines.iter().enumerate() {
             let b1 = match ip.spatial_index.bounds() {
@@ -792,20 +792,20 @@ where
                 None => continue,
             };
             let ip_inverted = PlineInversionView::new(&ip.polyline);
-    
+
             for (j, jp) in other.cw_plines.iter().enumerate() {
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
                 };
-    
+
                 if !boxes_overlap(&b1, &b2) {
                     continue;
                 }
                 // If they do overlap, mark them used
                 self_used_cw[i] = true;
                 othr_used_cw[j] = true;
-    
+
                 let jp_inverted = PlineInversionView::new(&jp.polyline);
                 let res = ip_inverted.boolean(&jp_inverted, op);
                 all_results.push(res);
@@ -867,11 +867,11 @@ where
                         final_cw.push(other.cw_plines[j].polyline.clone());
                     }
                 }
-            },
+            }
             BooleanOp::And => {
-            // For intersection, leftover loops do not appear
-            // ...
-            },
+                // For intersection, leftover loops do not appear
+                // ...
+            }
             BooleanOp::Not => {
                 // For difference: leftover loops from self remain,
                 // leftover loops from other do NOT appear.
@@ -891,11 +891,7 @@ where
         // 3) Optionally combine/merge identical or overlapping loops if necessary
 
         // 4) Build new shape from these final CCW / CW polylines:
-        Shape::from_plines(
-            final_ccw
-                .into_iter()
-                .chain(final_cw.into_iter())
-        )
+        Shape::from_plines(final_ccw.into_iter().chain(final_cw.into_iter()))
     }
 
     /// Union
@@ -917,7 +913,7 @@ where
     pub fn xor(&self, other: &Self) -> Self {
         self.boolean(other, BooleanOp::Xor)
     }
-    
+
     /// Translates all polylines by `(dx, dy)`.
     pub fn translate_mut(&mut self, dx: T, dy: T) {
         for loop_poly in &mut self.ccw_plines {
@@ -1070,11 +1066,17 @@ where
         let total_len = self.ccw_plines.len() + self.cw_plines.len();
         let mut builder = StaticAABB2DIndexBuilder::new(total_len);
         for loop_poly in &self.ccw_plines {
-            let bounds = loop_poly.spatial_index.bounds().expect("empty pline unexpected");
+            let bounds = loop_poly
+                .spatial_index
+                .bounds()
+                .expect("empty pline unexpected");
             builder.add(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
         }
         for loop_poly in &self.cw_plines {
-            let bounds = loop_poly.spatial_index.bounds().expect("empty pline unexpected");
+            let bounds = loop_poly
+                .spatial_index
+                .bounds()
+                .expect("empty pline unexpected");
             builder.add(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
         }
         builder.build().unwrap()
@@ -1207,9 +1209,8 @@ impl<T: Real> ShapeTransformBuilder<T> {
         }
 
         // now rebuild shape's top-level index
-        let mut builder = StaticAABB2DIndexBuilder::new(
-            self.shape.ccw_plines.len() + self.shape.cw_plines.len()
-        );
+        let mut builder =
+            StaticAABB2DIndexBuilder::new(self.shape.ccw_plines.len() + self.shape.cw_plines.len());
         for ip in &self.shape.ccw_plines {
             if let Some(b) = ip.spatial_index.bounds() {
                 builder.add(b.min_x, b.min_y, b.max_x, b.max_y);

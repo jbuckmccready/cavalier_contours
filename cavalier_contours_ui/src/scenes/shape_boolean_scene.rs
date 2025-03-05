@@ -6,7 +6,7 @@ use cavalier_contours::{
 use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint};
 
-use crate::plotting::ShapePlotItem;
+use crate::plotting::PlinesPlotItem;
 use crate::scenes::SceneSettings;
 
 use super::{super::plotting::PLOT_VERTEX_RADIUS, Scene};
@@ -112,10 +112,7 @@ impl Scene for ShapeBooleanScene {
 }
 
 /// The panel with controls where the user can pick the boolean op, etc.
-fn controls_panel(
-    ui: &mut Ui,
-    interaction_state: &mut InteractionState,
-) {
+fn controls_panel(ui: &mut Ui, interaction_state: &mut InteractionState) {
     SidePanel::right("shape_boolean_panel")
         .min_width(200.0)
         .default_width(200.0)
@@ -128,9 +125,21 @@ fn controls_panel(
                 ui.label("Boolean Operation");
                 ui.radio_value(&mut interaction_state.boolean_op, None, "None");
                 ui.radio_value(&mut interaction_state.boolean_op, Some(BooleanOp::Or), "Or");
-                ui.radio_value(&mut interaction_state.boolean_op, Some(BooleanOp::And), "And");
-                ui.radio_value(&mut interaction_state.boolean_op, Some(BooleanOp::Not), "Not");
-                ui.radio_value(&mut interaction_state.boolean_op, Some(BooleanOp::Xor), "Xor");
+                ui.radio_value(
+                    &mut interaction_state.boolean_op,
+                    Some(BooleanOp::And),
+                    "And",
+                );
+                ui.radio_value(
+                    &mut interaction_state.boolean_op,
+                    Some(BooleanOp::Not),
+                    "Not",
+                );
+                ui.radio_value(
+                    &mut interaction_state.boolean_op,
+                    Some(BooleanOp::Xor),
+                    "Xor",
+                );
 
                 // "Zoom to Fit" button
                 if ui.button("Zoom to Fit").clicked() {
@@ -158,7 +167,7 @@ fn plot_area(
         // set up the Plot widget
         let plot = Plot::new("plot_area").data_aspect(1.0).allow_drag(false);
         let mut shape_result = Shape::empty();
-        
+
         // TODO: color pickers
         let color1 = Color32::LIGHT_BLUE;
         let color2 = Color32::LIGHT_RED;
@@ -201,7 +210,8 @@ fn plot_area(
                         );
                     }
                     // after mutating, we must rebuild shape indices
-                    shape1.ccw_plines[0].spatial_index = shape1.ccw_plines[0].polyline.create_aabb_index();
+                    shape1.ccw_plines[0].spatial_index =
+                        shape1.ccw_plines[0].polyline.create_aabb_index();
                     // and the shape's overall index
                     //shape1.plines_index = shape1.build_plines_index();
                 }
@@ -221,8 +231,8 @@ fn plot_area(
                             let v = pline.at(i);
                             let screen_v = plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y));
                             // compute distance
-                            let hit_size =
-                                2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
+                            let hit_size = 2.0
+                                * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
                             let rect = Rect::from_center_size(screen_v, Vec2::splat(hit_size));
                             if rect.contains(coord) {
                                 *grabbed_vertex = Some((0, i));
@@ -239,14 +249,14 @@ fn plot_area(
                 // draw shapes
                 // 1) shape1
                 plot_ui.add(
-                    ShapePlotItem::new(&shape1)
+                    PlinesPlotItem::new(&*shape1)
                         .stroke_color(Color32::BLUE)
                         .fill_color(fill_color1)
                         .vertex_color(Color32::LIGHT_BLUE),
                 );
                 // 2) shape2
                 plot_ui.add(
-                    ShapePlotItem::new(&shape2)
+                    PlinesPlotItem::new(&*shape2)
                         .stroke_color(Color32::RED)
                         .fill_color(fill_color2)
                         .vertex_color(Color32::LIGHT_RED),
@@ -263,10 +273,10 @@ fn plot_area(
                     .chain(bool_result.cw_plines)
                     .map(|rp| rp.polyline); // ignoring sign for demonstration
                 shape_result = Shape::from_plines(all_plines);
-    
+
                 // add the shape result to the plot as well
                 plot_ui.add(
-                    ShapePlotItem::new(&shape_result)
+                    PlinesPlotItem::new(&shape_result)
                         .stroke_color(Color32::GREEN)
                         .fill_color(fill_color3)
                         .vertex_color(Color32::LIGHT_GREEN),
@@ -280,4 +290,3 @@ fn plot_area(
         });
     });
 }
-
