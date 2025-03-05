@@ -142,9 +142,10 @@ fn controls_panel(ui: &mut Ui, interaction_state: &mut InteractionState) {
                 );
 
                 // "Zoom to Fit" button
-                if ui.button("Zoom to Fit").clicked() {
-                    interaction_state.zoom_to_fit = true;
-                }
+                interaction_state.zoom_to_fit = ui
+                    .button("Zoom to Fit")
+                    .on_hover_text("Zoom to fit contents")
+                    .clicked();
             });
         });
 }
@@ -284,9 +285,9 @@ fn plot_area(
             }
 
             // if user asked "zoom to fit," we do it
-            //if *zoom_to_fit {
-            //    plot_ui.set_auto_bounds([true, true]);
-            //}
+            if *zoom_to_fit {
+                plot_ui.set_auto_bounds([true, true]);
+            }
         });
     });
 }
