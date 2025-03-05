@@ -8,9 +8,9 @@ use crate::{
         traits::Real,
     },
     polyline::{
-        BooleanOp, BooleanResultInfo, FindIntersectsOptions, PlineBasicIntersect, PlineInversionView,
-        PlineOffsetOptions, PlineOrientation, PlineSource, PlineSourceMut, PlineViewData, Polyline,
-        internal::pline_offset::point_valid_for_offset, seg_midpoint,
+        BooleanOp, BooleanResultInfo, FindIntersectsOptions, PlineBasicIntersect,
+        PlineInversionView, PlineOffsetOptions, PlineOrientation, PlineSource, PlineSourceMut,
+        PlineViewData, Polyline, internal::pline_offset::point_valid_for_offset, seg_midpoint,
     },
 };
 
@@ -719,15 +719,15 @@ where
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
-                };        
+                };
                 if !boxes_overlap(&b1, &b2) {
                     continue;
                 } else {
                     // bounding box says "maybe they intersect"
-                
+
                     // Actually do the boolean op to confirm real intersection:
                     let result = ip.polyline.boolean(&jp.polyline, op);
-                
+
                     // If the result is disjoint or empty, we consider them not used
                     if !matches!(result.result_info, BooleanResultInfo::Disjoint)
                         || !result.pos_plines.is_empty()
@@ -738,7 +738,7 @@ where
                         othr_used_ccw[j] = true;
                         all_results.push(result); // all of result?
                     }
-                } 
+                }
             }
         }
 
@@ -759,11 +759,11 @@ where
                     continue;
                 } else {
                     // bounding box says "maybe they intersect"
-                
+
                     // Actually do the boolean op to confirm real intersection:
                     let jp_inverted = PlineInversionView::new(&jp.polyline);
                     let result = ip.polyline.boolean(&jp_inverted, op);
-                
+
                     // If the result is disjoint or empty, we consider them not used
                     if !matches!(result.result_info, BooleanResultInfo::Disjoint)
                         || !result.pos_plines.is_empty()
@@ -796,10 +796,10 @@ where
                     continue;
                 } else {
                     // bounding box says "maybe they intersect"
-                
+
                     // Actually do the boolean op to confirm real intersection:
                     let result = ip_inverted.boolean(&jp.polyline, op);
-                
+
                     // If the result is disjoint or empty, we consider them not used
                     if !matches!(result.result_info, BooleanResultInfo::Disjoint)
                         || !result.pos_plines.is_empty()
@@ -832,11 +832,11 @@ where
                     continue;
                 } else {
                     // bounding box says "maybe they intersect"
-                
+
                     // Actually do the boolean op to confirm real intersection:
                     let jp_inverted = PlineInversionView::new(&jp.polyline);
                     let result = ip_inverted.boolean(&jp_inverted, op);
-                
+
                     // If the result is disjoint or empty, we consider them not used
                     if !matches!(result.result_info, BooleanResultInfo::Disjoint)
                         || !result.pos_plines.is_empty()
@@ -856,14 +856,14 @@ where
         // and neg_plines into final_cw (holes).
         let mut final_ccw = Vec::new();
         let mut final_cw = Vec::new();
-        
+
         for boolean_result in all_results {
             // each BooleanResult can have pos_plines or neg_plines
             for rp in boolean_result.pos_plines {
-                    final_ccw.push(rp.pline);
+                final_ccw.push(rp.pline);
             }
             for rp in boolean_result.neg_plines {
-                    final_cw.push(rp.pline);
+                final_cw.push(rp.pline);
             }
         }
 
