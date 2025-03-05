@@ -8,8 +8,8 @@ use crate::{
         traits::Real,
     },
     polyline::{
-        FindIntersectsOptions, PlineBasicIntersect, PlineOffsetOptions, PlineOrientation,
-        PlineSource, PlineSourceMut, PlineViewData, Polyline,
+        BooleanOp, FindIntersectsOptions, PlineBasicIntersect, PlineInversionView,
+        PlineOffsetOptions, PlineOrientation, PlineSource, PlineSourceMut, PlineViewData, Polyline,
         internal::pline_offset::point_valid_for_offset, seg_midpoint,
     },
 };
@@ -93,6 +93,35 @@ pub struct ShapeOffsetOptions<T> {
     /// Fuzzy comparison epsilon used for determining if two positions are equal when stitching
     /// polyline slices together.
     pub slice_join_eps: T,
+}
+
+/// A builder type for performing multiple transformations on a `Shape`
+/// without rebuilding indexes each time. The transforms are recorded
+/// and only applied in the final `build` step.
+pub struct ShapeTransformBuilder<T: Real> {
+    // We can either store an owned shape or a borrowed shape. Typically
+    // you might store an owned shape if you want to produce a new shape
+    // at the end and let the builder consume the old shape.
+    shape: Shape<T>,
+
+    // We can store the transformations in a small struct of
+    // "accumulated transform" if we only want uniform scale, rotate, etc.
+    // But we also want "invert direction" logic, which cannot be captured by a matrix alone.
+    // So let's store each step in an enum, or keep separate booleans/accumulations.
+    scale_factor: T,
+    // For non-uniform scale:
+    // scale_x: T,
+    // scale_y: T,
+    rotate_angle: T,
+    rotate_anchor: Option<(T, T)>,
+    translate_x: T,
+    translate_y: T,
+
+    // If we want to invert direction or do multiple times, we only need to track an invert bool:
+    invert_direction: bool,
+    // Possibly track repeated rotates or merges them. But let's keep it simple:
+    // We'll just store these as "accumulated transformations" for scale/rotate/translate,
+    // plus a boolean for invert direction. More complicated steps can be added if needed.
 }
 
 impl<T> ShapeOffsetOptions<T>
@@ -646,6 +675,556 @@ where
         } else {
             &s2[i - s1.len()]
         }
+    }
+
+    /// Perform a boolean operation between `self` and `other` producing a new `Shape<T>`.
+    /// The `op` can be `BooleanOp::Or`, `BooleanOp::And`, `BooleanOp::Not`, or `BooleanOp::Xor`.
+    pub fn boolean(&self, other: &Self, op: BooleanOp) -> Self {
+        // 1) Collect all polylines from self & other in a "signed" fashion:
+        //    - ccw_plines => "positive"
+        //    - cw_plines => "negative" or invert them, depending on how
+        //      the library’s polyline boolean expects holes.
+        // (We can do a naive approach: treat CW as simply "inverted" polylines.)
+
+        let mut all_results = Vec::new();
+
+        // Helper for checking bounding-box overlap
+        #[inline]
+        fn boxes_overlap<T: Real>(
+            b1: &static_aabb2d_index::AABB<T>,
+            b2: &static_aabb2d_index::AABB<T>,
+        ) -> bool {
+            b1.min_x <= b2.max_x
+                && b1.max_x >= b2.min_x
+                && b1.min_y <= b2.max_y
+                && b1.max_y >= b2.min_y
+        }
+
+        // Bookkeeping: track which polylines from self/other participated
+        let mut self_used_ccw = vec![false; self.ccw_plines.len()];
+        let mut self_used_cw = vec![false; self.cw_plines.len()];
+        let mut othr_used_ccw = vec![false; other.ccw_plines.len()];
+        let mut othr_used_cw = vec![false; other.cw_plines.len()];
+
+        // For each loop in self vs each loop in other, we run the boolean operation,
+        // wrapping clockwise polylines in a PlineInversionView (instead of mutating them)
+
+        // 1) ccw_plines vs ccw_plines
+        for (i, ip) in self.ccw_plines.iter().enumerate() {
+            let b1 = match ip.spatial_index.bounds() {
+                Some(bb) => bb,
+                None => continue,
+            };
+            for (j, jp) in other.ccw_plines.iter().enumerate() {
+                let b2 = match jp.spatial_index.bounds() {
+                    Some(bb) => bb,
+                    None => continue,
+                };
+                if !boxes_overlap(&b1, &b2) {
+                    continue;
+                }
+                // If they do overlap, mark them used
+                self_used_ccw[i] = true;
+                othr_used_ccw[j] = true;
+
+                // Now do boolean clip
+                let res = ip.polyline.boolean(&jp.polyline, op);
+                all_results.push(res);
+            }
+        }
+
+        // 2) ccw_plines vs cw_plines
+        for (i, ip) in self.ccw_plines.iter().enumerate() {
+            let b1 = match ip.spatial_index.bounds() {
+                Some(bb) => bb,
+                None => continue,
+            };
+
+            for (j, jp) in other.cw_plines.iter().enumerate() {
+                let b2 = match jp.spatial_index.bounds() {
+                    Some(bb) => bb,
+                    None => continue,
+                };
+
+                if !boxes_overlap(&b1, &b2) {
+                    continue;
+                }
+                // If they do overlap, mark them used
+                self_used_ccw[i] = true;
+                othr_used_cw[j] = true;
+
+                let jp_inverted = PlineInversionView::new(&jp.polyline);
+                let res = ip.polyline.boolean(&jp_inverted, op);
+                all_results.push(res);
+            }
+        }
+
+        // 3) cw_plines vs ccw_plines
+        for (i, ip) in self.cw_plines.iter().enumerate() {
+            let b1 = match ip.spatial_index.bounds() {
+                Some(bb) => bb,
+                None => continue,
+            };
+            let ip_inverted = PlineInversionView::new(&ip.polyline);
+
+            for (j, jp) in other.ccw_plines.iter().enumerate() {
+                let b2 = match jp.spatial_index.bounds() {
+                    Some(bb) => bb,
+                    None => continue,
+                };
+
+                if !boxes_overlap(&b1, &b2) {
+                    continue;
+                }
+                // If they do overlap, mark them used
+                self_used_cw[i] = true;
+                othr_used_ccw[j] = true;
+
+                let res = ip_inverted.boolean(&jp.polyline, op);
+                all_results.push(res);
+            }
+        }
+
+        // 4) cw_plines vs cw_plines
+        for (i, ip) in self.cw_plines.iter().enumerate() {
+            let b1 = match ip.spatial_index.bounds() {
+                Some(bb) => bb,
+                None => continue,
+            };
+            let ip_inverted = PlineInversionView::new(&ip.polyline);
+
+            for (j, jp) in other.cw_plines.iter().enumerate() {
+                let b2 = match jp.spatial_index.bounds() {
+                    Some(bb) => bb,
+                    None => continue,
+                };
+
+                if !boxes_overlap(&b1, &b2) {
+                    continue;
+                }
+                // If they do overlap, mark them used
+                self_used_cw[i] = true;
+                othr_used_cw[j] = true;
+
+                let jp_inverted = PlineInversionView::new(&jp.polyline);
+                let res = ip_inverted.boolean(&jp_inverted, op);
+                all_results.push(res);
+            }
+        }
+
+        // At this point, we have a bunch of BooleanResult<Pline<_>>.
+        // We'll classify each returned polyline by its signed area
+        // to figure out which are ccw (outer loops) vs cw (holes).
+        let mut final_ccw = Vec::new();
+        let mut final_cw = Vec::new();
+
+        for boolean_result in all_results {
+            // each BooleanResult can have pos_plines or neg_plines
+            for rp in boolean_result.pos_plines {
+                let area = rp.pline.area();
+                if area < T::zero() {
+                    // negative area → cw loop
+                    final_cw.push(rp.pline);
+                } else {
+                    // zero or positive area → ccw loop
+                    final_ccw.push(rp.pline);
+                }
+            }
+            for rp in boolean_result.neg_plines {
+                let area = rp.pline.area();
+                if area < T::zero() {
+                    final_cw.push(rp.pline);
+                } else {
+                    final_ccw.push(rp.pline);
+                }
+            }
+        }
+
+        // For union or XOR, also include any "unused" loops from self & other
+        match op {
+            BooleanOp::Or | BooleanOp::Xor => {
+                // all self.ccw that never overlapped anything
+                for (i, used) in self_used_ccw.iter().enumerate() {
+                    if !used {
+                        // Add it as-is (ccw stays ccw)
+                        final_ccw.push(self.ccw_plines[i].polyline.clone());
+                    }
+                }
+                // all self.cw that never overlapped anything
+                for (i, used) in self_used_cw.iter().enumerate() {
+                    if !used {
+                        final_cw.push(self.cw_plines[i].polyline.clone());
+                    }
+                }
+                // same for other
+                for (j, used) in othr_used_ccw.iter().enumerate() {
+                    if !used {
+                        final_ccw.push(other.ccw_plines[j].polyline.clone());
+                    }
+                }
+                for (j, used) in othr_used_cw.iter().enumerate() {
+                    if !used {
+                        final_cw.push(other.cw_plines[j].polyline.clone());
+                    }
+                }
+            }
+            BooleanOp::And => {
+                // For intersection, leftover loops do not appear
+                // ...
+            }
+            BooleanOp::Not => {
+                // For difference: leftover loops from self remain,
+                // leftover loops from other do NOT appear.
+                for (i, used) in self_used_ccw.iter().enumerate() {
+                    if !used {
+                        final_ccw.push(self.ccw_plines[i].polyline.clone());
+                    }
+                }
+                for (i, used) in self_used_cw.iter().enumerate() {
+                    if !used {
+                        final_cw.push(self.cw_plines[i].polyline.clone());
+                    }
+                }
+            }
+        }
+
+        // 3) Optionally combine/merge identical or overlapping loops if necessary
+
+        // 4) Build new shape from these final CCW / CW polylines:
+        Shape::from_plines(final_ccw.into_iter().chain(final_cw.into_iter()))
+    }
+
+    /// Union
+    pub fn union(&self, other: &Self) -> Self {
+        self.boolean(other, BooleanOp::Or)
+    }
+
+    /// Intersection
+    pub fn intersection(&self, other: &Self) -> Self {
+        self.boolean(other, BooleanOp::And)
+    }
+
+    /// Difference: shape1 minus shape2
+    pub fn difference(&self, other: &Self) -> Self {
+        self.boolean(other, BooleanOp::Not)
+    }
+
+    /// Symmetric difference (xor)
+    pub fn xor(&self, other: &Self) -> Self {
+        self.boolean(other, BooleanOp::Xor)
+    }
+
+    /// Translates all polylines by `(dx, dy)`.
+    pub fn translate_mut(&mut self, dx: T, dy: T) {
+        for loop_poly in &mut self.ccw_plines {
+            loop_poly.polyline.translate_mut(dx, dy);
+            // rebuild each loop's index
+            loop_poly.spatial_index = loop_poly.polyline.create_aabb_index();
+        }
+        for loop_poly in &mut self.cw_plines {
+            loop_poly.polyline.translate_mut(dx, dy);
+            loop_poly.spatial_index = loop_poly.polyline.create_aabb_index();
+        }
+        // rebuild the shape’s overall index
+        self.plines_index = self.build_plines_index();
+    }
+
+    /// Scales all polylines by `scale_factor` about the origin `(0, 0)`.
+    /// (You might want an overload that takes an `origin` parameter.)
+    pub fn scale_mut(&mut self, scale_factor: T) {
+        for loop_poly in &mut self.ccw_plines {
+            loop_poly.polyline.scale_mut(scale_factor);
+            loop_poly.spatial_index = loop_poly.polyline.create_aabb_index();
+        }
+        for loop_poly in &mut self.cw_plines {
+            loop_poly.polyline.scale_mut(scale_factor);
+            loop_poly.spatial_index = loop_poly.polyline.create_aabb_index();
+        }
+        self.plines_index = self.build_plines_index();
+    }
+
+    /// Rotates all polylines by `theta` radians about `(0, 0)`.
+    /// (You might want an overload for a custom center.)
+    pub fn rotate_mut(&mut self, theta: T) {
+        // We treat rotation as: (x, y) -> (x cos θ – y sin θ, x sin θ + y cos θ)
+        // Each polyline's `translate_mut` or manual iteration can do that.
+        let cos_theta = theta.cos();
+        let sin_theta = theta.sin();
+        for loop_poly in &mut self.ccw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                let (px, py) = (v.x, v.y);
+                let rx = px * cos_theta - py * sin_theta;
+                let ry = px * sin_theta + py * cos_theta;
+                v.x = rx;
+                v.y = ry;
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        for loop_poly in &mut self.cw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                let (px, py) = (v.x, v.y);
+                let rx = px * cos_theta - py * sin_theta;
+                let ry = px * sin_theta + py * cos_theta;
+                v.x = rx;
+                v.y = ry;
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        self.plines_index = self.build_plines_index();
+    }
+
+    /// Mirrors (reflects) all polylines about the X-axis (example).
+    /// For a more general "mirror across a line," you can parameterize the reflection formula.
+    /// This example just flips `y -> -y`.
+    pub fn mirror_x_mut(&mut self) {
+        for loop_poly in &mut self.ccw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                // reflect y about the x-axis
+                v.y = -v.y;
+                // if you want to invert bulge as well, do so if it's an arc:
+                // (since reflection can flip arc orientation)
+                v.bulge = -v.bulge;
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        for loop_poly in &mut self.cw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                v.y = -v.y;
+                v.bulge = -v.bulge;
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        self.plines_index = self.build_plines_index();
+    }
+
+    /// Re-centers the shape to place its bounding box center at the origin (0, 0).
+    pub fn center_mut(&mut self) {
+        if let Some(shape_aabb) = self.plines_index.bounds() {
+            let cx = (shape_aabb.min_x + shape_aabb.max_x) / T::two();
+            let cy = (shape_aabb.min_y + shape_aabb.max_y) / T::two();
+            // Translate the shape so that bounding box center -> (0, 0)
+            self.translate_mut(-cx, -cy);
+        }
+    }
+
+    /// Applies a full 2D transform if you want a custom matrix approach.
+    /// transform matrix is `[ [a, b], [c, d] ]` plus a translation `(tx, ty)`.
+    /// the mapping is: (x, y) -> (a x + b y + tx, c x + d y + ty).
+    pub fn transform_mut(
+        &mut self,
+        scale_x: T,
+        scale_y: T,
+        rot_cos: T,
+        rot_sin: T,
+        trans_x: T,
+        trans_y: T,
+    ) {
+        // apply transform to polylines
+        for loop_poly in &mut self.ccw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                let (px, py) = (v.x, v.y);
+                v.x = scale_x * px + scale_y * py + trans_x;
+                v.y = rot_cos * px + rot_sin * py + trans_y;
+                // If arcs are used, you might need more logic to handle orientation, etc.
+                // But for simple transform, bulge isn't changed, though reflection inverts sign, etc.
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+        for loop_poly in &mut self.cw_plines {
+            let pline = &mut loop_poly.polyline;
+            for i in 0..pline.vertex_count() {
+                let mut v = pline.at(i);
+                let (px, py) = (v.x, v.y);
+                v.x = scale_x * px + scale_y * py + trans_x;
+                v.y = rot_cos * px + rot_sin * py + trans_y;
+                pline.set_vertex(i, v);
+            }
+            loop_poly.spatial_index = pline.create_aabb_index();
+        }
+
+        // now rebuild the shape's top-level index
+        self.plines_index = self.build_plines_index();
+    }
+
+    /// Helper to rebuild the shape’s own bounding index after polylines are mutated.
+    fn build_plines_index(&self) -> StaticAABB2DIndex<T> {
+        let total_len = self.ccw_plines.len() + self.cw_plines.len();
+        let mut builder = StaticAABB2DIndexBuilder::new(total_len);
+        for loop_poly in &self.ccw_plines {
+            let bounds = loop_poly
+                .spatial_index
+                .bounds()
+                .expect("empty pline unexpected");
+            builder.add(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
+        }
+        for loop_poly in &self.cw_plines {
+            let bounds = loop_poly
+                .spatial_index
+                .bounds()
+                .expect("empty pline unexpected");
+            builder.add(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
+        }
+        builder.build().unwrap()
+    }
+}
+
+impl<T: Real> ShapeTransformBuilder<T> {
+    /// Creates a builder from an existing shape (consumes the shape).
+    pub fn new(shape: Shape<T>) -> Self {
+        // default no transformation
+        ShapeTransformBuilder {
+            shape,
+            scale_factor: T::one(),
+            rotate_angle: T::zero(),
+            rotate_anchor: None,
+            translate_x: T::zero(),
+            translate_y: T::zero(),
+            invert_direction: false,
+        }
+    }
+
+    /// Apply a uniform scale factor (accumulated). If you want x/y separate,
+    /// you'd keep scale_x and scale_y, etc.
+    pub fn scale_mut(&mut self, factor: T) -> &mut Self {
+        self.scale_factor = self.scale_factor * factor;
+        self
+    }
+
+    /// Translate by (dx, dy).
+    pub fn translate_mut(&mut self, dx: T, dy: T) -> &mut Self {
+        self.translate_x = self.translate_x + dx;
+        self.translate_y = self.translate_y + dy;
+        self
+    }
+
+    /// Invert directions of all polylines once we apply transforms
+    pub fn invert_direction_mut(&mut self) -> &mut Self {
+        self.invert_direction = !self.invert_direction;
+        self
+    }
+
+    /// Rotate about an anchor point with some angle in radians
+    pub fn rotate_about_mut(&mut self, anchor: Vector2<T>, angle: T) -> &mut Self {
+        // If you want multiple rotates about different anchors, you'd store them in a list
+        // or accumulate them with the existing rotate anchor. We'll do the simple approach:
+        self.rotate_angle = self.rotate_angle + angle;
+        self.rotate_anchor = Some((anchor.x, anchor.y));
+        self
+    }
+
+    /// Final build step: apply all transformations in the recorded order
+    /// to each polyline, then rebuild the shape-level indexes once.
+    pub fn build(mut self) -> Shape<T> {
+        // apply transformations to all polylines
+        // We'll do them in the order: invert => scale => rotate => translate
+        // or the user might want a different order. Typically you'd define the order or let them specify.
+
+        let do_invert = self.invert_direction;
+        let s = self.scale_factor;
+        let angle = self.rotate_angle;
+        let (rc, rs) = (angle.cos(), angle.sin());
+        let (tx, ty) = (self.translate_x, self.translate_y);
+
+        let anchor = match self.rotate_anchor {
+            None => (T::zero(), T::zero()),
+            Some(a) => a,
+        };
+
+        // We'll do the transformations in that order for each polyline:
+        // invert direction (bulges), scale, then rotate about anchor, then translate.
+
+        // We'll update self.shape in place
+        for ip in &mut self.shape.ccw_plines {
+            let p = &mut ip.polyline;
+            if do_invert {
+                p.invert_direction_mut();
+            }
+            for i in 0..p.vertex_count() {
+                let v = p.at(i);
+
+                // invert bulge is done by invert_direction_mut above, so skip if that's the user approach
+                let (mut x, mut y) = (v.x, v.y);
+
+                // scale
+                x = x * s;
+                y = y * s;
+
+                // rotate about anchor
+                // translate so anchor is origin => rotate => move back
+                x = x - anchor.0;
+                y = y - anchor.1;
+                let rx = x * rc - y * rs;
+                let ry = x * rs + y * rc;
+                x = rx + anchor.0;
+                y = ry + anchor.1;
+
+                // translate
+                x = x + tx;
+                y = y + ty;
+
+                p.set(i, x, y, v.bulge);
+            }
+            // now rebuild polyline's own index
+            ip.spatial_index = p.create_aabb_index();
+        }
+        for ip in &mut self.shape.cw_plines {
+            let p = &mut ip.polyline;
+            if do_invert {
+                p.invert_direction_mut();
+            }
+            for i in 0..p.vertex_count() {
+                let v = p.at(i);
+                let (mut x, mut y) = (v.x, v.y);
+                // scale
+                x = x * s;
+                y = y * s;
+                // rotate about anchor
+                x = x - anchor.0;
+                y = y - anchor.1;
+                let rx = x * rc - y * rs;
+                let ry = x * rs + y * rc;
+                x = rx + anchor.0;
+                y = ry + anchor.1;
+                // translate
+                x = x + tx;
+                y = y + ty;
+                p.set(i, x, y, v.bulge);
+            }
+            ip.spatial_index = p.create_aabb_index();
+        }
+
+        // now rebuild shape's top-level index
+        let mut builder =
+            StaticAABB2DIndexBuilder::new(self.shape.ccw_plines.len() + self.shape.cw_plines.len());
+        for ip in &self.shape.ccw_plines {
+            if let Some(b) = ip.spatial_index.bounds() {
+                builder.add(b.min_x, b.min_y, b.max_x, b.max_y);
+            }
+        }
+        for ip in &self.shape.cw_plines {
+            if let Some(b) = ip.spatial_index.bounds() {
+                builder.add(b.min_x, b.min_y, b.max_x, b.max_y);
+            }
+        }
+        self.shape.plines_index = builder.build().unwrap();
+
+        // Return the transformed shape
+        self.shape
     }
 }
 
