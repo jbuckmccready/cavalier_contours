@@ -13,7 +13,7 @@ use lyon::{
     tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, VertexBuffers},
 };
 
-use super::{VertexConstructor, aabb_to_plotbounds, lyon_point};
+use super::{VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point, plot_bounds_valid};
 
 pub struct RawPlineOffsetSegsPlotItem<'a> {
     pub segs: &'a [RawPlineOffsetSeg<f64>],
@@ -55,6 +55,10 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
         transform: &egui_plot::PlotTransform,
         shapes: &mut Vec<egui::Shape>,
     ) {
+        if !plot_bounds_valid(transform.bounds()) {
+            return;
+        }
+
         if self.segs.is_empty() {
             return;
         }
@@ -109,9 +113,13 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
 
             let path = builder.build();
 
+            // cull path to only include segments within the plot bounds, this is performance
+            // benefit as it avoids tessellating stroke segments that are not visible which is
+            // significant when zooming in as the number of triangles generated can be very large
+            let stroke_path = cull_path(&path, transform.frame());
             stroke_tess
-                .tessellate_path(
-                    path.as_slice(),
+                .tessellate(
+                    stroke_path,
                     &StrokeOptions::DEFAULT.with_line_width(line_width),
                     &mut BuffersBuilder::new(&mut lyon_mesh, VertexConstructor { color }),
                 )

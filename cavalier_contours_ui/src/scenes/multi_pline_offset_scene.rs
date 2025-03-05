@@ -7,7 +7,7 @@ use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Slider, U
 use egui::Id;
 use egui_plot::{Plot, PlotPoint};
 
-use crate::plotting::ShapePlotItem;
+use crate::plotting::PlinesPlotItem;
 
 use super::{super::plotting::PLOT_VERTEX_RADIUS, Scene, scene_settings::SceneSettings};
 
@@ -244,13 +244,13 @@ fn plot_area(
             }
 
             plot_ui.add(
-                ShapePlotItem::new(&shape)
+                PlinesPlotItem::new(&shape)
                     .stroke_color(Color32::GOLD)
                     .vertex_color(Color32::LIGHT_GREEN),
             );
 
             for shape in offset_shapes.iter() {
-                plot_ui.add(ShapePlotItem::new(shape).stroke_color(Color32::LIGHT_BLUE));
+                plot_ui.add(PlinesPlotItem::new(shape).stroke_color(Color32::LIGHT_BLUE));
             }
 
             if *zoom_to_fit {
