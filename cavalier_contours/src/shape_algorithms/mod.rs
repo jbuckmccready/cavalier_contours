@@ -898,8 +898,36 @@ where
 
         // 3) Optionally combine/merge identical or overlapping loops if necessary
 
-        // 4) Build new shape from these final CCW / CW polylines:
-        Shape::from_plines(final_ccw.into_iter().chain(final_cw.into_iter()))
+        // 4) Build a bounding box index
+        let mut final_ccw_result = Vec::new();
+        let mut final_cw_result = Vec::new();
+        // turn them into IndexedPolyline
+        for pl in final_ccw {
+            final_ccw_result.push(IndexedPolyline::new(pl));
+        }
+        for pl in final_cw {
+            final_cw_result.push(IndexedPolyline::new(pl));
+        }
+        
+        let mut builder = StaticAABB2DIndexBuilder::new(final_ccw_result.len() + final_cw_result.len());
+        for ip in &final_ccw_result {
+            if let Some(bds) = ip.spatial_index.bounds() {
+                builder.add(bds.min_x, bds.min_y, bds.max_x, bds.max_y);
+            }
+        }
+        for ip in &final_cw_result {
+            if let Some(bds) = ip.spatial_index.bounds() {
+                builder.add(bds.min_x, bds.min_y, bds.max_x, bds.max_y);
+            }
+        }
+        let plines_index = builder.build().unwrap();
+
+        // 5) Build new shape from these final CCW / CW polylines:
+        Shape {
+            ccw_plines: final_ccw_result,
+            cw_plines: final_cw_result,
+            plines_index,
+        }
     }
 
     /// Union
