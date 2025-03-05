@@ -8,7 +8,7 @@ use crate::{
         traits::Real,
     },
     polyline::{
-        BooleanOp, FindIntersectsOptions, PlineBasicIntersect, PlineInversionView,
+        BooleanOp, BooleanResultInfo, FindIntersectsOptions, PlineBasicIntersect, PlineInversionView,
         PlineOffsetOptions, PlineOrientation, PlineSource, PlineSourceMut, PlineViewData, Polyline,
         internal::pline_offset::point_valid_for_offset, seg_midpoint,
     },
@@ -719,17 +719,26 @@ where
                 let b2 = match jp.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
-                };
+                };        
                 if !boxes_overlap(&b1, &b2) {
                     continue;
-                }
-                // If they do overlap, mark them used
-                self_used_ccw[i] = true;
-                othr_used_ccw[j] = true;
-
-                // Now do boolean clip
-                let res = ip.polyline.boolean(&jp.polyline, op);
-                all_results.push(res);
+                } else {
+                    // bounding box says "maybe they intersect"
+                
+                    // Actually do the boolean op to confirm real intersection:
+                    let result = ip.polyline.boolean(&jp.polyline, op);
+                
+                    // If the result is disjoint or empty, we consider them not used
+                    if !matches!(result.result_info, BooleanResultInfo::Disjoint)
+                        || !result.pos_plines.is_empty()
+                        || !result.neg_plines.is_empty()
+                    {
+                        // If they do overlap, mark them used
+                        self_used_ccw[i] = true;
+                        othr_used_ccw[j] = true;
+                        all_results.push(result);
+                    }
+                } 
             }
         }
 
@@ -748,14 +757,24 @@ where
 
                 if !boxes_overlap(&b1, &b2) {
                     continue;
+                } else {
+                    // bounding box says "maybe they intersect"
+                
+                    // Actually do the boolean op to confirm real intersection:
+                    let jp_inverted = PlineInversionView::new(&jp.polyline);
+                    let result = ip.polyline.boolean(&jp_inverted, op);
+                
+                    // If the result is disjoint or empty, we consider them not used
+                    if !matches!(result.result_info, BooleanResultInfo::Disjoint)
+                        || !result.pos_plines.is_empty()
+                        || !result.neg_plines.is_empty()
+                    {
+                        // If they do overlap, mark them used
+                        self_used_ccw[i] = true;
+                        othr_used_cw[j] = true;
+                        all_results.push(result);
+                    }
                 }
-                // If they do overlap, mark them used
-                self_used_ccw[i] = true;
-                othr_used_cw[j] = true;
-
-                let jp_inverted = PlineInversionView::new(&jp.polyline);
-                let res = ip.polyline.boolean(&jp_inverted, op);
-                all_results.push(res);
             }
         }
 
@@ -775,13 +794,23 @@ where
 
                 if !boxes_overlap(&b1, &b2) {
                     continue;
+                } else {
+                    // bounding box says "maybe they intersect"
+                
+                    // Actually do the boolean op to confirm real intersection:
+                    let result = ip_inverted.boolean(&jp.polyline, op);
+                
+                    // If the result is disjoint or empty, we consider them not used
+                    if !matches!(result.result_info, BooleanResultInfo::Disjoint)
+                        || !result.pos_plines.is_empty()
+                        || !result.neg_plines.is_empty()
+                    {
+                        // If they do overlap, mark them used
+                        self_used_cw[i] = true;
+                        othr_used_ccw[j] = true;
+                        all_results.push(result);
+                    }
                 }
-                // If they do overlap, mark them used
-                self_used_cw[i] = true;
-                othr_used_ccw[j] = true;
-
-                let res = ip_inverted.boolean(&jp.polyline, op);
-                all_results.push(res);
             }
         }
 
@@ -801,14 +830,24 @@ where
 
                 if !boxes_overlap(&b1, &b2) {
                     continue;
+                } else {
+                    // bounding box says "maybe they intersect"
+                
+                    // Actually do the boolean op to confirm real intersection:
+                    let jp_inverted = PlineInversionView::new(&jp.polyline);
+                    let result = ip_inverted.boolean(&jp_inverted, op);
+                
+                    // If the result is disjoint or empty, we consider them not used
+                    if !matches!(result.result_info, BooleanResultInfo::Disjoint)
+                        || !result.pos_plines.is_empty()
+                        || !result.neg_plines.is_empty()
+                    {
+                        // If they do overlap, mark them used
+                        self_used_cw[i] = true;
+                        othr_used_cw[j] = true;
+                        all_results.push(result);
+                    }
                 }
-                // If they do overlap, mark them used
-                self_used_cw[i] = true;
-                othr_used_cw[j] = true;
-
-                let jp_inverted = PlineInversionView::new(&jp.polyline);
-                let res = ip_inverted.boolean(&jp_inverted, op);
-                all_results.push(res);
             }
         }
 
