@@ -7,13 +7,15 @@ use cavalier_contours::{
         },
     },
 };
-use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Slider, Ui, Vec2};
+use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, Slider, Ui, Vec2};
 use egui::Id;
 use egui_plot::{Plot, PlotPoint};
 
 use crate::plotting::{PlinePlotData, PlinesPlotItem, RawPlineOffsetSegsPlotItem};
 
-use super::{super::plotting::PLOT_VERTEX_RADIUS, Scene, scene_settings::SceneSettings};
+use super::{
+    super::plotting::PLOT_VERTEX_RADIUS, Scene, controls_side_panel, scene_settings::SceneSettings,
+};
 
 pub struct PlineOffsetScene {
     pline: Polyline,
@@ -122,9 +124,7 @@ fn controls_panel(
     offset: &mut f64,
     interaction_state: &mut InteractionState,
 ) {
-    SidePanel::right("pline_offset_panel")
-        .min_width(200.0)
-        .default_width(200.0)
+    controls_side_panel("pline_offset_controls")
         .show_inside(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);

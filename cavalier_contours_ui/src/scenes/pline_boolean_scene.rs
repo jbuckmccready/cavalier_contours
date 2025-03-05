@@ -3,12 +3,14 @@ use cavalier_contours::{
     polyline::{BooleanOp, BooleanResult, PlineSource, PlineSourceMut, Polyline},
     shape_algorithms::Shape,
 };
-use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Ui, Vec2};
+use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint};
 
 use crate::plotting::{PlinePlotData, PlinesPlotItem};
 
-use super::{super::plotting::PLOT_VERTEX_RADIUS, Scene, scene_settings::SceneSettings};
+use super::{
+    super::plotting::PLOT_VERTEX_RADIUS, Scene, controls_side_panel, scene_settings::SceneSettings,
+};
 
 pub struct PlineBooleanScene {
     pline1: Polyline,
@@ -131,9 +133,7 @@ fn controls_panel(
     show_vertexes: &mut bool,
     interaction_state: &mut InteractionState,
 ) {
-    SidePanel::right("pline_offset_panel")
-        .min_width(200.0)
-        .default_width(200.0)
+    controls_side_panel("pline_boolean_controls")
         .show_inside(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
