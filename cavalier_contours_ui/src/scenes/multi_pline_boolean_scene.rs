@@ -253,14 +253,14 @@ fn plot_area(
                 // 1) shape1
                 plot_ui.add(
                     PlinesPlotItem::new(&*shape1)
-                        .stroke_color(Color32::BLUE)
+                        .stroke_color(Color32::LIGHT_BLUE)
                         .fill_color(fill_color1)
                         .vertex_color(Color32::LIGHT_BLUE),
                 );
                 // 2) shape2
                 plot_ui.add(
                     PlinesPlotItem::new(&*shape2)
-                        .stroke_color(Color32::RED)
+                        .stroke_color(Color32::LIGHT_RED)
                         .fill_color(fill_color2)
                         .vertex_color(Color32::LIGHT_RED),
                 );
@@ -280,7 +280,7 @@ fn plot_area(
                 // add the shape result to the plot as well
                 plot_ui.add(
                     PlinesPlotItem::new(&shape_result)
-                        .stroke_color(Color32::GREEN)
+                        .stroke_color(Color32::LIGHT_GREEN)
                         .fill_color(fill_color3)
                         .vertex_color(Color32::LIGHT_GREEN),
                 );
