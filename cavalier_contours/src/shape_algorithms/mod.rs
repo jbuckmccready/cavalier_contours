@@ -736,7 +736,7 @@ where
                         // If they do overlap, mark them used
                         self_used_ccw[i] = true;
                         othr_used_ccw[j] = true;
-                        all_results.push(result);
+                        all_results.push(result); // all of result?
                     }
                 } 
             }
@@ -772,7 +772,7 @@ where
                         // If they do overlap, mark them used
                         self_used_ccw[i] = true;
                         othr_used_cw[j] = true;
-                        all_results.push(result);
+                        all_results.push(result); // all of result?
                     }
                 }
             }
@@ -808,7 +808,7 @@ where
                         // If they do overlap, mark them used
                         self_used_cw[i] = true;
                         othr_used_ccw[j] = true;
-                        all_results.push(result);
+                        all_results.push(result); // all of result?
                     }
                 }
             }
@@ -845,37 +845,25 @@ where
                         // If they do overlap, mark them used
                         self_used_cw[i] = true;
                         othr_used_cw[j] = true;
-                        all_results.push(result);
+                        all_results.push(result); // all of result?
                     }
                 }
             }
         }
 
         // At this point, we have a bunch of BooleanResult<Pline<_>>.
-        // We'll classify each returned polyline by its signed area
-        // to figure out which are ccw (outer loops) vs cw (holes).
+        // We'll dump all their pos_plines into final_ccw (outer loops)
+        // and neg_plines into final_cw (holes).
         let mut final_ccw = Vec::new();
         let mut final_cw = Vec::new();
-
+        
         for boolean_result in all_results {
             // each BooleanResult can have pos_plines or neg_plines
             for rp in boolean_result.pos_plines {
-                let area = rp.pline.area();
-                if area < T::zero() {
-                    // negative area → cw loop
-                    final_cw.push(rp.pline);
-                } else {
-                    // zero or positive area → ccw loop
                     final_ccw.push(rp.pline);
-                }
             }
             for rp in boolean_result.neg_plines {
-                let area = rp.pline.area();
-                if area < T::zero() {
                     final_cw.push(rp.pline);
-                } else {
-                    final_ccw.push(rp.pline);
-                }
             }
         }
 
