@@ -12,7 +12,7 @@ use crate::scenes::SceneSettings;
 use super::{super::plotting::PLOT_VERTEX_RADIUS, Scene};
 
 /// A simple example scene demonstrating shape boolean operations.
-pub struct ShapeBooleanScene {
+pub struct MultiPlineBooleanScene {
     /// The first shape object.
     shape1: Shape<f64>,
     /// The second shape object.
@@ -30,7 +30,7 @@ struct InteractionState {
 }
 
 /// Provide a default starting scene with two shapes that partially overlap.
-impl Default for ShapeBooleanScene {
+impl Default for MultiPlineBooleanScene {
     fn default() -> Self {
         // For demonstration: let both shapes start with the same polylines but
         // offset them so shape1 and shape2 partially overlap.
@@ -87,14 +87,14 @@ impl Default for ShapeBooleanScene {
 }
 
 /// Implement the `Scene` trait for our shape boolean example.
-impl Scene for ShapeBooleanScene {
+impl Scene for MultiPlineBooleanScene {
     fn name(&self) -> &'static str {
-        "Shape boolean and transformation"
+        "Multi Polyline Boolean"
     }
 
     fn ui(&mut self, ui: &mut Ui, settings: &SceneSettings, init: bool) {
         // destructure for convenience
-        let ShapeBooleanScene {
+        let MultiPlineBooleanScene {
             shape1,
             shape2,
             interaction_state,
@@ -113,7 +113,7 @@ impl Scene for ShapeBooleanScene {
 
 /// The panel with controls where the user can pick the boolean op, etc.
 fn controls_panel(ui: &mut Ui, interaction_state: &mut InteractionState) {
-    SidePanel::right("shape_boolean_panel")
+    SidePanel::right("multi_pline_boolean_panel")
         .min_width(200.0)
         .default_width(200.0)
         .show_inside(ui, |ui| {
