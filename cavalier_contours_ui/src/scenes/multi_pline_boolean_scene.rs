@@ -223,8 +223,6 @@ fn plot_area(
         boolean_op,
     } = interaction_state;
 
-    let mut shape_result = Shape::empty();
-
     CentralPanel::default().show_inside(ui, |ui| {
         // set up the Plot widget
         let plot =
@@ -307,17 +305,10 @@ fn plot_area(
             } else {
                 // We have a boolean op; compute the shape and draw the result
                 let bool_result = shape1.boolean(shape2, boolean_op.unwrap());
-                // build a shape from the boolean result for plotting
-                let all_plines = bool_result
-                    .ccw_plines
-                    .into_iter()
-                    .chain(bool_result.cw_plines)
-                    .map(|rp| rp.polyline); // ignoring sign for demonstration
-                shape_result = Shape::from_plines(all_plines);
 
                 // add the shape result to the plot as well
                 plot_ui.add(
-                    PlinesPlotItem::new(&shape_result)
+                    PlinesPlotItem::new(bool_result)
                         .stroke_color(Color32::LIGHT_GREEN)
                         .fill_color(fill_color3)
                         .vertex_color(Color32::LIGHT_GREEN),

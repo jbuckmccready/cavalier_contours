@@ -152,6 +152,9 @@ impl<T> Shape<T>
 where
     T: Real,
 {
+    /// Construct a Shape from list of plines in which CW winding / negative area correspond, and CCW and positive area correspond.
+    /// Polylines will be tested for area and sorted into CCW and CW bins.  If you'd like to do this sorting manually or skipt it
+    /// alltogether, construct the Shape manually.
     pub fn from_plines<I>(plines: I) -> Self
     where
         I: IntoIterator<Item = Polyline<T>>,
