@@ -291,16 +291,16 @@ fn plot_area(
                 // 1) shape1
                 plot_ui.add(
                     PlinesPlotItem::new(&*shape1)
-                        .stroke_color(Color32::LIGHT_BLUE)
+                        .stroke_color(color1)
                         .fill_color(fill_color1)
-                        .vertex_color(Color32::LIGHT_BLUE),
+                        .vertex_color(color1),
                 );
                 // 2) shape2
                 plot_ui.add(
                     PlinesPlotItem::new(&*shape2)
-                        .stroke_color(Color32::LIGHT_RED)
+                        .stroke_color(color2)
                         .fill_color(fill_color2)
-                        .vertex_color(Color32::LIGHT_RED),
+                        .vertex_color(color2),
                 );
             } else {
                 // We have a boolean op; compute the shape and draw the result
@@ -309,9 +309,9 @@ fn plot_area(
                 // add the shape result to the plot as well
                 plot_ui.add(
                     PlinesPlotItem::new(bool_result)
-                        .stroke_color(Color32::LIGHT_GREEN)
+                        .stroke_color(color3)
                         .fill_color(fill_color3)
-                        .vertex_color(Color32::LIGHT_GREEN),
+                        .vertex_color(color3),
                 );
             }
 
