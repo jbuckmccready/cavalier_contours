@@ -4,13 +4,13 @@ use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder};
 
 use crate::{
     core::{
-        math::{dist_squared, Vector2},
+        math::{Vector2, dist_squared},
         traits::Real,
     },
     polyline::{
-        internal::pline_offset::point_valid_for_offset, seg_midpoint, FindIntersectsOptions,
-        PlineBasicIntersect, PlineOffsetOptions, PlineOrientation, PlineSource, PlineSourceMut,
-        PlineViewData, Polyline,
+        FindIntersectsOptions, PlineBasicIntersect, PlineOffsetOptions, PlineOrientation,
+        PlineSource, PlineSourceMut, PlineViewData, Polyline,
+        internal::pline_offset::point_valid_for_offset, seg_midpoint,
     },
 };
 
@@ -210,9 +210,10 @@ where
 
         for pline in self.cw_plines.iter() {
             for offset_pline in pline.parallel_offset_for_shape(offset, &options) {
+                let area = offset_pline.area();
+
                 // check if orientation inverted (due to collapse of very narrow or small input)
                 // skip if inversion happened (cw became ccw while offsetting inward)
-                let area = offset_pline.area();
                 if offset < T::zero() && area > T::zero() {
                     continue;
                 }
@@ -513,7 +514,7 @@ where
                         ccw_plines_result.push(r);
                     } else {
                         let i = loop_idx - ccw_offset_loops.len();
-                        let r = std::mem::take(&mut cw_offset_loops[i]).indexed_pline;                        
+                        let r = std::mem::take(&mut cw_offset_loops[i]).indexed_pline;
                         cw_plines_result.push(r)
                     }
                 }
@@ -561,7 +562,7 @@ where
                 let slice_view = curr_slice.v_data.view(&source_loop.indexed_pline.polyline);
                 let slice_userdata_values = slice_view.get_userdata_values();
                 current_pline.extend_remove_repeat(&slice_view, pos_equal_eps);
-                current_pline.add_userdata_values(&slice_userdata_values);
+                current_pline.add_userdata_values(slice_userdata_values);
 
                 query_results.clear();
                 let slice_end_point = curr_slice.v_data.end_point;

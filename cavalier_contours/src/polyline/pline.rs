@@ -66,13 +66,14 @@ where
     }
     
     #[inline]
-    pub fn set_userdata_values(&mut self, values: &Vec<u64>) {
-        self.userdata = values.clone();
+    pub fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
+        self.userdata.clear();
+        self.userdata.extend(values);
     }
     
     #[inline]
-    pub fn add_userdata_values(&mut self, values: &Vec<u64>) {
-        self.userdata.extend(values.iter());
+    pub fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
+        self.userdata.extend(values);
     }
 }
 
@@ -130,13 +131,14 @@ where
     T: Real,
 {
     #[inline]
-    fn set_userdata_values(&mut self, values: &Vec<u64>) {
-        self.userdata = values.clone();
+    fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
+        self.userdata.clear();
+        self.userdata.extend(values);
     }
     
     #[inline]
-    fn add_userdata_values(&mut self, values: &Vec<u64>) {
-        self.userdata.extend(values.iter());
+    fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
+        self.userdata.extend(values);
     }
 
     #[inline]

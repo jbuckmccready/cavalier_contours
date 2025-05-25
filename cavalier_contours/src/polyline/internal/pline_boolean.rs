@@ -1,15 +1,15 @@
 use crate::{
     core::math::dist_squared,
     polyline::{
-        seg_midpoint, seg_split_at_point, BooleanOp, BooleanPlineSlice, BooleanResult,
-        BooleanResultInfo, BooleanResultPline, FindIntersectsOptions, PlineBasicIntersect,
-        PlineBooleanOptions, PlineCreation, PlineSource, PlineViewData,
+        BooleanOp, BooleanPlineSlice, BooleanResult, BooleanResultInfo, BooleanResultPline,
+        FindIntersectsOptions, PlineBasicIntersect, PlineBooleanOptions, PlineCreation,
+        PlineSource, PlineViewData, seg_midpoint, seg_split_at_point,
     },
 };
 use std::collections::BTreeMap;
 
 use super::pline_intersects::{
-    find_intersects, sort_and_join_overlapping_intersects, OverlappingSlice,
+    OverlappingSlice, find_intersects, sort_and_join_overlapping_intersects,
 };
 use crate::{
     core::{math::Vector2, traits::Real},
@@ -594,10 +594,12 @@ where
 
     let mut close_pline = |mut pline: O, subslices: Vec<BooleanPlineSlice<T>>| {
         // sanity assert (start should connect back with end)
-        debug_assert!(pline
-            .at(0)
-            .pos()
-            .fuzzy_eq_eps(pline.last().unwrap().pos(), pos_equal_eps));
+        debug_assert!(
+            pline
+                .at(0)
+                .pos()
+                .fuzzy_eq_eps(pline.last().unwrap().pos(), pos_equal_eps)
+        );
 
         if pline.vertex_count() < 3 {
             // skip slice in case of just two vertexes on top of each other
@@ -698,6 +700,14 @@ where
                 }
             }
         }
+    }
+
+    let mut composite_userdata: Vec<u64> = Vec::new();
+    composite_userdata.append(&mut source_pline1.get_userdata_values());
+    composite_userdata.append(&mut source_pline2.get_userdata_values());
+
+    for result_item in result.iter_mut() {
+        result_item.pline.set_userdata_values(composite_userdata.clone());
     }
 
     result

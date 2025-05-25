@@ -1,6 +1,6 @@
 //! Supporting public types used in the core polyline trait methods.
 
-use super::{internal::pline_intersects::OverlappingSlice, PlineVertex, PlineView, PlineViewData};
+use super::{PlineVertex, PlineView, PlineViewData, internal::pline_intersects::OverlappingSlice};
 use crate::{
     core::{
         math::Vector2,
@@ -65,7 +65,7 @@ where
     pub offset_dist_eps: T,
 }
 
-impl<'a, T> PlineOffsetOptions<'a, T>
+impl<T> PlineOffsetOptions<'_, T>
 where
     T: Real,
 {
@@ -81,7 +81,7 @@ where
     }
 }
 
-impl<'a, T> Default for PlineOffsetOptions<'a, T>
+impl<T> Default for PlineOffsetOptions<'_, T>
 where
     T: Real,
 {
@@ -223,7 +223,7 @@ where
     pub pos_equal_eps: T,
 }
 
-impl<'a, T> PlineBooleanOptions<'a, T>
+impl<T> PlineBooleanOptions<'_, T>
 where
     T: Real,
 {
@@ -236,7 +236,7 @@ where
     }
 }
 
-impl<'a, T> Default for PlineBooleanOptions<'a, T>
+impl<T> Default for PlineBooleanOptions<'_, T>
 where
     T: Real,
 {
@@ -273,7 +273,7 @@ where
     pub include: SelfIntersectsInclude,
 }
 
-impl<'a, T> PlineSelfIntersectOptions<'a, T>
+impl<T> PlineSelfIntersectOptions<'_, T>
 where
     T: Real,
 {
@@ -287,12 +287,11 @@ where
     }
 }
 
-impl<'a, T> Default for PlineSelfIntersectOptions<'a, T>
+impl<T> Default for PlineSelfIntersectOptions<'_, T>
 where
     T: Real,
 {
     #[inline]
-
     fn default() -> Self {
         Self::new()
     }
@@ -309,7 +308,7 @@ where
     pub pos_equal_eps: T,
 }
 
-impl<'a, T> FindIntersectsOptions<'a, T>
+impl<T> FindIntersectsOptions<'_, T>
 where
     T: Real,
 {
@@ -322,7 +321,7 @@ where
     }
 }
 
-impl<'a, T> Default for FindIntersectsOptions<'a, T>
+impl<T> Default for FindIntersectsOptions<'_, T>
 where
     T: Real,
 {

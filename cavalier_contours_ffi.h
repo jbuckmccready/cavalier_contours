@@ -132,6 +132,7 @@ void cavc_pline_f(struct cavc_pline *pline);
  * Set the userdata values of a pline
  *
  * 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+ * 'count' is the number of u64 values to be stored; not the byte size.
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.

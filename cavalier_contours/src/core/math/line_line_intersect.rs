@@ -1,4 +1,4 @@
-use super::{base_math::parametric_from_point, Vector2};
+use super::{Vector2, base_math::parametric_from_point};
 use crate::core::traits::Real;
 
 /// Holds the result of finding the intersect between two line segments.
@@ -56,12 +56,12 @@ where
 /// ## `FalseIntersect`
 /// Either of the following cases:
 /// * Line segments are not parallel and at least one must be extended to intersect (that is for
-/// `0 <= t <= 1` for both segments there is no intersect)
+///   `0 <= t <= 1` for both segments there is no intersect)
 ///
 /// ## `Overlapping`
 /// Either of the following cases:
 /// * The lines are collinear and overlap, the segments may fully, partially or not overlap at all
-/// (determined by parametric t values returned)
+///   (determined by parametric t values returned)
 ///
 /// # Examples
 ///

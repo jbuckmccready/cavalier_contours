@@ -91,8 +91,9 @@ impl cavc_pline_parallel_offset_o {
     ///
     /// `aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
     pub unsafe fn to_internal(&self) -> PlineOffsetOptions<f64> {
+        let aabb_index = unsafe { self.aabb_index.as_ref().map(|w| &w.0) };
         PlineOffsetOptions {
-            aabb_index: self.aabb_index.as_ref().map(|w| &w.0),
+            aabb_index,
             pos_equal_eps: self.pos_equal_eps,
             slice_join_eps: self.slice_join_eps,
             offset_dist_eps: self.offset_dist_eps,
@@ -122,7 +123,7 @@ impl Default for cavc_pline_parallel_offset_o {
 /// # Safety
 ///
 /// `options` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_parallel_offset_o_init(
     options: *mut cavc_pline_parallel_offset_o,
@@ -132,7 +133,9 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset_o_init(
             return 1;
         }
 
-        options.write(Default::default());
+        unsafe {
+            options.write(Default::default());
+        }
         0
     })
 }
@@ -152,8 +155,9 @@ impl cavc_pline_boolean_o {
     ///
     /// `pline1_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
     pub unsafe fn to_internal(&self) -> PlineBooleanOptions<f64> {
+        let pline1_aabb_index = unsafe { self.pline1_aabb_index.as_ref().map(|w| &w.0) };
         PlineBooleanOptions {
-            pline1_aabb_index: self.pline1_aabb_index.as_ref().map(|w| &w.0),
+            pline1_aabb_index,
             pos_equal_eps: self.pos_equal_eps,
         }
     }
@@ -177,7 +181,7 @@ impl Default for cavc_pline_boolean_o {
 /// # Safety
 ///
 /// `options` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_boolean_o_init(options: *mut cavc_pline_boolean_o) -> i32 {
     ffi_catch_unwind!({
@@ -185,7 +189,9 @@ pub unsafe extern "C" fn cavc_pline_boolean_o_init(options: *mut cavc_pline_bool
             return 1;
         }
 
-        options.write(Default::default());
+        unsafe {
+            options.write(Default::default());
+        }
         0
     })
 }
@@ -237,7 +243,7 @@ impl cavc_plinelist {
 /// `vertexes` may be null if `n_vertexes` is 0 or must point to a valid contiguous buffer of
 /// [cavc_vertex] with length of at least `n_vertexes`.
 /// `pline` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_create(
     vertexes: *const cavc_vertex,
@@ -252,14 +258,16 @@ pub unsafe extern "C" fn cavc_pline_create(
         }
 
         if !vertexes.is_null() && n_vertexes != 0 {
-            let data = slice::from_raw_parts(vertexes, n_vertexes as usize);
+            let data = unsafe { slice::from_raw_parts(vertexes, n_vertexes as usize) };
             result.reserve(data.len());
             for v in data {
                 result.add(v.x, v.y, v.bulge);
             }
         }
 
-        pline.write(Box::into_raw(Box::new(cavc_pline(result))));
+        unsafe {
+            pline.write(Box::into_raw(Box::new(cavc_pline(result))));
+        }
         0
     })
 }
@@ -272,16 +280,19 @@ pub unsafe extern "C" fn cavc_pline_create(
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not already been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
     if !pline.is_null() {
-        drop(Box::from_raw(pline))
+        unsafe {
+            drop(Box::from_raw(pline));
+        }
     }
 }
 
 /// Set the userdata values of a pline
 ///
 /// 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+/// 'count' is the number of u64 values to be stored; not the byte size.
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
@@ -291,7 +302,7 @@ pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `userdata_values` must point to a valid location to read from.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_set_userdata_values(pline: *mut cavc_pline, userdata_values: *const u64, count: u32) -> i32 {
     ffi_catch_unwind!({
@@ -299,11 +310,13 @@ pub unsafe extern "C" fn cavc_pline_set_userdata_values(pline: *mut cavc_pline, 
             return 1;
         }        
         
-        (*pline).0.userdata.clear();
-        
-        if !userdata_values.is_null() && count != 0 {
-            let data = slice::from_raw_parts(userdata_values, count as usize);
-            (*pline).0.userdata.extend_from_slice(data);
+        unsafe {
+            (*pline).0.userdata.clear();
+            
+            if !userdata_values.is_null() && count != 0 {
+              let data = slice::from_raw_parts(userdata_values, count as usize);
+              (*pline).0.userdata.extend_from_slice(data);
+            }
         }
         
         0
@@ -322,7 +335,7 @@ pub unsafe extern "C" fn cavc_pline_set_userdata_values(pline: *mut cavc_pline, 
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_userdata_count(
     pline: *const cavc_pline,
@@ -332,10 +345,12 @@ pub unsafe extern "C" fn cavc_pline_get_userdata_count(
         if pline.is_null() {
             return 1;
         }
-
-        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-        // prevent memory corruption/access errors but just panic as internal error if it does occur
-        count.write(u32::try_from((*pline).0.userdata.len()).unwrap());
+        
+        unsafe {
+            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+            // prevent memory corruption/access errors but just panic as internal error if it does occur
+            count.write(u32::try_from((*pline).0.userdata.len()).unwrap());
+        }
         0
     })
 }
@@ -353,7 +368,7 @@ pub unsafe extern "C" fn cavc_pline_get_userdata_count(
 /// has not been freed.
 /// `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
 /// overrun will happen.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_userdata_values(pline: *const cavc_pline, userdata_values: *mut u64) -> i32 {
     ffi_catch_unwind!({
@@ -361,7 +376,9 @@ pub unsafe extern "C" fn cavc_pline_get_userdata_values(pline: *const cavc_pline
             return 1;
         }
         
-        std::ptr::copy((*pline).0.userdata.as_ptr(), userdata_values, (*pline).0.userdata.len());
+        unsafe {
+          std::ptr::copy((*pline).0.userdata.as_ptr(), userdata_values, (*pline).0.userdata.len());
+        }
         0
     })
 }
@@ -377,7 +394,7 @@ pub unsafe extern "C" fn cavc_pline_get_userdata_values(pline: *const cavc_pline
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_reserve(pline: *mut cavc_pline, additional: u32) -> i32 {
     ffi_catch_unwind!({
@@ -385,7 +402,9 @@ pub unsafe extern "C" fn cavc_pline_reserve(pline: *mut cavc_pline, additional: 
             return 1;
         }
 
-        (*pline).0.reserve(additional as usize);
+        unsafe {
+            (*pline).0.reserve(additional as usize);
+        }
         0
     })
 }
@@ -403,7 +422,7 @@ pub unsafe extern "C" fn cavc_pline_reserve(pline: *mut cavc_pline, additional: 
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `cloned` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_clone(
     pline: *const cavc_pline,
@@ -414,7 +433,9 @@ pub unsafe extern "C" fn cavc_pline_clone(
             return 1;
         }
 
-        cloned.write(Box::into_raw(Box::new(cavc_pline((*pline).0.clone()))));
+        unsafe {
+            cloned.write(Box::into_raw(Box::new(cavc_pline((*pline).0.clone()))));
+        }
         0
     })
 }
@@ -432,7 +453,7 @@ pub unsafe extern "C" fn cavc_pline_clone(
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `is_closed` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_is_closed(
     pline: *const cavc_pline,
@@ -442,7 +463,9 @@ pub unsafe extern "C" fn cavc_pline_get_is_closed(
         if pline.is_null() {
             return 1;
         }
-        is_closed.write((*pline).0.is_closed() as u8);
+        unsafe {
+            is_closed.write((*pline).0.is_closed() as u8);
+        }
         0
     })
 }
@@ -458,14 +481,16 @@ pub unsafe extern "C" fn cavc_pline_get_is_closed(
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_set_is_closed(pline: *mut cavc_pline, is_closed: u8) -> i32 {
     ffi_catch_unwind!({
         if pline.is_null() {
             return 1;
         }
-        (*pline).0.set_is_closed(is_closed != 0);
+        unsafe {
+            (*pline).0.set_is_closed(is_closed != 0);
+        }
         0
     })
 }
@@ -482,7 +507,7 @@ pub unsafe extern "C" fn cavc_pline_set_is_closed(pline: *mut cavc_pline, is_clo
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_vertex_count(
     pline: *const cavc_pline,
@@ -495,7 +520,9 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_count(
 
         // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
         // prevent memory corruption/access errors but just panic as internal error if it does occur
-        count.write(u32::try_from((*pline).0.vertex_count()).unwrap());
+        unsafe {
+            count.write(u32::try_from((*pline).0.vertex_count()).unwrap());
+        }
         0
     })
 }
@@ -516,7 +543,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_count(
 /// has not been freed.
 /// `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
 /// overrun will happen.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_vertex_data(
     pline: *const cavc_pline,
@@ -527,8 +554,8 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_data(
             return 1;
         }
 
-        let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).0.vertex_count());
-        for (i, v) in (*pline).0.iter_vertexes().enumerate() {
+        let buffer = unsafe { slice::from_raw_parts_mut(vertex_data, (*pline).0.vertex_count()) };
+        for (i, v) in unsafe { (*pline).0.iter_vertexes().enumerate() } {
             buffer[i] = cavc_vertex::from_internal(v);
         }
         0
@@ -549,7 +576,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_data(
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `vertex_data` must be a valid pointer to a buffer of at least `n_vertexes` of [cavc_vertex].
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_set_vertex_data(
     pline: *mut cavc_pline,
@@ -561,12 +588,15 @@ pub unsafe extern "C" fn cavc_pline_set_vertex_data(
             return 1;
         }
 
-        (*pline).0.clear();
-        let buffer = slice::from_raw_parts(vertex_data, n_vertexes as usize);
-        (*pline).0.reserve(buffer.len());
-        for v in buffer {
-            (*pline).0.add(v.x, v.y, v.bulge);
+        unsafe {
+            (*pline).0.clear();
+            let buffer = slice::from_raw_parts(vertex_data, n_vertexes as usize);
+            (*pline).0.reserve(buffer.len());
+            for v in buffer {
+                (*pline).0.add(v.x, v.y, v.bulge);
+            }
         }
+
         0
     })
 }
@@ -580,7 +610,7 @@ pub unsafe extern "C" fn cavc_pline_set_vertex_data(
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_clear(pline: *mut cavc_pline) -> i32 {
     ffi_catch_unwind!({
@@ -588,7 +618,9 @@ pub unsafe extern "C" fn cavc_pline_clear(pline: *mut cavc_pline) -> i32 {
             return 1;
         }
 
-        (*pline).0.clear();
+        unsafe {
+            (*pline).0.clear();
+        }
         0
     })
 }
@@ -602,7 +634,7 @@ pub unsafe extern "C" fn cavc_pline_clear(pline: *mut cavc_pline) -> i32 {
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_add(pline: *mut cavc_pline, x: f64, y: f64, bulge: f64) -> i32 {
     ffi_catch_unwind!({
@@ -610,7 +642,9 @@ pub unsafe extern "C" fn cavc_pline_add(pline: *mut cavc_pline, x: f64, y: f64, 
             return 1;
         }
 
-        (*pline).0.add(x, y, bulge);
+        unsafe {
+            (*pline).0.add(x, y, bulge);
+        }
         0
     })
 }
@@ -629,7 +663,7 @@ pub unsafe extern "C" fn cavc_pline_add(pline: *mut cavc_pline, x: f64, y: f64, 
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `vertex` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_get_vertex(
     pline: *const cavc_pline,
@@ -641,12 +675,15 @@ pub unsafe extern "C" fn cavc_pline_get_vertex(
             return 1;
         }
 
-        if position >= (*pline).0.vertex_count() as u32 {
-            return 2;
+        unsafe {
+            if position >= (*pline).0.vertex_count() as u32 {
+                return 2;
+            }
+
+            let v = (*pline).0[position as usize];
+            vertex.write(cavc_vertex::from_internal(v));
         }
 
-        let v = (*pline).0[position as usize];
-        vertex.write(cavc_vertex::from_internal(v));
         0
     })
 }
@@ -664,7 +701,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex(
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_set_vertex(
     pline: *mut cavc_pline,
@@ -676,11 +713,14 @@ pub unsafe extern "C" fn cavc_pline_set_vertex(
             return 1;
         }
 
-        if position >= (*pline).0.vertex_count() as u32 {
-            return 2;
+        unsafe {
+            if position >= (*pline).0.vertex_count() as u32 {
+                return 2;
+            }
+
+            (*pline).0[position as usize] = PlineVertex::new(vertex.x, vertex.y, vertex.bulge);
         }
 
-        (*pline).0[position as usize] = PlineVertex::new(vertex.x, vertex.y, vertex.bulge);
         0
     })
 }
@@ -697,7 +737,7 @@ pub unsafe extern "C" fn cavc_pline_set_vertex(
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32) -> i32 {
     ffi_catch_unwind!({
@@ -705,11 +745,14 @@ pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32
             return 1;
         }
 
-        if position as usize >= (*pline).0.vertex_count() {
-            return 2;
+        unsafe {
+            if position as usize >= (*pline).0.vertex_count() {
+                return 2;
+            }
+
+            (*pline).0.remove(position as usize);
         }
 
-        (*pline).0.remove(position as usize);
         0
     })
 }
@@ -726,7 +769,7 @@ pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `path_length` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_eval_path_length(
     pline: *const cavc_pline,
@@ -736,7 +779,9 @@ pub unsafe extern "C" fn cavc_pline_eval_path_length(
         if pline.is_null() {
             return 1;
         }
-        path_length.write((*pline).0.path_length());
+        unsafe {
+            path_length.write((*pline).0.path_length());
+        }
         0
     })
 }
@@ -753,14 +798,16 @@ pub unsafe extern "C" fn cavc_pline_eval_path_length(
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `area` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_eval_area(pline: *const cavc_pline, area: *mut f64) -> i32 {
     ffi_catch_unwind!({
         if pline.is_null() {
             return 1;
         }
-        area.write((*pline).0.area());
+        unsafe {
+            area.write((*pline).0.area());
+        }
         0
     })
 }
@@ -777,7 +824,7 @@ pub unsafe extern "C" fn cavc_pline_eval_area(pline: *const cavc_pline, area: *m
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `winding_number` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_eval_wn(
     pline: *const cavc_pline,
@@ -789,7 +836,9 @@ pub unsafe extern "C" fn cavc_pline_eval_wn(
         if pline.is_null() {
             return 1;
         }
-        winding_number.write((*pline).0.winding_number(Vector2::new(x, y)));
+        unsafe {
+            winding_number.write((*pline).0.winding_number(Vector2::new(x, y)));
+        }
         0
     })
 }
@@ -803,14 +852,16 @@ pub unsafe extern "C" fn cavc_pline_eval_wn(
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_invert_direction(pline: *mut cavc_pline) -> i32 {
     ffi_catch_unwind!({
         if pline.is_null() {
             return 1;
         }
-        (*pline).0.invert_direction_mut();
+        unsafe {
+            (*pline).0.invert_direction_mut();
+        }
         0
     })
 }
@@ -824,14 +875,16 @@ pub unsafe extern "C" fn cavc_pline_invert_direction(pline: *mut cavc_pline) -> 
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_scale(pline: *mut cavc_pline, scale_factor: f64) -> i32 {
     ffi_catch_unwind!({
         if pline.is_null() {
             return 1;
         }
-        (*pline).0.scale_mut(scale_factor);
+        unsafe {
+            (*pline).0.scale_mut(scale_factor);
+        }
         0
     })
 }
@@ -845,7 +898,7 @@ pub unsafe extern "C" fn cavc_pline_scale(pline: *mut cavc_pline, scale_factor: 
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_translate(
     pline: *mut cavc_pline,
@@ -856,7 +909,9 @@ pub unsafe extern "C" fn cavc_pline_translate(
         if pline.is_null() {
             return 1;
         }
-        (*pline).0.translate_mut(x_offset, y_offset);
+        unsafe {
+            (*pline).0.translate_mut(x_offset, y_offset);
+        }
         0
     })
 }
@@ -870,7 +925,7 @@ pub unsafe extern "C" fn cavc_pline_translate(
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_remove_repeat_pos(
     pline: *mut cavc_pline,
@@ -880,14 +935,17 @@ pub unsafe extern "C" fn cavc_pline_remove_repeat_pos(
         if pline.is_null() {
             return 1;
         }
-        match (*pline).0.remove_repeat_pos(pos_equal_eps) {
+
+        let pline = unsafe { &mut (*pline).0 };
+
+        match pline.remove_repeat_pos(pos_equal_eps) {
             None => {
                 // do nothing (no repeat positions, leave unchanged)
                 0
             }
             Some(x) => {
                 // update self with result
-                (*pline).0 = x;
+                *pline = x;
                 0
             }
         }
@@ -903,7 +961,7 @@ pub unsafe extern "C" fn cavc_pline_remove_repeat_pos(
 ///
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_remove_redundant(
     pline: *mut cavc_pline,
@@ -913,14 +971,17 @@ pub unsafe extern "C" fn cavc_pline_remove_redundant(
         if pline.is_null() {
             return 1;
         }
-        match (*pline).0.remove_redundant(pos_equal_eps) {
+
+        let pline = unsafe { &mut (*pline).0 };
+
+        match pline.remove_redundant(pos_equal_eps) {
             None => {
                 // do nothing (no repeat positions, leave unchanged)
                 0
             }
             Some(x) => {
                 // update self with result
-                (*pline).0 = x;
+                *pline = x;
                 0
             }
         }
@@ -938,7 +999,7 @@ pub unsafe extern "C" fn cavc_pline_remove_redundant(
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `min_x`, `min_y`, `max_x`, and `max_y` must all point to a valid places in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_eval_extents(
     pline: *const cavc_pline,
@@ -951,12 +1012,16 @@ pub unsafe extern "C" fn cavc_pline_eval_extents(
         if pline.is_null() {
             return 1;
         }
-        match (*pline).0.extents() {
+
+        let pline = unsafe { &(*pline).0 };
+        match pline.extents() {
             Some(aabb) => {
-                min_x.write(aabb.min_x);
-                min_y.write(aabb.min_y);
-                max_x.write(aabb.max_x);
-                max_y.write(aabb.max_y);
+                unsafe {
+                    min_x.write(aabb.min_x);
+                    min_y.write(aabb.min_y);
+                    max_x.write(aabb.max_x);
+                    max_y.write(aabb.max_y);
+                }
                 0
             }
             None => 2,
@@ -976,7 +1041,7 @@ pub unsafe extern "C" fn cavc_pline_eval_extents(
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `result` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_parallel_offset(
     pline: *const cavc_pline,
@@ -989,19 +1054,21 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset(
             return 1;
         }
 
+        let pline = unsafe { &(*pline).0 };
+
         let results = if options.is_null() {
-            (*pline).0.parallel_offset(offset)
+            pline.parallel_offset(offset)
         } else {
-            (*pline)
-                .0
-                .parallel_offset_opt(offset, &(*options).to_internal())
+            let opts = unsafe { &(*options).to_internal() };
+            pline.parallel_offset_opt(offset, opts)
         };
 
-        result.write(cavc_plinelist::from_internal(results));
+        unsafe {
+            result.write(cavc_plinelist::from_internal(results));
+        }
         0
     })
 }
-
 /// Wraps [PlineSource::boolean_opt].
 ///
 /// `options` is allowed to be null (default options will be used).
@@ -1021,7 +1088,7 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset(
 /// `pline1` and `pline2` must each be null or a valid cavc_pline object that was created with
 /// [cavc_pline_create] and has not been freed.
 /// `pos_plines` and `neg_plines` must both point to different valid places in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_boolean(
     pline1: *const cavc_pline,
@@ -1044,20 +1111,25 @@ pub unsafe extern "C" fn cavc_pline_boolean(
                 }
             }
         };
+
+        let pline1 = unsafe { &(*pline1).0 };
+        let pline2 = unsafe { &(*pline2).0 };
+
         let results = if options.is_null() {
-            (*pline1).0.boolean(&(*pline2).0, op)
+            pline1.boolean(pline2, op)
         } else {
-            (*pline1)
-                .0
-                .boolean_opt(&(*pline2).0, op, &(*options).to_internal())
+            let options = unsafe { &(*options).to_internal() };
+            pline1.boolean_opt(pline2, op, options)
         };
 
-        pos_plines.write(cavc_plinelist::from_internal(
-            results.pos_plines.into_iter().map(|p| p.pline),
-        ));
-        neg_plines.write(cavc_plinelist::from_internal(
-            results.neg_plines.into_iter().map(|p| p.pline),
-        ));
+        unsafe {
+            pos_plines.write(cavc_plinelist::from_internal(
+                results.pos_plines.into_iter().map(|p| p.pline),
+            ));
+            neg_plines.write(cavc_plinelist::from_internal(
+                results.neg_plines.into_iter().map(|p| p.pline),
+            ));
+        }
         0
     })
 }
@@ -1072,7 +1144,7 @@ pub unsafe extern "C" fn cavc_pline_boolean(
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `aabbindex` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_create_approx_aabbindex(
     pline: *const cavc_pline,
@@ -1083,8 +1155,12 @@ pub unsafe extern "C" fn cavc_pline_create_approx_aabbindex(
             return 1;
         }
 
-        let result = (*pline).0.create_approx_aabb_index();
-        aabbindex.write(Box::into_raw(Box::new(cavc_aabbindex(result))));
+        let pline = unsafe { &(*pline).0 };
+        let result = pline.create_approx_aabb_index();
+        unsafe {
+            aabbindex.write(Box::into_raw(Box::new(cavc_aabbindex(result))));
+        }
+
         0
     })
 }
@@ -1099,7 +1175,7 @@ pub unsafe extern "C" fn cavc_pline_create_approx_aabbindex(
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `aabbindex` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_create_aabbindex(
     pline: *const cavc_pline,
@@ -1110,8 +1186,12 @@ pub unsafe extern "C" fn cavc_pline_create_aabbindex(
             return 1;
         }
 
-        let result = (*pline).0.create_aabb_index();
-        aabbindex.write(Box::into_raw(Box::new(cavc_aabbindex(result))));
+        let pline = unsafe { &(*pline).0 };
+        let result = pline.create_aabb_index();
+        unsafe {
+            aabbindex.write(Box::into_raw(Box::new(cavc_aabbindex(result))));
+        }
+
         0
     })
 }
@@ -1123,10 +1203,10 @@ pub unsafe extern "C" fn cavc_pline_create_aabbindex(
 /// # Safety
 ///
 /// `aabbindex` must be null or a valid [cavc_aabbindex] object.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_aabbindex_f(aabbindex: *mut cavc_aabbindex) {
     if !aabbindex.is_null() {
-        drop(Box::from_raw(aabbindex))
+        unsafe { drop(Box::from_raw(aabbindex)) }
     }
 }
 
@@ -1140,7 +1220,7 @@ pub unsafe extern "C" fn cavc_aabbindex_f(aabbindex: *mut cavc_aabbindex) {
 ///
 /// `aabbindex` must be null or a valid [cavc_aabbindex] object.
 /// `min_x`, `min_y`, `max_x`, and `max_y` must all point to a valid places in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_aabbindex_get_extents(
     aabbindex: *const cavc_aabbindex,
@@ -1154,16 +1234,22 @@ pub unsafe extern "C" fn cavc_aabbindex_get_extents(
             return 1;
         }
 
-        if let Some(bounds) = (*aabbindex).0.bounds() {
-            min_x.write(bounds.min_x);
-            min_y.write(bounds.min_y);
-            max_x.write(bounds.max_x);
-            max_y.write(bounds.max_y);
+        let aabbindex = unsafe { &(*aabbindex).0 };
+
+        if let Some(bounds) = aabbindex.bounds() {
+            unsafe {
+                min_x.write(bounds.min_x);
+                min_y.write(bounds.min_y);
+                max_x.write(bounds.max_x);
+                max_y.write(bounds.max_y);
+            }
         } else {
-            min_x.write(f64::NAN);
-            min_y.write(f64::NAN);
-            max_x.write(f64::NAN);
-            max_y.write(f64::NAN);
+            unsafe {
+                min_x.write(f64::NAN);
+                min_y.write(f64::NAN);
+                max_x.write(f64::NAN);
+                max_y.write(f64::NAN);
+            }
         }
         0
     })
@@ -1177,14 +1263,16 @@ pub unsafe extern "C" fn cavc_aabbindex_get_extents(
 /// # Safety
 ///
 /// `plinelist` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_create(
     capacity: usize,
     plinelist: *mut *mut cavc_plinelist,
 ) -> i32 {
     ffi_catch_unwind!({
-        plinelist.write(Box::into_raw(Box::new(cavc_plinelist(Vec::with_capacity(capacity)))));
+        unsafe {
+            plinelist.write(Box::into_raw(Box::new(cavc_plinelist(Vec::with_capacity(capacity)))));
+        }
         0
     })
 }
@@ -1196,10 +1284,10 @@ pub unsafe extern "C" fn cavc_plinelist_create(
 /// # Safety
 ///
 /// `plinelist` must be null or a valid [cavc_plinelist] object.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_plinelist_f(plinelist: *mut cavc_plinelist) {
     if !plinelist.is_null() {
-        drop(Box::from_raw(plinelist))
+        unsafe { drop(Box::from_raw(plinelist)) }
     }
 }
 
@@ -1214,7 +1302,7 @@ pub unsafe extern "C" fn cavc_plinelist_f(plinelist: *mut cavc_plinelist) {
 ///
 /// `plinelist` must be null or a valid [cavc_plinelist] object.
 /// `count` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_get_count(
     plinelist: *const cavc_plinelist,
@@ -1227,7 +1315,9 @@ pub unsafe extern "C" fn cavc_plinelist_get_count(
 
         // using try_from to catch odd case of polyline count greater than u32::MAX to
         // prevent memory corruption/access errors but just panic as internal error if it does occur
-        count.write(u32::try_from((*plinelist).0.len()).unwrap());
+        unsafe {
+            count.write(u32::try_from((*plinelist).0.len()).unwrap());
+        }
         0
     })
 }
@@ -1246,7 +1336,7 @@ pub unsafe extern "C" fn cavc_plinelist_get_count(
 ///
 /// `plinelist` must be null or a valid [cavc_plinelist] object.
 /// `pline` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_get_pline(
     plinelist: *const cavc_plinelist,
@@ -1258,11 +1348,15 @@ pub unsafe extern "C" fn cavc_plinelist_get_pline(
             return 1;
         }
 
+        let plinelist = unsafe { &(*plinelist).0 };
+
         let pos = position as usize;
 
-        match (*plinelist).0.get(pos) {
+        match plinelist.get(pos) {
             Some(pl) => {
-                pline.write(*pl);
+                unsafe {
+                    pline.write(*pl);
+                }
                 0
             }
             None => 2,
@@ -1270,7 +1364,7 @@ pub unsafe extern "C" fn cavc_plinelist_get_pline(
     })
 }
 
-/// Append a [cavc_pline] to the end of a [cavc_plinelist], the [cavc_plinelist] takes ownership of the polyline.
+/// Append a [cavc_pline] to the end of a [cavc_plinelist].
 ///
 /// `plinelist` is the [cavc_plinelist] to append to.
 /// `pline` is the [cavc_pline] to be appended.
@@ -1283,7 +1377,7 @@ pub unsafe extern "C" fn cavc_plinelist_get_pline(
 ///
 /// `plinelist` must be a valid [cavc_plinelist] object.
 /// `pline` must be a valid [cavc_pline] object.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_push(
     plinelist: *mut cavc_plinelist,
@@ -1296,7 +1390,10 @@ pub unsafe extern "C" fn cavc_plinelist_push(
         if pline.is_null() {
             return 2;
         }
-        (*plinelist).0.push(pline);
+        
+        unsafe {
+            (*plinelist).0.push(pline);
+        }
         0
     })
 }
@@ -1314,7 +1411,7 @@ pub unsafe extern "C" fn cavc_plinelist_push(
 ///
 /// `plinelist` must be null or a valid [cavc_plinelist] object.
 /// `pline` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_pop(
     plinelist: *mut cavc_plinelist,
@@ -1325,9 +1422,13 @@ pub unsafe extern "C" fn cavc_plinelist_pop(
             return 1;
         }
 
-        match (*plinelist).0.pop() {
+        let plinelist = unsafe { &mut (*plinelist).0 };
+
+        match plinelist.pop() {
             Some(p) => {
-                pline.write(p);
+                unsafe {
+                    pline.write(p);
+                }
                 0
             }
             None => 2,
@@ -1348,7 +1449,7 @@ pub unsafe extern "C" fn cavc_plinelist_pop(
 ///
 /// `plinelist` must be null or a valid [cavc_plinelist] object.
 /// `pline` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_take(
     plinelist: *mut cavc_plinelist,
@@ -1360,13 +1461,17 @@ pub unsafe extern "C" fn cavc_plinelist_take(
             return 1;
         }
 
+        let plinelist = unsafe { &mut (*plinelist).0 };
         let pos = position as usize;
 
-        if pos >= (*plinelist).0.len() {
+        if pos >= plinelist.len() {
             return 2;
         }
 
-        pline.write((*plinelist).0.remove(pos));
+        unsafe {
+            pline.write(plinelist.remove(pos));
+        }
+
         0
     })
 }
@@ -1410,7 +1515,7 @@ impl Default for cavc_shape_offset_o {
 /// # Safety
 ///
 /// `options` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_offset_o_init(
     options: *mut cavc_shape_offset_o,
@@ -1419,8 +1524,10 @@ pub unsafe extern "C" fn cavc_shape_offset_o_init(
         if options.is_null() {
             return 1;
         }
-
-        options.write(Default::default());
+        
+        unsafe {
+            options.write(Default::default());
+        }
         0
     })
 }
@@ -1443,7 +1550,7 @@ pub struct cavc_shape(pub Shape<f64>);
 /// # Safety
 ///
 /// `shape` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_create(
     plinelist: *const cavc_plinelist,
@@ -1453,17 +1560,19 @@ pub unsafe extern "C" fn cavc_shape_create(
         if plinelist.is_null() {
             return 1;
         }
-    
-        let count:usize = (*plinelist).0.len();
-        let mut v:Vec<Polyline<f64>> = Vec::with_capacity(count);
         
-        for pline in (*plinelist).0.iter() {
-            v.push((**pline).0.clone());
+        unsafe {
+            let count:usize = (*plinelist).0.len();
+            let mut v:Vec<Polyline<f64>> = Vec::with_capacity(count);
+            
+            for pline in (*plinelist).0.iter() {
+                v.push((**pline).0.clone());
+            }
+            
+            let s = Shape::from_plines(v);
+            
+            shape.write(Box::into_raw(Box::new(cavc_shape(s))));
         }
-        
-        let s = Shape::from_plines(v);
-        
-        shape.write(Box::into_raw(Box::new(cavc_shape(s))));
         0
     })
 }
@@ -1476,10 +1585,12 @@ pub unsafe extern "C" fn cavc_shape_create(
 ///
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
 /// has not already been freed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_shape_f(shape: *mut cavc_shape) {
     if !shape.is_null() {
-        drop(Box::from_raw(shape))
+        unsafe {
+            drop(Box::from_raw(shape))
+        }
     }
 }
 
@@ -1495,7 +1606,7 @@ pub unsafe extern "C" fn cavc_shape_f(shape: *mut cavc_shape) {
 /// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `result` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_parallel_offset(
     shape: *const cavc_shape,
@@ -1508,14 +1619,16 @@ pub unsafe extern "C" fn cavc_shape_parallel_offset(
             return 1;
         }
 
-        let results = if options.is_null() {
-            let default_options = ShapeOffsetOptions::new();
-            (*shape).0.parallel_offset(offset, default_options)
-        } else {
-            (*shape).0.parallel_offset(offset, (*options).to_internal())
-        };
-
-        result.write(Box::into_raw(Box::new(cavc_shape(results))));
+        unsafe {
+            let results = if options.is_null() {
+                let default_options = ShapeOffsetOptions::new();
+                (*shape).0.parallel_offset(offset, default_options)
+            } else {
+                (*shape).0.parallel_offset(offset, (*options).to_internal())
+            };
+    
+            result.write(Box::into_raw(Box::new(cavc_shape(results))));
+        }
         0
     })
 }
@@ -1532,7 +1645,7 @@ pub unsafe extern "C" fn cavc_shape_parallel_offset(
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_ccw_count(
     shape: *const cavc_shape,
@@ -1542,10 +1655,12 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_count(
         if shape.is_null() {
             return 1;
         }
-
-        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-        // prevent memory corruption/access errors but just panic as internal error if it does occur
-        count.write(u32::try_from((*shape).0.ccw_plines.len()).unwrap());
+        
+        unsafe {
+            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+            // prevent memory corruption/access errors but just panic as internal error if it does occur
+            count.write(u32::try_from((*shape).0.ccw_plines.len()).unwrap());
+        }
         0
     })
 }
@@ -1563,7 +1678,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_count(
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_count(
     shape: *const cavc_shape,
@@ -1574,14 +1689,16 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_count(
         if shape.is_null() {
             return 1;
         }
-
-        if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
-            return 2;
+        
+        unsafe {
+            if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
+                return 2;
+            }
+    
+            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+            // prevent memory corruption/access errors but just panic as internal error if it does occur
+            count.write(u32::try_from((*shape).0.ccw_plines[polyline_index as usize].polyline.vertex_data.len()).unwrap());
         }
-
-        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-        // prevent memory corruption/access errors but just panic as internal error if it does occur
-        count.write(u32::try_from((*shape).0.ccw_plines[polyline_index as usize].polyline.vertex_data.len()).unwrap());
         0
     })
 }
@@ -1600,7 +1717,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_count(
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `is_closed` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_is_closed(
     shape: *const cavc_shape,
@@ -1612,13 +1729,15 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_is_closed(
             return 1;
         }
 
-        if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
-            return 2;
+        unsafe {
+            if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
+                return 2;
+            }
+    
+            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+            // prevent memory corruption/access errors but just panic as internal error if it does occur
+            is_closed.write(u8::try_from((*shape).0.ccw_plines[polyline_index as usize].polyline.is_closed).unwrap());
         }
-
-        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-        // prevent memory corruption/access errors but just panic as internal error if it does occur
-        is_closed.write(u8::try_from((*shape).0.ccw_plines[polyline_index as usize].polyline.is_closed).unwrap());
         0
     })
 }
@@ -1640,7 +1759,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_is_closed(
 /// has not been freed.
 /// `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
 /// overrun will happen.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_vertex_data(
     shape: *const cavc_shape,
@@ -1651,16 +1770,18 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_vertex_data(
         if shape.is_null() {
             return 1;
         }
-
-        if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
-            return 2;
-        }
-
-        let pline: *const Polyline<f64> = &((*shape).0.ccw_plines[polyline_index as usize].polyline);
-
-        let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).vertex_count());
-        for (i, v) in (*pline).iter_vertexes().enumerate() {
-            buffer[i] = cavc_vertex::from_internal(v);
+        
+        unsafe {
+            if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
+                return 2;
+            }
+    
+            let pline: *const Polyline<f64> = &((*shape).0.ccw_plines[polyline_index as usize].polyline);
+    
+            let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).vertex_count());
+            for (i, v) in (*pline).iter_vertexes().enumerate() {
+                buffer[i] = cavc_vertex::from_internal(v);
+            }
         }
         0
     })
@@ -1679,7 +1800,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_vertex_data(
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
 /// has not been freed.
 /// `userdata_values` must point to a valid location to read from.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_set_ccw_pline_userdata_values(
     shape: *mut cavc_shape,
@@ -1690,21 +1811,22 @@ pub unsafe extern "C" fn cavc_shape_set_ccw_pline_userdata_values(
     ffi_catch_unwind!({
         if shape.is_null() {
             return 1;
-        }        
-        
-        if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
-            return 2;
         }
-
-        let pline: *mut Polyline<f64> = &mut ((*shape).0.ccw_plines[polyline_index as usize].polyline);
-        
-        (*pline).userdata.clear();
-        
-        if !userdata_values.is_null() && count != 0 {
-            let data = slice::from_raw_parts(userdata_values, count as usize);
-            (*pline).userdata.extend_from_slice(data);
+         
+        unsafe {
+            if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
+                return 2;
+            }
+    
+            let pline: *mut Polyline<f64> = &mut ((*shape).0.ccw_plines[polyline_index as usize].polyline);
+            
+            (*pline).userdata.clear();
+            
+            if !userdata_values.is_null() && count != 0 {
+                let data = slice::from_raw_parts(userdata_values, count as usize);
+                (*pline).userdata.extend_from_slice(data);
+            }
         }
-        
         0
     })
 }
@@ -1722,7 +1844,7 @@ pub unsafe extern "C" fn cavc_shape_set_ccw_pline_userdata_values(
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_count(
     shape: *const cavc_shape,
@@ -1734,15 +1856,17 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_count(
             return 1;
         }
         
-        if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
-            return 2;
+        unsafe {
+            if polyline_index as usize >= ((*shape).0.ccw_plines.len()) {
+                return 2;
+            }
+    
+            let pline: *const Polyline<f64> = &((*shape).0.ccw_plines[polyline_index as usize].polyline);
+    
+            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+            // prevent memory corruption/access errors but just panic as internal error if it does occur
+            count.write(u32::try_from((*pline).userdata.len()).unwrap());
         }
-
-        let pline: *const Polyline<f64> = &((*shape).0.ccw_plines[polyline_index as usize].polyline);
-
-        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-        // prevent memory corruption/access errors but just panic as internal error if it does occur
-        count.write(u32::try_from((*pline).userdata.len()).unwrap());
         0
     })
 }
@@ -1760,7 +1884,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_count(
 /// has not been freed.
 /// `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
 /// overrun will happen.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_values(shape: *const cavc_shape, polyline_index: u32, userdata_values: *mut u64) -> i32 {
     ffi_catch_unwind!({
@@ -1768,9 +1892,11 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_values(shape: *const 
             return 1;
         }
         
-        let pline: *const Polyline<f64> = &((*shape).0.ccw_plines[polyline_index as usize].polyline);
-        
-        std::ptr::copy((*pline).userdata.as_ptr(), userdata_values, (*pline).userdata.len());
+        unsafe {
+            let pline: *const Polyline<f64> = &((*shape).0.ccw_plines[polyline_index as usize].polyline);
+            
+            std::ptr::copy((*pline).userdata.as_ptr(), userdata_values, (*pline).userdata.len());
+        }
         0
     })
 }
@@ -1787,7 +1913,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_values(shape: *const 
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_cw_count(
     shape: *const cavc_shape,
@@ -1798,9 +1924,11 @@ pub unsafe extern "C" fn cavc_shape_get_cw_count(
             return 1;
         }
 
-        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-        // prevent memory corruption/access errors but just panic as internal error if it does occur
-        count.write(u32::try_from((*shape).0.cw_plines.len()).unwrap());
+        unsafe {
+            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+            // prevent memory corruption/access errors but just panic as internal error if it does occur
+            count.write(u32::try_from((*shape).0.cw_plines.len()).unwrap());
+        }
         0
     })
 }
@@ -1818,7 +1946,7 @@ pub unsafe extern "C" fn cavc_shape_get_cw_count(
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_cw_polyline_count(
     shape: *const cavc_shape,
@@ -1829,14 +1957,16 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_count(
         if shape.is_null() {
             return 1;
         }
-
-        if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
-            return 2;
+        
+        unsafe {
+            if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+                return 2;
+            }
+    
+            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+            // prevent memory corruption/access errors but just panic as internal error if it does occur
+            count.write(u32::try_from((*shape).0.cw_plines[polyline_index as usize].polyline.vertex_data.len()).unwrap());
         }
-
-        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-        // prevent memory corruption/access errors but just panic as internal error if it does occur
-        count.write(u32::try_from((*shape).0.cw_plines[polyline_index as usize].polyline.vertex_data.len()).unwrap());
         0
     })
 }
@@ -1855,7 +1985,7 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_count(
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
 /// has not been freed.
 /// `is_closed` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_cw_polyline_is_closed(
     shape: *const cavc_shape,
@@ -1866,14 +1996,16 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_is_closed(
         if shape.is_null() {
             return 1;
         }
-
-        if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
-            return 2;
+        
+        unsafe {
+            if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+                return 2;
+            }
+    
+            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+            // prevent memory corruption/access errors but just panic as internal error if it does occur
+            is_closed.write(u8::try_from((*shape).0.cw_plines[polyline_index as usize].polyline.is_closed).unwrap());
         }
-
-        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-        // prevent memory corruption/access errors but just panic as internal error if it does occur
-        is_closed.write(u8::try_from((*shape).0.cw_plines[polyline_index as usize].polyline.is_closed).unwrap());
         0
     })
 }
@@ -1895,7 +2027,7 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_is_closed(
 /// has not been freed.
 /// `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
 /// overrun will happen.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_cw_polyline_vertex_data(
     shape: *const cavc_shape,
@@ -1906,16 +2038,18 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_vertex_data(
         if shape.is_null() {
             return 1;
         }
-
-        if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
-            return 2;
-        }
-
-        let pline: *const Polyline<f64> = &((*shape).0.cw_plines[polyline_index as usize].polyline);
-
-        let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).vertex_count());
-        for (i, v) in (*pline).iter_vertexes().enumerate() {
-            buffer[i] = cavc_vertex::from_internal(v);
+    
+        unsafe {
+            if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+                return 2;
+            }
+    
+            let pline: *const Polyline<f64> = &((*shape).0.cw_plines[polyline_index as usize].polyline);
+    
+            let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).vertex_count());
+            for (i, v) in (*pline).iter_vertexes().enumerate() {
+                buffer[i] = cavc_vertex::from_internal(v);
+            }
         }
         0
     })
@@ -1934,7 +2068,7 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_vertex_data(
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
 /// has not been freed.
 /// `userdata_values` must point to a valid location to read from.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_set_cw_pline_userdata_values(
     shape: *mut cavc_shape,
@@ -1947,19 +2081,20 @@ pub unsafe extern "C" fn cavc_shape_set_cw_pline_userdata_values(
             return 1;
         }        
         
-        if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
-            return 2;
+        unsafe {
+            if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+                return 2;
+            }
+    
+            let pline: *mut Polyline<f64> = &mut ((*shape).0.cw_plines[polyline_index as usize].polyline);
+            
+            (*pline).userdata.clear();
+            
+            if !userdata_values.is_null() && count != 0 {
+                let data = slice::from_raw_parts(userdata_values, count as usize);
+                (*pline).userdata.extend_from_slice(data);
+            }
         }
-
-        let pline: *mut Polyline<f64> = &mut ((*shape).0.cw_plines[polyline_index as usize].polyline);
-        
-        (*pline).userdata.clear();
-        
-        if !userdata_values.is_null() && count != 0 {
-            let data = slice::from_raw_parts(userdata_values, count as usize);
-            (*pline).userdata.extend_from_slice(data);
-        }
-        
         0
     })
 }
@@ -1977,7 +2112,7 @@ pub unsafe extern "C" fn cavc_shape_set_cw_pline_userdata_values(
 /// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_cw_pline_userdata_count(
     shape: *const cavc_shape,
@@ -1989,15 +2124,17 @@ pub unsafe extern "C" fn cavc_shape_get_cw_pline_userdata_count(
             return 1;
         }
         
-        if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
-            return 2;
+        unsafe {
+            if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+                return 2;
+            }
+
+            let pline: *const Polyline<f64> = &((*shape).0.cw_plines[polyline_index as usize].polyline);
+    
+            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
+            // prevent memory corruption/access errors but just panic as internal error if it does occur
+            count.write(u32::try_from((*pline).userdata.len()).unwrap());
         }
-
-        let pline: *const Polyline<f64> = &((*shape).0.cw_plines[polyline_index as usize].polyline);
-
-        // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-        // prevent memory corruption/access errors but just panic as internal error if it does occur
-        count.write(u32::try_from((*pline).userdata.len()).unwrap());
         0
     })
 }
@@ -2015,7 +2152,7 @@ pub unsafe extern "C" fn cavc_shape_get_cw_pline_userdata_count(
 /// has not been freed.
 /// `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
 /// overrun will happen.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_shape_get_cw_pline_userdata_values(shape: *const cavc_shape, polyline_index: u32, userdata_values: *mut u64) -> i32 {
     ffi_catch_unwind!({
@@ -2023,9 +2160,10 @@ pub unsafe extern "C" fn cavc_shape_get_cw_pline_userdata_values(shape: *const c
             return 1;
         }
         
-        let pline: *const Polyline<f64> = &((*shape).0.cw_plines[polyline_index as usize].polyline);
-        
-        std::ptr::copy((*pline).userdata.as_ptr(), userdata_values, (*pline).userdata.len());
+        unsafe {
+            let pline: *const Polyline<f64> = &((*shape).0.cw_plines[polyline_index as usize].polyline);
+            std::ptr::copy((*pline).userdata.as_ptr(), userdata_values, (*pline).userdata.len());
+        }
         0
     })
 }

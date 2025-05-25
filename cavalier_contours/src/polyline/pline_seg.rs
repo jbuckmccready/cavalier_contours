@@ -1,9 +1,9 @@
 use super::PlineVertex;
 use crate::core::{
     math::{
-        angle, angle_is_within_sweep, bulge_from_angle, delta_angle, delta_angle_signed,
+        Vector2, angle, angle_is_within_sweep, bulge_from_angle, delta_angle, delta_angle_signed,
         dist_squared, line_seg_closest_point, midpoint, min_max, point_on_circle,
-        point_within_arc_sweep, Vector2,
+        point_within_arc_sweep,
     },
     traits::Real,
 };

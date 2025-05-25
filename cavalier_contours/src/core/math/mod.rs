@@ -6,7 +6,7 @@ mod line_line_intersect;
 mod vector2;
 
 pub use base_math::*;
-pub use circle_circle_intersect::{circle_circle_intr, CircleCircleIntr};
-pub use line_circle_intersect::{line_circle_intr, LineCircleIntr};
-pub use line_line_intersect::{line_line_intr, LineLineIntr};
+pub use circle_circle_intersect::{CircleCircleIntr, circle_circle_intr};
+pub use line_circle_intersect::{LineCircleIntr, line_circle_intr};
+pub use line_line_intersect::{LineLineIntr, line_line_intr};
 pub use vector2::Vector2;
