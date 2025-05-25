@@ -13,12 +13,13 @@ pub fn aabb_fuzzy_eq_eps(a: &AABB<f64>, b: &AABB<f64>, eps: f64) -> bool {
 }
 
 /// Holds a set of properties of a polyline for comparison in tests
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct PlineProperties {
     pub vertex_count: usize,
     pub area: f64,
     pub path_length: f64,
     pub extents: AABB<f64>,
+    pub userdata: Vec<u64>,
 }
 
 impl PlineProperties {
@@ -37,12 +38,14 @@ impl PlineProperties {
         min_y: f64,
         max_x: f64,
         max_y: f64,
+        userdata: Vec<u64>,
     ) -> Self {
         Self {
             vertex_count,
             area,
             path_length,
             extents: AABB::new(min_x, min_y, max_x, max_y),
+            userdata,
         }
     }
 
@@ -54,12 +57,14 @@ impl PlineProperties {
             let a = pline.area();
             if invert_area { -a } else { a }
         };
+        let userdata = pline.userdata.clone();
 
         Self {
             vertex_count: pline.vertex_count(),
             area,
             path_length: pline.path_length(),
             extents: pline.extents().unwrap(),
+            userdata
         }
     }
 
@@ -74,6 +79,9 @@ impl PlineProperties {
             return false;
         }
         if !aabb_fuzzy_eq_eps(&self.extents, &other.extents, eps) {
+            return false;
+        }
+        if !userdata_sets_match(&self.userdata, &other.userdata) {
             return false;
         }
         true
@@ -92,6 +100,9 @@ impl PlineProperties {
         if !aabb_fuzzy_eq_eps(&self.extents, &other.extents, eps) {
             return false;
         }
+        if !userdata_sets_match(&self.userdata, &other.userdata) {
+            return false;
+        }
         true
     }
 }
@@ -104,6 +115,17 @@ where
         .into_iter()
         .map(|pl| PlineProperties::from_pline(pl, invert_area))
         .collect()
+}
+
+pub fn userdata_sets_match(actual: &Vec<u64>, expected: &Vec<u64>) -> bool {
+    let mut sets_match = true;
+        for datum in expected.iter() {
+            if(!actual.contains(datum)) {
+                sets_match=false;
+                break;
+            }
+        }
+    sets_match
 }
 
 pub fn property_sets_match(

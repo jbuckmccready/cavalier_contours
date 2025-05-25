@@ -560,7 +560,9 @@ where
                 let source_loop =
                     Self::get_loop(curr_slice.source_idx, &ccw_offset_loops, &cw_offset_loops);
                 let slice_view = curr_slice.v_data.view(&source_loop.indexed_pline.polyline);
+                let slice_userdata_values = slice_view.get_userdata_values();
                 current_pline.extend_remove_repeat(&slice_view, pos_equal_eps);
+                current_pline.add_userdata_values(slice_userdata_values);
 
                 query_results.clear();
                 let slice_end_point = curr_slice.v_data.end_point;

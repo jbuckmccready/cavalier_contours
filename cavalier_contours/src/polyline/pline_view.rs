@@ -53,6 +53,11 @@ where
     type OutputPolyline = Polyline<P::Num>;
 
     #[inline]
+    fn get_userdata_values(&self) -> Vec<u64> {
+        self.source.get_userdata_values()
+    }
+    
+    #[inline]
     fn vertex_count(&self) -> usize {
         self.data.vertex_count()
     }

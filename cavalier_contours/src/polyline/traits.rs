@@ -47,6 +47,8 @@ pub trait PlineSource {
     /// Type used for output when invoking methods that return a new polyline.
     type OutputPolyline: PlineCreation<Num = Self::Num>;
 
+    fn get_userdata_values(&self) -> Vec<u64>;
+    
     /// Total number of vertexes.
     fn vertex_count(&self) -> usize;
 
@@ -1552,6 +1554,11 @@ pub trait PlineSource {
 ///
 /// See other core polyline traits: [PlineSource] and [PlineCreation] for more information.
 pub trait PlineSourceMut: PlineSource {
+    
+    fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>);
+    
+    fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>);
+
     /// Set the vertex data at the given `index` position of the polyline.
     fn set_vertex(&mut self, index: usize, vertex: PlineVertex<Self::Num>);
 
@@ -1783,7 +1790,10 @@ pub trait PlineCreation: PlineSourceMut + Sized {
     where
         P: PlineSource<Num = Self::Num> + ?Sized,
     {
-        Self::from_iter(pline.iter_vertexes(), pline.is_closed())
+        let mut result=Self::from_iter(pline.iter_vertexes(), pline.is_closed());
+        let userdata_values= pline.get_userdata_values();
+        result.set_userdata_values(userdata_values);
+        result
     }
 
     /// Same as [PlineCreation::create_from] but removes any repeat position vertexes in the
@@ -1805,6 +1815,8 @@ pub trait PlineCreation: PlineSourceMut + Sized {
                 result.remove_last();
             }
         }
+        let userdata_values= pline.get_userdata_values();
+        result.set_userdata_values(userdata_values);
         result
     }
 
