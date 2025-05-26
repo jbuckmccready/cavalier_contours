@@ -61,20 +61,26 @@ where
     }
 
     #[inline]
-    pub fn get_userdata_values(&self) -> Vec<u64> {
-      self.userdata.clone()
+    pub fn get_userdata_count(&self) -> usize {
+        self.userdata.len()
+    }
+
+    #[inline]
+    pub fn get_userdata_values(&self) -> impl Iterator<Item = &u64> {
+      self.userdata.iter()
     }
     
     #[inline]
-    pub fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
+    pub fn set_userdata_values<'a>(&mut self, values: impl IntoIterator<Item = &'a u64>) {
         self.userdata.clear();
         self.userdata.extend(values);
     }
     
     #[inline]
-    pub fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
+    pub fn add_userdata_values<'a>(&mut self, values: impl IntoIterator<Item = &'a u64>) {
         self.userdata.extend(values);
     }
+
 }
 
 impl<T> Index<usize> for Polyline<T> {
@@ -101,8 +107,13 @@ where
     type OutputPolyline = Polyline<T>;
 
     #[inline]
-    fn get_userdata_values(&self) -> Vec<u64> {
-      self.userdata.clone()
+    fn get_userdata_count(&self) -> usize {
+        self.userdata.len()
+    }
+
+    #[inline]
+    fn get_userdata_values(&self) -> impl Iterator<Item = &u64> {
+      self.userdata.iter()
     }
 
     #[inline]
@@ -131,13 +142,13 @@ where
     T: Real,
 {
     #[inline]
-    fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
+    fn set_userdata_values<'a>(&mut self, values: impl IntoIterator<Item = &'a u64>) {
         self.userdata.clear();
         self.userdata.extend(values);
     }
     
     #[inline]
-    fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
+    fn add_userdata_values<'a>(&mut self, values: impl IntoIterator<Item = &'a u64>) {
         self.userdata.extend(values);
     }
 

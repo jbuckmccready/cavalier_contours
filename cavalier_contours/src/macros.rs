@@ -79,12 +79,15 @@ macro_rules! pline_open {
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::pline_open;
+/// # use cavalier_contours::pline_open_userdata;
 /// # use cavalier_contours::polyline::*;
-/// let polyline = pline_open![(0.0, 1.0, 1.0), (2.0, 0.0, 0.0)];
+/// let polyline = pline_open_userdata![vec![04, 117], (0.0, 1.0, 1.0), (2.0, 0.0, 0.0)];
 /// assert!(!polyline.is_closed());
 /// assert_eq!(polyline[0], PlineVertex::new(0.0, 1.0, 1.0));
 /// assert_eq!(polyline[1], PlineVertex::new(2.0, 0.0, 0.0));
+/// assert_eq!(polyline.get_userdata_count(), 2);
+/// assert!(polyline.get_userdata_values().any(|&x| x == 04));
+/// assert!(polyline.get_userdata_values().any(|&x| x == 117));
 /// ```
 #[macro_export]
 macro_rules! pline_open_userdata {
@@ -97,7 +100,7 @@ macro_rules! pline_open_userdata {
             $(
                 pl.add($x.0, $x.1, $x.2);
             )*
-            pl.set_userdata_values($u);
+            pl.set_userdata_values($u.iter());
             pl
         }
     };
@@ -136,12 +139,15 @@ macro_rules! pline_closed {
 /// # Examples
 ///
 /// ```
-/// # use cavalier_contours::pline_closed;
+/// # use cavalier_contours::pline_closed_userdata;
 /// # use cavalier_contours::polyline::*;
-/// let polyline = pline_closed![(0.0, 1.0, 1.0), (2.0, 0.0, 0.0)];
+/// let polyline = pline_closed_userdata![vec![04, 117], (0.0, 1.0, 1.0), (2.0, 0.0, 0.0)];
 /// assert!(polyline.is_closed());
 /// assert_eq!(polyline[0], PlineVertex::new(0.0, 1.0, 1.0));
 /// assert_eq!(polyline[1], PlineVertex::new(2.0, 0.0, 0.0));
+/// assert_eq!(polyline.get_userdata_count(), 2);
+/// assert!(polyline.get_userdata_values().any(|&x| x == 04));
+/// assert!(polyline.get_userdata_values().any(|&x| x == 117));
 /// ```
 #[macro_export]
 macro_rules! pline_closed_userdata {
@@ -154,7 +160,7 @@ macro_rules! pline_closed_userdata {
             $(
                 pl.add($x.0, $x.1, $x.2);
             )*
-            pl.set_userdata_values($u);
+            pl.set_userdata_values($u.iter());
             pl
         }
     };

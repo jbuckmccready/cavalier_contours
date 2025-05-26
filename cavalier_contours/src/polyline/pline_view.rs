@@ -53,7 +53,12 @@ where
     type OutputPolyline = Polyline<P::Num>;
 
     #[inline]
-    fn get_userdata_values(&self) -> Vec<u64> {
+    fn get_userdata_count(&self) -> usize {
+        self.source.get_userdata_count()
+    }
+
+    #[inline]
+    fn get_userdata_values(&self) -> impl Iterator<Item = &u64> {
         self.source.get_userdata_values()
     }
     

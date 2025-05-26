@@ -1479,7 +1479,6 @@ where
     T: Real,
     O: PlineCreation<Num = T>,
 {
-    let userdata = polyline.get_userdata_values();
     if polyline.vertex_count() < 2 {
         return Vec::new();
     }
@@ -1536,7 +1535,7 @@ where
     );
     
     for cursor in result.iter_mut() {
-      cursor.set_userdata_values(userdata.clone());
+      cursor.set_userdata_values(polyline.get_userdata_values());
     }
     
     result
