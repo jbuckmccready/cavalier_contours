@@ -11,6 +11,10 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ### Changed 🔧
 
+- ⚠️ BREAKING: Fix memory leak in cavc_plinelist by implementing Drop trait ([#64](https://github.com/jbuckmccready/cavalier_contours/pull/64)).
+  This is not likely breaking for most users but if you are calling `cavc_pline_f` on each pline
+  in a `cavc_plinelist` without removing them from the list then you will get a double free on
+  the plines not removed when the `cavc_plinelist` is freed/dropped.
 - Updated MSRV to 1.85 and Rust edition to 2024.
 
 ## 0.4.0 - 2024-02-21
