@@ -216,6 +216,17 @@ fn boolean_op_from_u32(i: u32) -> Option<BooleanOp> {
 /// FFI opaque type as part of their FFI API.
 pub struct cavc_plinelist(pub Vec<*mut cavc_pline>);
 
+impl Drop for cavc_plinelist {
+    fn drop(&mut self) {
+        // Free all contained cavc_pline pointers
+        for pline_ptr in self.0.drain(..) {
+            unsafe {
+                cavc_pline_f(pline_ptr);
+            }
+        }
+    }
+}
+
 impl cavc_plinelist {
     pub fn from_internal<I>(plines: I) -> *mut cavc_plinelist
     where
