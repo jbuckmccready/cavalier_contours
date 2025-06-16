@@ -2,6 +2,17 @@
 
 All notable changes to the cavalier_contours crate will be documented in this file.
 
+## Unreleased
+
+### Added ⭐
+
+- Added `README.md` file to `cavalier_contours_ffi` crate.
+- Added `egui` interactive demo UI crate and auto deployment to GitHub pages for the demo [page is here](https://jbuckmccready.github.io/cavalier_contours/).
+
+### Changed 🔧
+
+- Updated MSRV to 1.85 and Rust edition to 2024.
+
 ## 0.4.0 - 2024-02-21
 
 ### Added ⭐
