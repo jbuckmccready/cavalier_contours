@@ -220,10 +220,8 @@ impl Drop for cavc_plinelist {
     fn drop(&mut self) {
         // Free all contained cavc_pline pointers
         for pline_ptr in self.0.drain(..) {
-            if !pline_ptr.is_null() {
-                unsafe {
-                    drop(Box::from_raw(pline_ptr));
-                }
+            unsafe {
+                cavc_pline_f(pline_ptr);
             }
         }
     }
