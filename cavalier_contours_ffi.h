@@ -85,6 +85,27 @@ typedef struct cavc_shape_offset_o {
 int32_t cavc_pline_parallel_offset_o_init(struct cavc_pline_parallel_offset_o *options);
 
 /**
+ * Create a new [cavc_pline_boolean_o] object.
+ *
+ * # Safety
+ *
+ * `options` must point to a valid place in memory to be written.
+ */
+int32_t cavc_pline_boolean_o_create(struct cavc_pline_boolean_o **options);
+
+/**
+ * Free an existing [cavc_pline_boolean_o] object.
+ *
+ * Nothing happens if `options` is null.
+ *
+ * # Safety
+ *
+ * `options` must be null or a valid cavc_pline_boolean_o object that was created with [cavc_pline_boolean_o_create] and
+ * has not already been freed.
+ */
+void cavc_pline_boolean_o_f(struct cavc_pline_boolean_o *options);
+
+/**
  * Write default option values to a [cavc_pline_boolean_o].
  *
  * ## Specific Error Codes
@@ -703,6 +724,8 @@ int32_t cavc_plinelist_push(struct cavc_plinelist *plinelist, struct cavc_pline 
  *
  * `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
  * NOTE: The caller now must call [cavc_pline_f] at some point to free the released [cavc_pline].
+ * If you pass null in `pline` you must already have another pointer to the released [cavc_pline]
+ * in order to free it.
  *
  * ## Specific Error Codes
  * * 1 = `plinelist` is null.
@@ -711,15 +734,18 @@ int32_t cavc_plinelist_push(struct cavc_plinelist *plinelist, struct cavc_pline 
  * # Safety
  *
  * `plinelist` must be null or a valid [cavc_plinelist] object.
- * `pline` must point to a valid place in memory to be written.
+ * `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [cavc_pline].
  */
-int32_t cavc_plinelist_pop(struct cavc_plinelist *plinelist, const struct cavc_pline **pline);
+int32_t cavc_plinelist_pop(struct cavc_plinelist *plinelist,
+                           const struct cavc_pline **pline);
 
 /**
  * Release and return a [cavc_pline] from a [cavc_plinelist] at a given index position.
  *
  * `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
  * NOTE: The caller now must call [cavc_pline_f] at some point to free the released [cavc_pline].
+ * If you pass null in `pline` you must already have another pointer to the released [cavc_pline]
+ * in order to free it.
  *
  * ## Specific Error Codes
  * * 1 = `plinelist` is null.
@@ -728,7 +754,7 @@ int32_t cavc_plinelist_pop(struct cavc_plinelist *plinelist, const struct cavc_p
  * # Safety
  *
  * `plinelist` must be null or a valid [cavc_plinelist] object.
- * `pline` must point to a valid place in memory to be written.
+ * `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [cavc_pline].
  */
 int32_t cavc_plinelist_take(struct cavc_plinelist *plinelist,
                             uint32_t position,
