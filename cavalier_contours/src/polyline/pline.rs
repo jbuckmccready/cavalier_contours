@@ -23,7 +23,7 @@ pub struct Polyline<T = f64> {
     // Vec of user-provided u64 values. Preserved across offset calls. Note that a Polyline that was
     // composed out of multiple slices of other Polylines will have userdata values from each source
     // polyline, and as such userdata values may appear repeatedly.
-    pub userdata: Vec<u64>
+    pub userdata: Vec<u64>,
 }
 
 impl<T> Default for Polyline<T>
@@ -46,7 +46,7 @@ where
         Polyline {
             vertex_data: Vec::new(),
             is_closed: false,
-            userdata: Vec::new()
+            userdata: Vec::new(),
         }
     }
 
@@ -56,7 +56,7 @@ where
         Polyline {
             vertex_data: Vec::new(),
             is_closed: true,
-            userdata: Vec::new()
+            userdata: Vec::new(),
         }
     }
 
@@ -67,20 +67,19 @@ where
 
     #[inline]
     pub fn get_userdata_values<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
-      self.userdata.iter().copied()
+        self.userdata.iter().copied()
     }
-    
+
     #[inline]
     pub fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
         self.userdata.clear();
         self.userdata.extend(values);
     }
-    
+
     #[inline]
     pub fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
         self.userdata.extend(values);
     }
-
 }
 
 impl<T> Index<usize> for Polyline<T> {
@@ -113,7 +112,7 @@ where
 
     #[inline]
     fn get_userdata_values<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
-      self.userdata.iter().copied()
+        self.userdata.iter().copied()
     }
 
     #[inline]
@@ -146,7 +145,7 @@ where
         self.userdata.clear();
         self.userdata.extend(values);
     }
-    
+
     #[inline]
     fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
         self.userdata.extend(values);
@@ -205,7 +204,7 @@ where
         Polyline {
             vertex_data: Vec::with_capacity(capacity),
             is_closed,
-            userdata: Vec::new()
+            userdata: Vec::new(),
         }
     }
 
@@ -217,7 +216,7 @@ where
         Polyline {
             vertex_data: iter.collect(),
             is_closed,
-            userdata: Vec::new()
+            userdata: Vec::new(),
         }
     }
 }

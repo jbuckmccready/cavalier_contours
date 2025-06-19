@@ -61,7 +61,7 @@ where
     fn get_userdata_values<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
         self.source.get_userdata_values()
     }
-    
+
     #[inline]
     fn vertex_count(&self) -> usize {
         self.data.vertex_count()

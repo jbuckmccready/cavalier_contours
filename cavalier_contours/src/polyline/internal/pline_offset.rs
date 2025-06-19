@@ -1533,10 +1533,10 @@ where
             .all(|p: &O| p.remove_repeat_pos(options.pos_equal_eps).is_none()),
         "bug: result should never have repeat position vertexes"
     );
-    
+
     for cursor in result.iter_mut() {
-      cursor.set_userdata_values(polyline.get_userdata_values());
+        cursor.set_userdata_values(polyline.get_userdata_values());
     }
-    
+
     result
 }

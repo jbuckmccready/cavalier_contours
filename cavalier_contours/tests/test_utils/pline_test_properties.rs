@@ -64,7 +64,7 @@ impl PlineProperties {
             area,
             path_length: pline.path_length(),
             extents: pline.extents().unwrap(),
-            userdata
+            userdata,
         }
     }
 
@@ -119,12 +119,12 @@ where
 
 pub fn userdata_sets_match(actual: &Vec<u64>, expected: &Vec<u64>) -> bool {
     let mut sets_match = true;
-        for datum in expected.iter() {
-            if(!actual.contains(datum)) {
-                sets_match=false;
-                break;
-            }
+    for datum in expected.iter() {
+        if (!actual.contains(datum)) {
+            sets_match = false;
+            break;
         }
+    }
     sets_match
 }
 
