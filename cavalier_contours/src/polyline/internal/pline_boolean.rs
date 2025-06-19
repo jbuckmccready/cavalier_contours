@@ -707,7 +707,7 @@ where
     composite_userdata.extend(source_pline2.get_userdata_values());
 
     for result_item in result.iter_mut() {
-        result_item.pline.set_userdata_values(composite_userdata.iter());
+        result_item.pline.set_userdata_values(composite_userdata.iter().copied());
     }
 
     result

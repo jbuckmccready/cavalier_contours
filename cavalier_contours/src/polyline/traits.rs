@@ -49,7 +49,7 @@ pub trait PlineSource {
 
     fn get_userdata_count(&self) -> usize;
     
-    fn get_userdata_values(&self) -> impl Iterator<Item = &u64>;
+    fn get_userdata_values<'a>(&'a self) -> impl Iterator<Item = u64> + 'a;
     
     /// Total number of vertexes.
     fn vertex_count(&self) -> usize;
@@ -1414,6 +1414,7 @@ pub trait PlineSource {
     ) -> Vec<Self::OutputPolyline> {
         parallel_offset(self, offset, options)
     }
+
     /// Perform a boolean `operation` between this polyline and another using default options.
     ///
     /// See [PlineSource::boolean_opt] for more information.
@@ -1558,10 +1559,10 @@ pub trait PlineSource {
 pub trait PlineSourceMut: PlineSource {
     
     /// Clears the pline's userdata storage and then copies from 'values' into userdata storage.
-    fn set_userdata_values<'a>(&mut self, values: impl IntoIterator<Item = &'a u64>);
+    fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>);
 
     /// Copies from 'values' into userdata storage.
-    fn add_userdata_values<'a> (&mut self, values: impl IntoIterator<Item = &'a u64>);
+    fn add_userdata_values (&mut self, values: impl IntoIterator<Item = u64>);
 
     /// Set the vertex data at the given `index` position of the polyline.
     fn set_vertex(&mut self, index: usize, vertex: PlineVertex<Self::Num>);

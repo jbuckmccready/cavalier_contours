@@ -66,18 +66,18 @@ where
     }
 
     #[inline]
-    pub fn get_userdata_values(&self) -> impl Iterator<Item = &u64> {
-      self.userdata.iter()
+    pub fn get_userdata_values<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
+      self.userdata.iter().copied()
     }
     
     #[inline]
-    pub fn set_userdata_values<'a>(&mut self, values: impl IntoIterator<Item = &'a u64>) {
+    pub fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
         self.userdata.clear();
         self.userdata.extend(values);
     }
     
     #[inline]
-    pub fn add_userdata_values<'a>(&mut self, values: impl IntoIterator<Item = &'a u64>) {
+    pub fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
         self.userdata.extend(values);
     }
 
@@ -112,8 +112,8 @@ where
     }
 
     #[inline]
-    fn get_userdata_values(&self) -> impl Iterator<Item = &u64> {
-      self.userdata.iter()
+    fn get_userdata_values<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
+      self.userdata.iter().copied()
     }
 
     #[inline]
@@ -142,13 +142,13 @@ where
     T: Real,
 {
     #[inline]
-    fn set_userdata_values<'a>(&mut self, values: impl IntoIterator<Item = &'a u64>) {
+    fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
         self.userdata.clear();
         self.userdata.extend(values);
     }
     
     #[inline]
-    fn add_userdata_values<'a>(&mut self, values: impl IntoIterator<Item = &'a u64>) {
+    fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
         self.userdata.extend(values);
     }
 

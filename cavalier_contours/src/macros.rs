@@ -86,8 +86,8 @@ macro_rules! pline_open {
 /// assert_eq!(polyline[0], PlineVertex::new(0.0, 1.0, 1.0));
 /// assert_eq!(polyline[1], PlineVertex::new(2.0, 0.0, 0.0));
 /// assert_eq!(polyline.get_userdata_count(), 2);
-/// assert!(polyline.get_userdata_values().any(|&x| x == 04));
-/// assert!(polyline.get_userdata_values().any(|&x| x == 117));
+/// assert!(polyline.get_userdata_values().any(|x| x == 04));
+/// assert!(polyline.get_userdata_values().any(|x| x == 117));
 /// ```
 #[macro_export]
 macro_rules! pline_open_userdata {
@@ -100,7 +100,7 @@ macro_rules! pline_open_userdata {
             $(
                 pl.add($x.0, $x.1, $x.2);
             )*
-            pl.set_userdata_values($u.iter());
+            pl.set_userdata_values($u.iter().copied());
             pl
         }
     };
@@ -146,8 +146,8 @@ macro_rules! pline_closed {
 /// assert_eq!(polyline[0], PlineVertex::new(0.0, 1.0, 1.0));
 /// assert_eq!(polyline[1], PlineVertex::new(2.0, 0.0, 0.0));
 /// assert_eq!(polyline.get_userdata_count(), 2);
-/// assert!(polyline.get_userdata_values().any(|&x| x == 04));
-/// assert!(polyline.get_userdata_values().any(|&x| x == 117));
+/// assert!(polyline.get_userdata_values().any(|x| x == 04));
+/// assert!(polyline.get_userdata_values().any(|x| x == 117));
 /// ```
 #[macro_export]
 macro_rules! pline_closed_userdata {
@@ -160,7 +160,7 @@ macro_rules! pline_closed_userdata {
             $(
                 pl.add($x.0, $x.1, $x.2);
             )*
-            pl.set_userdata_values($u.iter());
+            pl.set_userdata_values($u.into_iter());
             pl
         }
     };

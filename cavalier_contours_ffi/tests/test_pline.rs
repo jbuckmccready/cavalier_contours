@@ -820,6 +820,8 @@ fn shape_eval_ffi() {
             assert_eq!(cavc_shape_create(ptr::null(), &mut shape), 1);
             assert_eq!(cavc_shape_create(list, &mut shape), 0);
             
+            assert_eq!(cavc_plinelist_pop(list, ptr::null_mut()), 0);  // The plines in the list (pointed to by outer_pline and inner_pline) will be re-used later.
+            assert_eq!(cavc_plinelist_pop(list, ptr::null_mut()), 0);
             cavc_plinelist_f(list);
             
             let mut ccw_count: u32 = 0xDEAD;
@@ -882,6 +884,10 @@ fn shape_eval_ffi() {
             let mut shape = ptr::null_mut();
             assert_eq!(cavc_shape_create(list, &mut shape), 0);
             
+            assert_eq!(cavc_plinelist_pop(list, ptr::null_mut()), 0);  // The plines in the list (pointed to by outer_pline and inner_pline) will be re-used later.
+            assert_eq!(cavc_plinelist_pop(list, ptr::null_mut()), 0);
+            cavc_plinelist_f(list);
+            
             let mut ccw_count: u32 = 0xDEAD;
             assert_eq!(cavc_shape_get_ccw_count(shape, &mut ccw_count), 0);
             assert_eq!(ccw_count, 1);
@@ -941,6 +947,8 @@ fn shape_eval_ffi() {
             
             let mut shape = ptr::null_mut();
             assert_eq!(cavc_shape_create(list, &mut shape), 0);
+            
+            cavc_plinelist_f(list); // As this is the last use of outer_pline and inner_pline; we won't pop them before freeing the plinelist.
             
             let mut result_shape = ptr::null_mut();
             assert_eq!(cavc_shape_parallel_offset(shape, 40.0, ptr::null(), &mut result_shape), 0);

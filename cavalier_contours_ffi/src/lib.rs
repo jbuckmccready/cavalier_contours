@@ -173,6 +173,42 @@ impl Default for cavc_pline_boolean_o {
     }
 }
 
+/// Create a new [cavc_pline_boolean_o] object.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_boolean_o_create(
+    options: *mut *mut cavc_pline_boolean_o
+) -> i32 {
+    ffi_catch_unwind!({        
+        unsafe {
+            let result = cavc_pline_boolean_o::default();
+            options.write(Box::into_raw(Box::new(result)));
+        }
+        0
+    })
+}
+
+/// Free an existing [cavc_pline_boolean_o] object.
+///
+/// Nothing happens if `options` is null.
+///
+/// # Safety
+///
+/// `options` must be null or a valid cavc_pline_boolean_o object that was created with [cavc_pline_boolean_o_create] and
+/// has not already been freed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cavc_pline_boolean_o_f(options: *mut cavc_pline_boolean_o) {
+    if !options.is_null() {
+        unsafe {
+            drop(Box::from_raw(options));
+        }
+    }
+}
+
 /// Write default option values to a [cavc_pline_boolean_o].
 ///
 /// ## Specific Error Codes
@@ -215,6 +251,17 @@ fn boolean_op_from_u32(i: u32) -> Option<BooleanOp> {
 /// Note the internal member is only public for composing in other Rust libraries wanting to use the
 /// FFI opaque type as part of their FFI API.
 pub struct cavc_plinelist(pub Vec<*mut cavc_pline>);
+
+impl Drop for cavc_plinelist {
+    fn drop(&mut self) {
+        // Free all contained cavc_pline pointers
+        for pline_ptr in self.0.drain(..) {
+            unsafe {
+                cavc_pline_f(pline_ptr);
+            }
+        }
+    }
+}
 
 impl cavc_plinelist {
     pub fn from_internal<I>(plines: I) -> *mut cavc_plinelist
@@ -1069,6 +1116,7 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset(
         0
     })
 }
+
 /// Wraps [PlineSource::boolean_opt].
 ///
 /// `options` is allowed to be null (default options will be used).
@@ -1402,6 +1450,8 @@ pub unsafe extern "C" fn cavc_plinelist_push(
 ///
 /// `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
 /// NOTE: The caller now must call [cavc_pline_f] at some point to free the released [cavc_pline].
+/// If you pass null in `pline` you must already have another pointer to the released [cavc_pline]
+/// in order to free it.
 ///
 /// ## Specific Error Codes
 /// * 1 = `plinelist` is null.
@@ -1410,7 +1460,7 @@ pub unsafe extern "C" fn cavc_plinelist_push(
 /// # Safety
 ///
 /// `plinelist` must be null or a valid [cavc_plinelist] object.
-/// `pline` must point to a valid place in memory to be written.
+/// `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [cavc_pline].
 #[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_pop(
@@ -1427,7 +1477,9 @@ pub unsafe extern "C" fn cavc_plinelist_pop(
         match plinelist.pop() {
             Some(p) => {
                 unsafe {
-                    pline.write(p);
+                    if !pline.is_null() {
+                        pline.write(p);
+                    }
                 }
                 0
             }
@@ -1440,6 +1492,8 @@ pub unsafe extern "C" fn cavc_plinelist_pop(
 ///
 /// `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
 /// NOTE: The caller now must call [cavc_pline_f] at some point to free the released [cavc_pline].
+/// If you pass null in `pline` you must already have another pointer to the released [cavc_pline]
+/// in order to free it.
 ///
 /// ## Specific Error Codes
 /// * 1 = `plinelist` is null.
@@ -1448,7 +1502,7 @@ pub unsafe extern "C" fn cavc_plinelist_pop(
 /// # Safety
 ///
 /// `plinelist` must be null or a valid [cavc_plinelist] object.
-/// `pline` must point to a valid place in memory to be written.
+/// `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [cavc_pline].
 #[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_take(
@@ -1469,7 +1523,10 @@ pub unsafe extern "C" fn cavc_plinelist_take(
         }
 
         unsafe {
-            pline.write(plinelist.remove(pos));
+            let result = plinelist.remove(pos);
+            if !pline.is_null() {
+                pline.write(result);
+            }
         }
 
         0
