@@ -22,28 +22,13 @@ fn create_pline(vertexes: &[(f64, f64, f64)], is_closed: bool) -> *mut cavc_plin
     result as *mut _
 }
 
-fn compare_vertexes(actual: &Vec<cavc_vertex>, expected: &Vec<cavc_vertex>) {
+fn compare_vertexes(actual: &[cavc_vertex], expected: &[cavc_vertex]) {
     assert_eq!(expected.len(), actual.len());
 
-    let mut index = 0;
-    for vertex in actual.iter() {
+    for (index, vertex) in actual.iter().enumerate() {
         assert_fuzzy_eq!(vertex.x, expected[index].x);
         assert_fuzzy_eq!(vertex.y, expected[index].y);
         assert_fuzzy_eq!(vertex.bulge, expected[index].bulge);
-        index = index + 1;
-    }
-}
-
-fn contains_userdata(userdata: *const u64, limit: u32, search_value: u64) -> bool {
-    unsafe {
-        let mut p: *const u64 = userdata;
-        for _i in 0..limit {
-            if *p == search_value {
-                return true;
-            }
-            p = p.offset(1);
-        }
-        false
     }
 }
 
@@ -912,7 +897,7 @@ fn shape_eval_ffi() {
             );
 
             assert_eq!(cavc_pline_set_userdata_values(outer_pline, &117u64, 1), 0);
-            assert_eq!(cavc_pline_set_userdata_values(inner_pline, &04u64, 1), 0);
+            assert_eq!(cavc_pline_set_userdata_values(inner_pline, &4u64, 1), 0);
 
             let mut count: u32 = 0xDEAD;
             assert_eq!(cavc_pline_get_userdata_count(outer_pline, &mut count), 0);
@@ -920,7 +905,7 @@ fn shape_eval_ffi() {
             assert_eq!(cavc_pline_get_userdata_count(inner_pline, &mut count), 0);
             assert_eq!(count, 1);
 
-            let mut userdata: u64 = 0xDEADBEEF;
+            let mut userdata = 0xDEADBEEF_u64;
             assert_eq!(
                 cavc_pline_get_userdata_values(outer_pline, &mut userdata),
                 0
@@ -930,7 +915,7 @@ fn shape_eval_ffi() {
                 cavc_pline_get_userdata_values(inner_pline, &mut userdata),
                 0
             );
-            assert_eq!(userdata, 04);
+            assert_eq!(userdata, 4);
         }
 
         {
@@ -977,7 +962,7 @@ fn shape_eval_ffi() {
             assert_eq!(cavc_shape_get_cw_count(result_shape, &mut cw_count), 0);
             assert_eq!(cw_count, 0);
 
-            for index in 0..4 as u32 {
+            for index in 0..4 {
                 let mut is_closed: u8 = 0;
                 assert_eq!(
                     cavc_shape_get_ccw_polyline_is_closed(result_shape, index, &mut is_closed),
@@ -1017,7 +1002,7 @@ fn shape_eval_ffi() {
                 );
                 assert_eq!(userdata_count, 2);
 
-                let mut userdata = [0xDEADBEEF, 0xDEADBEEF];
+                let mut userdata = [0xDEADBEEF_u64, 0xDEADBEEF_u64];
                 assert_eq!(
                     cavc_shape_get_ccw_pline_userdata_values(
                         result_shape,
@@ -1026,8 +1011,9 @@ fn shape_eval_ffi() {
                     ),
                     0
                 );
-                assert_eq!(contains_userdata(&mut (userdata[0]), 2, 117), true);
-                assert_eq!(contains_userdata(&mut (userdata[0]), 2, 04), true);
+
+                assert!(userdata.contains(&117));
+                assert!(userdata.contains(&4));
             }
 
             cavc_shape_f(shape);
@@ -1076,7 +1062,7 @@ fn shape_eval_ffi() {
             assert_eq!(cavc_shape_get_cw_count(result_shape, &mut cw_count), 0);
             assert_eq!(cw_count, 0);
 
-            for index in 0..4 as u32 {
+            for index in 0..4 {
                 let mut is_closed: u8 = 0;
                 assert_eq!(
                     cavc_shape_get_ccw_polyline_is_closed(result_shape, index, &mut is_closed),
@@ -1116,7 +1102,7 @@ fn shape_eval_ffi() {
                 );
                 assert_eq!(userdata_count, 2);
 
-                let mut userdata = [0xDEADBEEF, 0xDEADBEEF];
+                let mut userdata = [0xDEADBEEF_u64, 0xDEADBEEF_u64];
                 assert_eq!(
                     cavc_shape_get_ccw_pline_userdata_values(
                         result_shape,
@@ -1125,8 +1111,9 @@ fn shape_eval_ffi() {
                     ),
                     0
                 );
-                assert_eq!(contains_userdata(&mut (userdata[0]), 2, 117), true);
-                assert_eq!(contains_userdata(&mut (userdata[0]), 2, 04), true);
+
+                assert!(userdata.contains(&117));
+                assert!(userdata.contains(&4));
             }
 
             cavc_shape_f(shape);
@@ -1193,12 +1180,12 @@ fn shape_eval_ffi() {
                 );
                 assert_eq!(userdata_count, 1);
 
-                let mut userdata: u64 = 0xDEADBEEF;
+                let mut userdata = 0xDEADBEEF_u64;
                 assert_eq!(
                     cavc_shape_get_ccw_pline_userdata_values(result_shape, 0, &mut userdata),
                     0
                 );
-                assert_eq!(contains_userdata(&userdata, 1, 117), true);
+                assert_eq!(userdata, 117);
             }
 
             {
@@ -1234,12 +1221,12 @@ fn shape_eval_ffi() {
                 );
                 assert_eq!(userdata_count, 1);
 
-                let mut userdata: u64 = 0xDEADBEEF;
+                let mut userdata = 0xDEADBEEF_u64;
                 assert_eq!(
                     cavc_shape_get_cw_pline_userdata_values(result_shape, 0, &mut userdata),
                     0
                 );
-                assert_eq!(contains_userdata(&userdata, 1, 04), true);
+                assert_eq!(userdata, 4);
             }
 
             cavc_shape_f(shape);

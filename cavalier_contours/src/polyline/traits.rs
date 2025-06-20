@@ -49,7 +49,7 @@ pub trait PlineSource {
 
     fn get_userdata_count(&self) -> usize;
 
-    fn get_userdata_values<'a>(&'a self) -> impl Iterator<Item = u64> + 'a;
+    fn get_userdata_values(&self) -> impl Iterator<Item = u64> + '_;
 
     /// Total number of vertexes.
     fn vertex_count(&self) -> usize;

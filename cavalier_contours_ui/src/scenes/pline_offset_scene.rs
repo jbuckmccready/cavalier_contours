@@ -35,6 +35,7 @@ enum Mode {
 }
 
 impl Mode {
+    #[allow(clippy::unneeded_struct_pattern)]
     fn label(&self) -> &'static str {
         match self {
             Mode::Offset { .. } => "Offset",

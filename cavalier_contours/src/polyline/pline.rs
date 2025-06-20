@@ -66,7 +66,7 @@ where
     }
 
     #[inline]
-    pub fn get_userdata_values<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
+    pub fn get_userdata_values(&self) -> impl Iterator<Item = u64> + '_ {
         self.userdata.iter().copied()
     }
 
@@ -111,7 +111,7 @@ where
     }
 
     #[inline]
-    fn get_userdata_values<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
+    fn get_userdata_values(&self) -> impl Iterator<Item = u64> + '_ {
         self.userdata.iter().copied()
     }
 

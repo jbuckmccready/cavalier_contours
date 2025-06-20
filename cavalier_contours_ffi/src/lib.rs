@@ -1558,7 +1558,7 @@ pub struct cavc_shape_offset_o {
 
 impl cavc_shape_offset_o {
     /// Convert FFI shape offset options type to internal type.
-    pub unsafe fn to_internal(&self) -> ShapeOffsetOptions<f64> {
+    pub fn to_internal(&self) -> ShapeOffsetOptions<f64> {
         ShapeOffsetOptions {
             pos_equal_eps: self.pos_equal_eps,
             offset_dist_eps: self.offset_dist_eps,
@@ -1809,16 +1809,11 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_is_closed(
                 return 2;
             }
 
-            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-            // prevent memory corruption/access errors but just panic as internal error if it does occur
-            is_closed.write(
-                u8::try_from(
-                    (*shape).0.ccw_plines[polyline_index as usize]
-                        .polyline
-                        .is_closed,
-                )
-                .unwrap(),
-            );
+            is_closed.write(u8::from(
+                (*shape).0.ccw_plines[polyline_index as usize]
+                    .polyline
+                    .is_closed,
+            ));
         }
         0
     })
@@ -2101,16 +2096,11 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_is_closed(
                 return 2;
             }
 
-            // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
-            // prevent memory corruption/access errors but just panic as internal error if it does occur
-            is_closed.write(
-                u8::try_from(
-                    (*shape).0.cw_plines[polyline_index as usize]
-                        .polyline
-                        .is_closed,
-                )
-                .unwrap(),
-            );
+            is_closed.write(u8::from(
+                (*shape).0.cw_plines[polyline_index as usize]
+                    .polyline
+                    .is_closed,
+            ));
         }
         0
     })

@@ -58,7 +58,7 @@ where
     }
 
     #[inline]
-    fn get_userdata_values<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
+    fn get_userdata_values(&self) -> impl Iterator<Item = u64> + '_ {
         self.source.get_userdata_values()
     }
 

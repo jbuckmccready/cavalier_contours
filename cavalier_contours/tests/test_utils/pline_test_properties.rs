@@ -30,6 +30,7 @@ impl PlineProperties {
     // epsilon for use of remove_redundant for consistent property compare
     pub const REMOVE_REDUNDANT_EPS: f64 = 1e-4;
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         vertex_count: usize,
         area: f64,
@@ -117,7 +118,7 @@ where
         .collect()
 }
 
-pub fn userdata_sets_match(actual: &Vec<u64>, expected: &Vec<u64>) -> bool {
+pub fn userdata_sets_match(actual: &[u64], expected: &[u64]) -> bool {
     let mut sets_match = true;
     for datum in expected.iter() {
         if (!actual.contains(datum)) {
