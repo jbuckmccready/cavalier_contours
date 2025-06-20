@@ -47,6 +47,10 @@ pub trait PlineSource {
     /// Type used for output when invoking methods that return a new polyline.
     type OutputPolyline: PlineCreation<Num = Self::Num>;
 
+    fn get_userdata_count(&self) -> usize;
+
+    fn get_userdata_values(&self) -> impl Iterator<Item = u64> + '_;
+
     /// Total number of vertexes.
     fn vertex_count(&self) -> usize;
 
@@ -1410,6 +1414,7 @@ pub trait PlineSource {
     ) -> Vec<Self::OutputPolyline> {
         parallel_offset(self, offset, options)
     }
+
     /// Perform a boolean `operation` between this polyline and another using default options.
     ///
     /// See [PlineSource::boolean_opt] for more information.
@@ -1552,6 +1557,12 @@ pub trait PlineSource {
 ///
 /// See other core polyline traits: [PlineSource] and [PlineCreation] for more information.
 pub trait PlineSourceMut: PlineSource {
+    /// Clears the pline's userdata storage and then copies from 'values' into userdata storage.
+    fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>);
+
+    /// Copies from 'values' into userdata storage.
+    fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>);
+
     /// Set the vertex data at the given `index` position of the polyline.
     fn set_vertex(&mut self, index: usize, vertex: PlineVertex<Self::Num>);
 
@@ -1783,7 +1794,10 @@ pub trait PlineCreation: PlineSourceMut + Sized {
     where
         P: PlineSource<Num = Self::Num> + ?Sized,
     {
-        Self::from_iter(pline.iter_vertexes(), pline.is_closed())
+        let mut result = Self::from_iter(pline.iter_vertexes(), pline.is_closed());
+
+        result.set_userdata_values(pline.get_userdata_values());
+        result
     }
 
     /// Same as [PlineCreation::create_from] but removes any repeat position vertexes in the
@@ -1805,6 +1819,8 @@ pub trait PlineCreation: PlineSourceMut + Sized {
                 result.remove_last();
             }
         }
+
+        result.set_userdata_values(pline.get_userdata_values());
         result
     }
 

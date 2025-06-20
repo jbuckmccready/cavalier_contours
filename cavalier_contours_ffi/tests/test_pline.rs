@@ -22,6 +22,16 @@ fn create_pline(vertexes: &[(f64, f64, f64)], is_closed: bool) -> *mut cavc_plin
     result as *mut _
 }
 
+fn compare_vertexes(actual: &[cavc_vertex], expected: &[cavc_vertex]) {
+    assert_eq!(expected.len(), actual.len());
+
+    for (index, vertex) in actual.iter().enumerate() {
+        assert_fuzzy_eq!(vertex.x, expected[index].x);
+        assert_fuzzy_eq!(vertex.y, expected[index].y);
+        assert_fuzzy_eq!(vertex.bulge, expected[index].bulge);
+    }
+}
+
 #[test]
 fn pline_data_manipulation() {
     let pline = create_pline(&[], true);
@@ -699,6 +709,528 @@ fn pline_eval_boolean() {
             cavc_plinelist_f(neg_plines as *mut _);
 
             cavc_pline_f(pline1);
+        }
+    }
+}
+
+#[test]
+fn shape_eval_ffi() {
+    let outer_pline = create_pline(
+        &[
+            (-200.0, 200.0, 0.0),
+            (-200.0, -200.0, 0.0),
+            (200.0, -200.0, 0.0),
+            (200.0, 200.0, 0.0),
+        ],
+        true,
+    );
+
+    let inner_pline = create_pline(
+        &[
+            (-100.0, 0.0, 0.0),
+            (0.0, 100.0, 0.0),
+            (100.0, 0.0, 0.0),
+            (0.0, -100.0, 0.0),
+        ],
+        true,
+    );
+
+    let expected_65 = [
+        vec![
+            cavc_vertex {
+                x: -135.0,
+                y: -56.92388155425118,
+                bulge: 0.0,
+            },
+            cavc_vertex {
+                x: -135.0,
+                y: -135.0,
+                bulge: 0.0,
+            },
+            cavc_vertex {
+                x: -56.92388155425118,
+                y: -135.0,
+                bulge: 0.0,
+            },
+        ],
+        vec![
+            cavc_vertex {
+                x: 56.92388155425118,
+                y: -135.0,
+                bulge: 0.0,
+            },
+            cavc_vertex {
+                x: 135.0,
+                y: -135.0,
+                bulge: 0.0,
+            },
+            cavc_vertex {
+                x: 135.0,
+                y: -56.92388155425118,
+                bulge: 0.0,
+            },
+        ],
+        vec![
+            cavc_vertex {
+                x: 135.0,
+                y: 56.92388155425118,
+                bulge: 0.0,
+            },
+            cavc_vertex {
+                x: 135.0,
+                y: 135.0,
+                bulge: 0.0,
+            },
+            cavc_vertex {
+                x: 56.92388155425118,
+                y: 135.0,
+                bulge: 0.0,
+            },
+        ],
+        vec![
+            cavc_vertex {
+                x: -56.92388155425118,
+                y: 135.0,
+                bulge: 0.0,
+            },
+            cavc_vertex {
+                x: -135.0,
+                y: 135.0,
+                bulge: 0.0,
+            },
+            cavc_vertex {
+                x: -135.0,
+                y: 56.92388155425118,
+                bulge: 0.0,
+            },
+        ],
+    ];
+
+    let expected_40_ccw = vec![
+        cavc_vertex {
+            x: -160.0,
+            y: 160.0,
+            bulge: 0.0,
+        },
+        cavc_vertex {
+            x: -160.0,
+            y: -160.0,
+            bulge: 0.0,
+        },
+        cavc_vertex {
+            x: 160.0,
+            y: -160.0,
+            bulge: 0.0,
+        },
+        cavc_vertex {
+            x: 160.0,
+            y: 160.0,
+            bulge: 0.0,
+        },
+    ];
+
+    let expected_40_cw = vec![
+        cavc_vertex {
+            x: -128.2842712474619,
+            y: 28.284271247461902,
+            bulge: 0.0,
+        },
+        cavc_vertex {
+            x: -28.284271247461902,
+            y: 128.2842712474619,
+            bulge: -0.4142135623730951,
+        },
+        cavc_vertex {
+            x: 28.284271247461902,
+            y: 128.2842712474619,
+            bulge: 0.0,
+        },
+        cavc_vertex {
+            x: 128.2842712474619,
+            y: 28.284271247461902,
+            bulge: -0.4142135623730951,
+        },
+        cavc_vertex {
+            x: 128.2842712474619,
+            y: -28.284271247461902,
+            bulge: 0.0,
+        },
+        cavc_vertex {
+            x: 28.284271247461902,
+            y: -128.2842712474619,
+            bulge: -0.4142135623730951,
+        },
+        cavc_vertex {
+            x: -28.284271247461902,
+            y: -128.2842712474619,
+            bulge: 0.0,
+        },
+        cavc_vertex {
+            x: -128.2842712474619,
+            y: -28.284271247461902,
+            bulge: -0.4142135623730951,
+        },
+    ];
+
+    unsafe {
+        {
+            assert_eq!(
+                cavc_pline_set_userdata_values(ptr::null_mut(), ptr::null(), 0),
+                1
+            );
+            assert_eq!(
+                cavc_pline_get_userdata_count(ptr::null(), ptr::null_mut()),
+                1
+            );
+            assert_eq!(
+                cavc_pline_get_userdata_values(ptr::null(), ptr::null_mut()),
+                1
+            );
+
+            assert_eq!(
+                cavc_shape_set_ccw_pline_userdata_values(ptr::null_mut(), 0, ptr::null(), 0),
+                1
+            );
+            assert_eq!(
+                cavc_shape_get_ccw_pline_userdata_count(ptr::null(), 0, ptr::null_mut()),
+                1
+            );
+
+            assert_eq!(cavc_pline_set_userdata_values(outer_pline, &117u64, 1), 0);
+            assert_eq!(cavc_pline_set_userdata_values(inner_pline, &4u64, 1), 0);
+
+            let mut count: u32 = 0xDEAD;
+            assert_eq!(cavc_pline_get_userdata_count(outer_pline, &mut count), 0);
+            assert_eq!(count, 1);
+            assert_eq!(cavc_pline_get_userdata_count(inner_pline, &mut count), 0);
+            assert_eq!(count, 1);
+
+            let mut userdata = 0xDEADBEEF_u64;
+            assert_eq!(
+                cavc_pline_get_userdata_values(outer_pline, &mut userdata),
+                0
+            );
+            assert_eq!(userdata, 117);
+            assert_eq!(
+                cavc_pline_get_userdata_values(inner_pline, &mut userdata),
+                0
+            );
+            assert_eq!(userdata, 4);
+        }
+
+        {
+            // Full-stack shape offset operation check with default offset options
+            let mut list = ptr::null_mut();
+            assert_eq!(cavc_plinelist_create(0, &mut list), 0);
+
+            assert_eq!(cavc_plinelist_push(ptr::null_mut(), outer_pline), 1);
+            assert_eq!(cavc_plinelist_push(list, ptr::null_mut()), 2);
+            assert_eq!(cavc_plinelist_push(list, outer_pline), 0);
+            assert_eq!(cavc_plinelist_push(list, inner_pline), 0);
+
+            let mut shape = ptr::null_mut();
+            assert_eq!(cavc_shape_create(ptr::null(), &mut shape), 1);
+            assert_eq!(cavc_shape_create(list, &mut shape), 0);
+
+            assert_eq!(cavc_plinelist_pop(list, ptr::null_mut()), 0); // The plines in the list (pointed to by outer_pline and inner_pline) will be re-used later.
+            assert_eq!(cavc_plinelist_pop(list, ptr::null_mut()), 0);
+            cavc_plinelist_f(list);
+
+            let mut ccw_count: u32 = 0xDEAD;
+            assert_eq!(cavc_shape_get_ccw_count(shape, &mut ccw_count), 0);
+            assert_eq!(ccw_count, 1);
+
+            let mut cw_count: u32 = 0xDEAD;
+            assert_eq!(cavc_shape_get_cw_count(shape, &mut cw_count), 0);
+            assert_eq!(cw_count, 1);
+
+            let mut result_shape = ptr::null_mut();
+            assert_eq!(
+                cavc_shape_parallel_offset(ptr::null(), 65.0, ptr::null(), &mut result_shape),
+                1
+            );
+            assert_eq!(
+                cavc_shape_parallel_offset(shape, 65.0, ptr::null(), &mut result_shape),
+                0
+            );
+
+            ccw_count = 0xDEAD;
+            assert_eq!(cavc_shape_get_ccw_count(result_shape, &mut ccw_count), 0);
+            assert_eq!(ccw_count, 4);
+
+            cw_count = 0xDEAD;
+            assert_eq!(cavc_shape_get_cw_count(result_shape, &mut cw_count), 0);
+            assert_eq!(cw_count, 0);
+
+            for index in 0..4 {
+                let mut is_closed: u8 = 0;
+                assert_eq!(
+                    cavc_shape_get_ccw_polyline_is_closed(result_shape, index, &mut is_closed),
+                    0
+                );
+                assert_ne!(is_closed, 0);
+
+                let mut ccw_vertex_count: u32 = 0;
+                assert_eq!(
+                    cavc_shape_get_ccw_polyline_count(result_shape, index, &mut ccw_vertex_count),
+                    0
+                );
+                assert_eq!(ccw_vertex_count, 3);
+
+                let mut vertexes: Vec<cavc_vertex> = Vec::with_capacity(3);
+                vertexes.resize(3, cavc_vertex::new(0.0, 0.0, 0.0));
+
+                assert_eq!(
+                    cavc_shape_get_ccw_polyline_vertex_data(
+                        result_shape,
+                        index,
+                        vertexes.as_mut_ptr()
+                    ),
+                    0
+                );
+
+                compare_vertexes(&vertexes, &(expected_65[index as usize]));
+
+                let mut userdata_count: u32 = 0xDEAD;
+                assert_eq!(
+                    cavc_shape_get_ccw_pline_userdata_count(
+                        result_shape,
+                        index,
+                        &mut userdata_count
+                    ),
+                    0
+                );
+                assert_eq!(userdata_count, 2);
+
+                let mut userdata = [0xDEADBEEF_u64, 0xDEADBEEF_u64];
+                assert_eq!(
+                    cavc_shape_get_ccw_pline_userdata_values(
+                        result_shape,
+                        index,
+                        &mut (userdata[0])
+                    ),
+                    0
+                );
+
+                assert!(userdata.contains(&117));
+                assert!(userdata.contains(&4));
+            }
+
+            cavc_shape_f(shape);
+            cavc_shape_f(result_shape);
+        }
+
+        {
+            // Full-stack shape offset operation check with custom offset options
+            let mut list = ptr::null_mut();
+            assert_eq!(cavc_plinelist_create(0, &mut list), 0);
+
+            assert_eq!(cavc_plinelist_push(list, outer_pline), 0);
+            assert_eq!(cavc_plinelist_push(list, inner_pline), 0);
+
+            let mut shape = ptr::null_mut();
+            assert_eq!(cavc_shape_create(list, &mut shape), 0);
+
+            assert_eq!(cavc_plinelist_pop(list, ptr::null_mut()), 0); // The plines in the list (pointed to by outer_pline and inner_pline) will be re-used later.
+            assert_eq!(cavc_plinelist_pop(list, ptr::null_mut()), 0);
+            cavc_plinelist_f(list);
+
+            let mut ccw_count: u32 = 0xDEAD;
+            assert_eq!(cavc_shape_get_ccw_count(shape, &mut ccw_count), 0);
+            assert_eq!(ccw_count, 1);
+
+            let mut cw_count: u32 = 0xDEAD;
+            assert_eq!(cavc_shape_get_cw_count(shape, &mut cw_count), 0);
+            assert_eq!(cw_count, 1);
+
+            let offset_options = cavc_shape_offset_o {
+                pos_equal_eps: 0.0001,
+                offset_dist_eps: 0.001,
+                slice_join_eps: 0.001,
+            };
+            let mut result_shape = ptr::null_mut();
+            assert_eq!(
+                cavc_shape_parallel_offset(shape, 65.0, &offset_options, &mut result_shape),
+                0
+            );
+
+            ccw_count = 0xDEAD;
+            assert_eq!(cavc_shape_get_ccw_count(result_shape, &mut ccw_count), 0);
+            assert_eq!(ccw_count, 4);
+
+            cw_count = 0xDEAD;
+            assert_eq!(cavc_shape_get_cw_count(result_shape, &mut cw_count), 0);
+            assert_eq!(cw_count, 0);
+
+            for index in 0..4 {
+                let mut is_closed: u8 = 0;
+                assert_eq!(
+                    cavc_shape_get_ccw_polyline_is_closed(result_shape, index, &mut is_closed),
+                    0
+                );
+                assert_ne!(is_closed, 0);
+
+                let mut ccw_vertex_count: u32 = 0;
+                assert_eq!(
+                    cavc_shape_get_ccw_polyline_count(result_shape, index, &mut ccw_vertex_count),
+                    0
+                );
+                assert_eq!(ccw_vertex_count, 3);
+
+                let mut vertexes: Vec<cavc_vertex> = Vec::with_capacity(3);
+                vertexes.resize(3, cavc_vertex::new(0.0, 0.0, 0.0));
+
+                assert_eq!(
+                    cavc_shape_get_ccw_polyline_vertex_data(
+                        result_shape,
+                        index,
+                        vertexes.as_mut_ptr()
+                    ),
+                    0
+                );
+
+                compare_vertexes(&vertexes, &(expected_65[index as usize]));
+
+                let mut userdata_count: u32 = 0xDEAD;
+                assert_eq!(
+                    cavc_shape_get_ccw_pline_userdata_count(
+                        result_shape,
+                        index,
+                        &mut userdata_count
+                    ),
+                    0
+                );
+                assert_eq!(userdata_count, 2);
+
+                let mut userdata = [0xDEADBEEF_u64, 0xDEADBEEF_u64];
+                assert_eq!(
+                    cavc_shape_get_ccw_pline_userdata_values(
+                        result_shape,
+                        index,
+                        (&mut userdata) as *mut u64
+                    ),
+                    0
+                );
+
+                assert!(userdata.contains(&117));
+                assert!(userdata.contains(&4));
+            }
+
+            cavc_shape_f(shape);
+            cavc_shape_f(result_shape);
+        }
+
+        {
+            // Full-stack shape offset operation with no intersection (generates one CCW path and one CW path)
+            let mut list = ptr::null_mut();
+            assert_eq!(cavc_plinelist_create(0, &mut list), 0);
+
+            assert_eq!(cavc_plinelist_push(list, outer_pline), 0);
+            assert_eq!(cavc_plinelist_push(list, inner_pline), 0);
+
+            let mut shape = ptr::null_mut();
+            assert_eq!(cavc_shape_create(list, &mut shape), 0);
+
+            cavc_plinelist_f(list); // As this is the last use of outer_pline and inner_pline; we won't pop them before freeing the plinelist.
+
+            let mut result_shape = ptr::null_mut();
+            assert_eq!(
+                cavc_shape_parallel_offset(shape, 40.0, ptr::null(), &mut result_shape),
+                0
+            );
+
+            let mut ccw_count: u32 = 0;
+            assert_eq!(cavc_shape_get_ccw_count(result_shape, &mut ccw_count), 0);
+            assert_eq!(ccw_count, 1);
+
+            let mut cw_count: u32 = 0;
+            assert_eq!(cavc_shape_get_cw_count(result_shape, &mut cw_count), 0);
+            assert_eq!(cw_count, 1);
+
+            {
+                // CCW result
+                let mut is_closed: u8 = 0;
+                assert_eq!(
+                    cavc_shape_get_ccw_polyline_is_closed(result_shape, 0, &mut is_closed),
+                    0
+                );
+                assert_ne!(is_closed, 0);
+
+                let mut ccw_vertex_count: u32 = 0;
+                assert_eq!(
+                    cavc_shape_get_ccw_polyline_count(result_shape, 0, &mut ccw_vertex_count),
+                    0
+                );
+                assert_eq!(ccw_vertex_count, 4);
+
+                let mut vertexes: Vec<cavc_vertex> = Vec::with_capacity(4);
+                vertexes.resize(4, cavc_vertex::new(0.0, 0.0, 0.0));
+
+                assert_eq!(
+                    cavc_shape_get_ccw_polyline_vertex_data(result_shape, 0, vertexes.as_mut_ptr()),
+                    0
+                );
+
+                compare_vertexes(&vertexes, &expected_40_ccw);
+
+                let mut userdata_count: u32 = 0xDEAD;
+                assert_eq!(
+                    cavc_shape_get_ccw_pline_userdata_count(result_shape, 0, &mut userdata_count),
+                    0
+                );
+                assert_eq!(userdata_count, 1);
+
+                let mut userdata = 0xDEADBEEF_u64;
+                assert_eq!(
+                    cavc_shape_get_ccw_pline_userdata_values(result_shape, 0, &mut userdata),
+                    0
+                );
+                assert_eq!(userdata, 117);
+            }
+
+            {
+                // CW result
+                let mut is_closed: u8 = 0;
+                assert_eq!(
+                    cavc_shape_get_cw_polyline_is_closed(result_shape, 0, &mut is_closed),
+                    0
+                );
+                assert_ne!(is_closed, 0);
+
+                let mut cw_vertex_count: u32 = 0;
+                assert_eq!(
+                    cavc_shape_get_cw_polyline_count(result_shape, 0, &mut cw_vertex_count),
+                    0
+                );
+                assert_eq!(cw_vertex_count, 8);
+
+                let mut vertexes: Vec<cavc_vertex> = Vec::with_capacity(8);
+                vertexes.resize(8, cavc_vertex::new(0.0, 0.0, 0.0));
+
+                assert_eq!(
+                    cavc_shape_get_cw_polyline_vertex_data(result_shape, 0, vertexes.as_mut_ptr()),
+                    0
+                );
+
+                compare_vertexes(&vertexes, &expected_40_cw);
+
+                let mut userdata_count: u32 = 0xDEAD;
+                assert_eq!(
+                    cavc_shape_get_cw_pline_userdata_count(result_shape, 0, &mut userdata_count),
+                    0
+                );
+                assert_eq!(userdata_count, 1);
+
+                let mut userdata = 0xDEADBEEF_u64;
+                assert_eq!(
+                    cavc_shape_get_cw_pline_userdata_values(result_shape, 0, &mut userdata),
+                    0
+                );
+                assert_eq!(userdata, 4);
+            }
+
+            cavc_shape_f(shape);
+            cavc_shape_f(result_shape);
         }
     }
 }
