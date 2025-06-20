@@ -38,8 +38,8 @@ impl Mode {
     fn label(&self) -> &'static str {
         match self {
             Mode::Offset { .. } => "Offset",
-            Mode::RawOffset { .. } => "Raw Offset",
-            Mode::RawOffsetSegments { .. } => "Raw Offset Segments",
+            Mode::RawOffset => "Raw Offset",
+            Mode::RawOffsetSegments => "Raw Offset Segments",
         }
     }
 
