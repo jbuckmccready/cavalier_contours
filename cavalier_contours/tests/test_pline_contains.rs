@@ -51,6 +51,18 @@ mod test_pline_contains {
     }
 
     #[test]
+    fn test_copy() {
+        let rectangle = pline_closed![
+            (-2.0, -2.0, 0.0),
+            (2.0, -2.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (-2.0, 2.0, 0.0),
+        ];
+
+        assert_eq!(rectangle.contains(&rectangle.clone()), Intersected);
+    }
+
+    #[test]
     fn test_invalid() {
         let bad1 = pline_open![(0.0, 0.0, 0.0),];
 
