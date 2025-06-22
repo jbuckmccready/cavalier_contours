@@ -10,7 +10,10 @@ use crate::{
         },
         traits::{ControlFlow, FuzzyEq, FuzzyOrd, Real},
     },
-    polyline::{SelfIntersectsInclude, seg_arc_radius_and_center},
+    polyline::{
+        PlineContainmentOptions, PlineContainmentResult, SelfIntersectsInclude,
+        seg_arc_radius_and_center,
+    },
 };
 
 use super::{
@@ -19,6 +22,7 @@ use super::{
     PlineSelfIntersectOptions, PlineVertex, arc_seg_bounding_box,
     internal::{
         pline_boolean::polyline_boolean,
+        pline_contains::polyline_contains,
         pline_intersects::{
             find_intersects, visit_global_self_intersects, visit_local_self_intersects,
         },
@@ -1500,6 +1504,103 @@ pub trait PlineSource {
         P: PlineSource<Num = Self::Num> + ?Sized,
     {
         polyline_boolean(self, other, operation, options)
+    }
+
+    /// Determine if this polyline fully contains another using default options.
+    ///
+    /// Note that [polyline_contains] uses the infrastructure of the boolean processor to do it's work; and that
+    /// [PlineContainmentOptions] is an alias for [PlineBooleanOptions]. See [PlineSource::boolean_opt] for more information.
+    /// 
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
+    /// # Examples
+    /// ```
+    /// # use cavalier_contours::core::traits::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::pline_closed;
+    /// # use cavalier_contours::polyline::PlineContainmentResult::*;
+    /// let rectangle = pline_closed![
+    ///     (-2.0, -2.0, 0.0),
+    ///     (2.0, -2.0, 0.0),
+    ///     (2.0, 2.0, 0.0),
+    ///     (-2.0, 2.0, 0.0),
+    /// ];
+    /// let circle = pline_closed![(-1.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
+    /// let triangle = pline_closed![(3.1340, 4.5, 0.0), (4.0, 3.0, 0.0), (4.8660, 4.5, 0.0)];
+    ///
+    /// // since the circle is inside the rectangle we get back Pline2InsidePline1
+    /// assert_eq!(rectangle.contains(&circle), Pline2InsidePline1);
+    /// // since the rectangle is outside the circle, but containing, it we get back Pline1InsidePline2
+    /// assert_eq!(circle.contains(&rectangle), Pline1InsidePline2);
+    /// // since the triangle is outside the rectangle, and not containing it, we get back Disjoint
+    /// assert_eq!(rectangle.contains(&triangle), Disjoint);
+    /// ```
+    fn contains<P>(&self, other: &P) -> PlineContainmentResult
+    where
+        P: PlineSource<Num = Self::Num> + ?Sized,
+    {
+        self.contains_opt(other, &Default::default())
+    }
+
+    /// Determine if this polyline fully contains another with options provided.
+    ///
+    /// Note that [polyline_contains] uses the infrastructure of the boolean processor to do it's work; and that
+    /// [PlineContainmentOptions] is an alias for [PlineBooleanOptions]. See [PlineSource::boolean_opt] for more information.
+    /// 
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
+    /// # Examples
+    /// ```
+    /// # use cavalier_contours::core::traits::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::pline_closed;
+    /// # use cavalier_contours::polyline::{PlineContainmentOptions, PlineContainmentResult::*};
+    /// let rectangle = pline_closed![
+    ///     (-2.0, -2.0, 0.0),
+    ///     (2.0, -2.0, 0.0),
+    ///     (2.0, 2.0, 0.0),
+    ///     (-2.0, 2.0, 0.0),
+    /// ];
+    /// let circle = pline_closed![(-1.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
+    /// let triangle = pline_closed![(3.1340, 4.5, 0.0), (4.0, 3.0, 0.0), (4.8660, 4.5, 0.0)];
+    ///
+    /// let rectangle_aabb_index = rectangle.create_approx_aabb_index();
+    /// let rectangle_options = PlineBooleanOptions {
+    ///     // passing in existing spatial index of the polyline segments for the first polyline
+    ///     pline1_aabb_index: Some(&rectangle_aabb_index),
+    ///     ..Default::default()
+    /// };
+    /// // since the circle is inside the rectangle we get back Pline2InsidePline1
+    /// assert_eq!(rectangle.contains_opt(&circle, &rectangle_options), Pline2InsidePline1);
+    ///
+    /// let circle_aabb_index = circle.create_approx_aabb_index();
+    /// let circle_options = PlineBooleanOptions {
+    ///     // passing in existing spatial index of the polyline segments for the first polyline
+    ///     pline1_aabb_index: Some(&circle_aabb_index),
+    ///     ..Default::default()
+    /// };
+    /// // since the rectangle is outside the circle, but containing, it we get back Pline1InsidePline2
+    /// assert_eq!(circle.contains_opt(&rectangle, &circle_options), Pline1InsidePline2);
+    ///
+    /// // since the triangle is outside the rectangle, and not containing it, we get back Disjoint
+    /// assert_eq!(rectangle.contains_opt(&triangle, &rectangle_options), Disjoint);
+    ///
+    /// ```
+    fn contains_opt<P>(
+        &self,
+        other: &P,
+        options: &PlineContainmentOptions<Self::Num>,
+    ) -> PlineContainmentResult
+    where
+        P: PlineSource<Num = Self::Num> + ?Sized,
+    {
+        polyline_contains(self, other, options)
     }
 
     /// Find the segment index and point on the polyline corresponding to the path length given.

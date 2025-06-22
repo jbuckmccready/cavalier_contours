@@ -91,8 +91,12 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// The containment functions use the same underlying mechinsims as the boolean functions.
+pub use BooleanResultInfo as PlineContainmentResult;
+pub use PlineBooleanOptions as PlineContainmentOptions;
+
 /// Boolean operation to apply to polylines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BooleanOp {
     /// Return the union of the polylines.
     Or,
@@ -137,7 +141,7 @@ where
 }
 
 /// Information about what happened during the boolean operation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BooleanResultInfo {
     /// Input was not valid to perform boolean operation.
     InvalidInput,

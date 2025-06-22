@@ -3,6 +3,16 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define CAVC_CONTAINS_RESULT_INVALID_INPUT 0
+
+#define CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2 1
+
+#define CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1 2
+
+#define CAVC_CONTAINS_RESULT_DISJOINT 3
+
+#define CAVC_CONTAINS_RESULT_INTERSECTED 5
+
 /**
  * Opaque type that wraps a [StaticAABB2DIndex].
  *
@@ -53,6 +63,11 @@ typedef struct cavc_pline_boolean_o {
   const struct cavc_aabbindex *pline1_aabb_index;
   double pos_equal_eps;
 } cavc_pline_boolean_o;
+
+/**
+ * The cavc_pline_contains() function uses the boolean infrastructure internally.
+ */
+typedef struct cavc_pline_boolean_o cavc_pline_contains_o;
 
 /**
  * Represents a polyline vertex holding x, y, and bulge.
@@ -116,6 +131,39 @@ void cavc_pline_boolean_o_f(struct cavc_pline_boolean_o *options);
  * `options` must point to a valid place in memory to be written.
  */
 int32_t cavc_pline_boolean_o_init(struct cavc_pline_boolean_o *options);
+
+/**
+ * Create a new [cavc_pline_contains_o] object.
+ *
+ * # Safety
+ *
+ * `options` must point to a valid place in memory to be written.
+ */
+int32_t cavc_pline_contains_o_create(cavc_pline_contains_o **options);
+
+/**
+ * Free an existing [cavc_pline_contains_o] object.
+ *
+ * Nothing happens if `options` is null.
+ *
+ * # Safety
+ *
+ * `options` must be null or a valid cavc_pline_contains_o object that was created with [cavc_pline_contains_o_create] and
+ * has not already been freed.
+ */
+void cavc_pline_contains_o_f(cavc_pline_contains_o *options);
+
+/**
+ * Write default option values to a [cavc_pline_contains_o].
+ *
+ * ## Specific Error Codes
+ * * 1 = `options` is null.
+ *
+ * # Safety
+ *
+ * `options` must point to a valid place in memory to be written.
+ */
+int32_t cavc_pline_contains_o_init(cavc_pline_contains_o *options);
 
 /**
  * Create a new polyline object.
@@ -584,6 +632,33 @@ int32_t cavc_pline_boolean(const struct cavc_pline *pline1,
                            const struct cavc_pline_boolean_o *options,
                            const struct cavc_plinelist **pos_plines,
                            const struct cavc_plinelist **neg_plines);
+
+/**
+ * Wraps [PlineSource::contains_opt].
+ *
+ * `options` is allowed to be null (default options will be used).
+ *
+ * Possible values returned in result:
+ *
+ * CAVC_CONTAINS_RESULT_INVALID_INPUT: Input was not valid to perform operation.
+ * CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2: Pline1 entirely inside of pline2 with no intersects.
+ * CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1: Pline2 entirely inside of pline1 with no intersects.
+ * CAVC_CONTAINS_RESULT_DISJOINT: Pline1 is disjoint from pline2 (no intersects and neither polyline is inside of the other).
+ * CAVC_CONTAINS_RESULT_INTERSECTED: Pline1 intersects with pline2 in at least one place.
+ *
+ * ## Specific Error Codes
+ * * 1 = `pline1` and/or `pline2` is null. In case of an error, if result is not null it will be set to CAVC_CONTAINS_RESULT_INVALID_INPUT.
+ *
+ * # Safety
+ *
+ * `pline1` and `pline2` must each be null or a valid cavc_pline object that was created with
+ * [cavc_pline_create] and has not been freed.
+ * `result` must point to a valid place in memory to be written.
+ */
+int32_t cavc_pline_contains(const struct cavc_pline *pline1,
+                            const struct cavc_pline *pline2,
+                            const cavc_pline_contains_o *options,
+                            uint32_t *result);
 
 /**
  * Wraps [PlineSource::create_approx_aabb_index].

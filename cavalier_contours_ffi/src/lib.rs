@@ -247,6 +247,49 @@ fn boolean_op_from_u32(i: u32) -> Option<BooleanOp> {
     }
 }
 
+/// The cavc_pline_contains() function uses the boolean infrastructure internally.
+pub type cavc_pline_contains_o = cavc_pline_boolean_o;
+
+/// Create a new [cavc_pline_contains_o] object.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_contains_o_create(
+    options: *mut *mut cavc_pline_contains_o,
+) -> i32 {
+    unsafe { cavc_pline_boolean_o_create(options) }
+}
+
+/// Free an existing [cavc_pline_contains_o] object.
+///
+/// Nothing happens if `options` is null.
+///
+/// # Safety
+///
+/// `options` must be null or a valid cavc_pline_contains_o object that was created with [cavc_pline_contains_o_create] and
+/// has not already been freed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cavc_pline_contains_o_f(options: *mut cavc_pline_contains_o) {
+    unsafe { cavc_pline_boolean_o_f(options) }
+}
+
+/// Write default option values to a [cavc_pline_contains_o].
+///
+/// ## Specific Error Codes
+/// * 1 = `options` is null.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_contains_o_init(options: *mut cavc_pline_contains_o) -> i32 {
+    unsafe { cavc_pline_boolean_o_init(options) }
+}
+
 /// Opaque type that represents a list of [cavc_pline].
 ///
 /// Note the internal member is only public for composing in other Rust libraries wanting to use the
@@ -1190,6 +1233,66 @@ pub unsafe extern "C" fn cavc_pline_boolean(
                 results.neg_plines.into_iter().map(|p| p.pline),
             ));
         }
+        0
+    })
+}
+
+pub const CAVC_CONTAINS_RESULT_INVALID_INPUT: u32 = 0;
+pub const CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2: u32 = 1;
+pub const CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1: u32 = 2;
+pub const CAVC_CONTAINS_RESULT_DISJOINT: u32 = 3;
+pub const CAVC_CONTAINS_RESULT_INTERSECTED: u32 = 5;
+
+/// Wraps [PlineSource::contains_opt].
+///
+/// `options` is allowed to be null (default options will be used).
+///
+/// Possible values returned in result:
+///
+/// CAVC_CONTAINS_RESULT_INVALID_INPUT: Input was not valid to perform operation.
+/// CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2: Pline1 entirely inside of pline2 with no intersects.
+/// CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1: Pline2 entirely inside of pline1 with no intersects.
+/// CAVC_CONTAINS_RESULT_DISJOINT: Pline1 is disjoint from pline2 (no intersects and neither polyline is inside of the other).
+/// CAVC_CONTAINS_RESULT_INTERSECTED: Pline1 intersects with pline2 in at least one place.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline1` and/or `pline2` is null. In case of an error, if result is not null it will be set to CAVC_CONTAINS_RESULT_INVALID_INPUT.
+///
+/// # Safety
+///
+/// `pline1` and `pline2` must each be null or a valid cavc_pline object that was created with
+/// [cavc_pline_create] and has not been freed.
+/// `result` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_contains(
+    pline1: *const cavc_pline,
+    pline2: *const cavc_pline,
+    options: *const cavc_pline_contains_o,
+    result: *mut u32,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline1.is_null() || pline2.is_null() {
+            if !result.is_null() {
+                unsafe { result.write(CAVC_CONTAINS_RESULT_INVALID_INPUT) };
+            }
+            return 1;
+        }
+
+        let pline1 = unsafe { &(*pline1).0 };
+        let pline2 = unsafe { &(*pline2).0 };
+
+        let computed_result = if options.is_null() {
+            pline1.contains(pline2)
+        } else {
+            let options = unsafe { &(*options).to_internal() };
+            pline1.contains_opt(pline2, options)
+        };
+
+        unsafe {
+            result.write(computed_result as u32);
+        }
+
         0
     })
 }
