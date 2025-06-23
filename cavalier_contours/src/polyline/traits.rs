@@ -1263,6 +1263,33 @@ pub trait PlineSource {
     /// # Panics
     ///
     /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::*;
+    /// # use cavalier_contours::core::math::*;
+    /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 2.0, 0.0);
+    /// polyline.add(1.0, 1.0, 0.0);
+    /// polyline.add(-1.0, 1.0, 0.0);
+    ///
+    /// let mut visited_intersects = 0;
+    /// // NOTE: FnMut(PlineIntersect) implements PlineInteresectVisitor trait
+    /// polyline.visit_self_intersects(&mut |intersect: PlineIntersect<f64>| {
+    ///    visited_intersects += 1;
+    ///    match intersect {
+    ///        PlineIntersect::Basic(intr) => assert!(intr.point.fuzzy_eq_eps(Vector2::new(0.0, 1.0), 1e-5)),
+    ///        PlineIntersect::Overlapping(_) => panic!("Unexpected overlapping intersection"),
+    ///    }
+    ///    // stop visiting intersects on first intersect found by returning Control::Break
+    ///    // NOTE: use Control::Continue or return () to continue visiting
+    ///    Control::Break(())
+    /// });
+    ///
+    /// assert_eq!(visited_intersects, 1);
+    /// ```
     #[inline]
     fn visit_self_intersects<C, V>(&self, visitor: &mut V) -> C
     where
