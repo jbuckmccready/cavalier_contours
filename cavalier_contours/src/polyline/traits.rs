@@ -1271,6 +1271,7 @@ pub trait PlineSource {
     /// # use cavalier_contours::core::*;
     /// # use cavalier_contours::core::math::*;
     /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 0.0, 0.0);
     /// polyline.add(0.0, 2.0, 0.0);
     /// polyline.add(1.0, 1.0, 0.0);
     /// polyline.add(-1.0, 1.0, 0.0);
