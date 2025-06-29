@@ -739,7 +739,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex(
                 return 2;
             }
 
-            let v = (*pline).0[position as usize];
+            let v = (&(*pline).0)[position as usize];
             vertex.write(cavc_vertex::from_internal(v));
         }
 
@@ -777,7 +777,8 @@ pub unsafe extern "C" fn cavc_pline_set_vertex(
                 return 2;
             }
 
-            (*pline).0[position as usize] = PlineVertex::new(vertex.x, vertex.y, vertex.bulge);
+            (&mut (*pline).0)[position as usize] =
+                PlineVertex::new(vertex.x, vertex.y, vertex.bulge);
         }
 
         0
@@ -1764,15 +1765,9 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_count(
 
             // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
             // prevent memory corruption/access errors but just panic as internal error if it does occur
-            count.write(
-                u32::try_from(
-                    (*shape).0.ccw_plines[polyline_index as usize]
-                        .polyline
-                        .vertex_data
-                        .len(),
-                )
-                .unwrap(),
-            );
+            let ccw_plines = &(*shape).0.ccw_plines;
+            let polyline = &ccw_plines[polyline_index as usize].polyline;
+            count.write(u32::try_from(polyline.vertex_data.len()).unwrap());
         }
         0
     })
@@ -1809,11 +1804,9 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_is_closed(
                 return 2;
             }
 
-            is_closed.write(u8::from(
-                (*shape).0.ccw_plines[polyline_index as usize]
-                    .polyline
-                    .is_closed,
-            ));
+            let ccw_plines = &(*shape).0.ccw_plines;
+            let polyline = &ccw_plines[polyline_index as usize].polyline;
+            is_closed.write(u8::from(polyline.is_closed));
         }
         0
     })
@@ -1853,11 +1846,11 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_vertex_data(
                 return 2;
             }
 
-            let pline: *const Polyline<f64> =
-                &((*shape).0.ccw_plines[polyline_index as usize].polyline);
+            let ccw_plines = &(*shape).0.ccw_plines;
+            let pline = &ccw_plines[polyline_index as usize].polyline;
 
-            let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).vertex_count());
-            for (i, v) in (*pline).iter_vertexes().enumerate() {
+            let buffer = slice::from_raw_parts_mut(vertex_data, pline.vertex_count());
+            for (i, v) in pline.iter_vertexes().enumerate() {
                 buffer[i] = cavc_vertex::from_internal(v);
             }
         }
@@ -1896,14 +1889,14 @@ pub unsafe extern "C" fn cavc_shape_set_ccw_pline_userdata_values(
                 return 2;
             }
 
-            let pline: *mut Polyline<f64> =
-                &mut ((*shape).0.ccw_plines[polyline_index as usize].polyline);
+            let ccw_plines = &mut (*shape).0.ccw_plines;
+            let pline = &mut ccw_plines[polyline_index as usize].polyline;
 
-            (*pline).userdata.clear();
+            pline.userdata.clear();
 
             if !userdata_values.is_null() && count != 0 {
                 let data = slice::from_raw_parts(userdata_values, count as usize);
-                (*pline).userdata.extend_from_slice(data);
+                pline.userdata.extend_from_slice(data);
             }
         }
         0
@@ -1940,12 +1933,12 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_count(
                 return 2;
             }
 
-            let pline: *const Polyline<f64> =
-                &((*shape).0.ccw_plines[polyline_index as usize].polyline);
+            let ccw_plines = &(*shape).0.ccw_plines;
+            let pline = &ccw_plines[polyline_index as usize].polyline;
 
             // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
             // prevent memory corruption/access errors but just panic as internal error if it does occur
-            count.write(u32::try_from((*pline).userdata.len()).unwrap());
+            count.write(u32::try_from(pline.userdata.len()).unwrap());
         }
         0
     })
@@ -1977,13 +1970,13 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_values(
         }
 
         unsafe {
-            let pline: *const Polyline<f64> =
-                &((*shape).0.ccw_plines[polyline_index as usize].polyline);
+            let ccw_plines = &(*shape).0.ccw_plines;
+            let pline = &ccw_plines[polyline_index as usize].polyline;
 
             std::ptr::copy(
-                (*pline).userdata.as_ptr(),
+                pline.userdata.as_ptr(),
                 userdata_values,
-                (*pline).userdata.len(),
+                pline.userdata.len(),
             );
         }
         0
@@ -2051,15 +2044,9 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_count(
 
             // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
             // prevent memory corruption/access errors but just panic as internal error if it does occur
-            count.write(
-                u32::try_from(
-                    (*shape).0.cw_plines[polyline_index as usize]
-                        .polyline
-                        .vertex_data
-                        .len(),
-                )
-                .unwrap(),
-            );
+            let cw_plines = &(*shape).0.cw_plines;
+            let polyline = &cw_plines[polyline_index as usize].polyline;
+            count.write(u32::try_from(polyline.vertex_data.len()).unwrap());
         }
         0
     })
@@ -2092,14 +2079,13 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_is_closed(
         }
 
         unsafe {
-            if polyline_index as usize >= ((*shape).0.cw_plines.len()) {
+            let shape = &(*shape).0;
+            if polyline_index as usize >= shape.cw_plines.len() {
                 return 2;
             }
 
             is_closed.write(u8::from(
-                (*shape).0.cw_plines[polyline_index as usize]
-                    .polyline
-                    .is_closed,
+                shape.cw_plines[polyline_index as usize].polyline.is_closed,
             ));
         }
         0
@@ -2140,11 +2126,11 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_vertex_data(
                 return 2;
             }
 
-            let pline: *const Polyline<f64> =
-                &((*shape).0.cw_plines[polyline_index as usize].polyline);
+            let cw_plines = &(*shape).0.cw_plines;
+            let pline = &cw_plines[polyline_index as usize].polyline;
 
-            let buffer = slice::from_raw_parts_mut(vertex_data, (*pline).vertex_count());
-            for (i, v) in (*pline).iter_vertexes().enumerate() {
+            let buffer = slice::from_raw_parts_mut(vertex_data, pline.vertex_count());
+            for (i, v) in pline.iter_vertexes().enumerate() {
                 buffer[i] = cavc_vertex::from_internal(v);
             }
         }
@@ -2183,14 +2169,14 @@ pub unsafe extern "C" fn cavc_shape_set_cw_pline_userdata_values(
                 return 2;
             }
 
-            let pline: *mut Polyline<f64> =
-                &mut ((*shape).0.cw_plines[polyline_index as usize].polyline);
+            let cw_plines = &mut (*shape).0.cw_plines;
+            let pline = &mut cw_plines[polyline_index as usize].polyline;
 
-            (*pline).userdata.clear();
+            pline.userdata.clear();
 
             if !userdata_values.is_null() && count != 0 {
                 let data = slice::from_raw_parts(userdata_values, count as usize);
-                (*pline).userdata.extend_from_slice(data);
+                pline.userdata.extend_from_slice(data);
             }
         }
         0
@@ -2227,12 +2213,12 @@ pub unsafe extern "C" fn cavc_shape_get_cw_pline_userdata_count(
                 return 2;
             }
 
-            let pline: *const Polyline<f64> =
-                &((*shape).0.cw_plines[polyline_index as usize].polyline);
+            let cw_plines = &(*shape).0.cw_plines;
+            let pline = &cw_plines[polyline_index as usize].polyline;
 
             // using try_from to catch odd case of polyline vertex count greater than u32::MAX to
             // prevent memory corruption/access errors but just panic as internal error if it does occur
-            count.write(u32::try_from((*pline).userdata.len()).unwrap());
+            count.write(u32::try_from(pline.userdata.len()).unwrap());
         }
         0
     })
@@ -2264,12 +2250,12 @@ pub unsafe extern "C" fn cavc_shape_get_cw_pline_userdata_values(
         }
 
         unsafe {
-            let pline: *const Polyline<f64> =
-                &((*shape).0.cw_plines[polyline_index as usize].polyline);
+            let cw_plines = &(*shape).0.cw_plines;
+            let pline = &cw_plines[polyline_index as usize].polyline;
             std::ptr::copy(
-                (*pline).userdata.as_ptr(),
+                pline.userdata.as_ptr(),
                 userdata_values,
-                (*pline).userdata.len(),
+                pline.userdata.len(),
             );
         }
         0

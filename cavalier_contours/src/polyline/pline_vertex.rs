@@ -66,6 +66,9 @@ mod serde_impl {
     }
 }
 #[cfg(feature = "serde")]
+// Re-export trait implementations for serde support
+// Note: clippy may warn about unused imports, but these are needed for trait impls
+#[allow(unused_imports)]
 pub use serde_impl::*;
 
 impl<T> PlineVertex<T>

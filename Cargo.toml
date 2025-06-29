@@ -6,7 +6,7 @@ homepage = "https://wwww.cavaliercontours.dev"
 keywords = ["algorithm", "2d", "computational", "geometry", "spatial"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-rust-version = "1.85"
+rust-version = "1.88"
 repository = "https://github.com/jbuckmccready/cavalier_contours"
 version = "0.4.0"
 
