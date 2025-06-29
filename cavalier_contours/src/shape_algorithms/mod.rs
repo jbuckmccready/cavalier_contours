@@ -464,38 +464,37 @@ where
                     // create slices from adjacent points
                     let mut windows = sorted_intrs.windows(2);
                     while let Some([pt1, pt2]) = windows.next() {
-                        let v_data = create_slice(pt1, pt2, &curr_loop.indexed_pline.polyline);
-                        if let Some(v_data) = v_data {
-                            if is_slice_valid(
+                        if let Some(v_data) =
+                            create_slice(pt1, pt2, &curr_loop.indexed_pline.polyline)
+                            && is_slice_valid(
                                 &v_data,
                                 &curr_loop.indexed_pline.polyline,
                                 curr_loop.parent_loop_idx,
                                 &mut query_stack,
-                            ) {
-                                slices_data.push(DissectedSlice {
-                                    source_idx: loop_idx,
-                                    v_data,
-                                });
-                            }
+                            )
+                        {
+                            slices_data.push(DissectedSlice {
+                                source_idx: loop_idx,
+                                v_data,
+                            });
                         }
                     }
 
                     // collect slice from last to start
                     let pt1 = sorted_intrs.last().unwrap();
                     let pt2 = &sorted_intrs[0];
-                    let v_data = create_slice(pt1, pt2, &curr_loop.indexed_pline.polyline);
-                    if let Some(v_data) = v_data {
-                        if is_slice_valid(
+                    if let Some(v_data) = create_slice(pt1, pt2, &curr_loop.indexed_pline.polyline)
+                        && is_slice_valid(
                             &v_data,
                             &curr_loop.indexed_pline.polyline,
                             curr_loop.parent_loop_idx,
                             &mut query_stack,
-                        ) {
-                            slices_data.push(DissectedSlice {
-                                source_idx: loop_idx,
-                                v_data,
-                            });
-                        }
+                        )
+                    {
+                        slices_data.push(DissectedSlice {
+                            source_idx: loop_idx,
+                            v_data,
+                        });
                     }
                 }
             } else {
