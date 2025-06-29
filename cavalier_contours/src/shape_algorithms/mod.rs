@@ -14,8 +14,20 @@ use crate::{
     },
 };
 
-struct OffsetLoop<T: Real> {
+/// An offset polyline with spatial indexing and parent loop tracking.
+///
+/// This structure represents a single offset result from a parent polyline, containing
+/// both the generated offset polyline with its spatial index and a reference to which
+/// original input polyline it was derived from.
+///
+/// # Public Visibility
+///
+/// This struct is made public for visualization and testing purposes, allowing
+/// intermediate offset results to be inspected during algorithm execution.
+pub struct OffsetLoop<T: Real> {
+    /// Index of the parent loop in the original input shape
     pub parent_loop_idx: usize,
+    /// The offset polyline with its spatial index for fast intersection queries
     pub indexed_pline: IndexedPolyline<T>,
 }
 
@@ -50,7 +62,7 @@ where
         }
     }
 
-    fn parallel_offset_for_shape(
+    pub fn parallel_offset_for_shape(
         &self,
         offset: T,
         options: &ShapeOffsetOptions<T>,
@@ -176,19 +188,69 @@ where
     }
 
     pub fn parallel_offset(&self, offset: T, options: ShapeOffsetOptions<T>) -> Self {
-        let pos_equal_eps = options.pos_equal_eps;
-        let offset_dist_eps = options.offset_dist_eps;
-        let slice_join_eps = options.slice_join_eps;
+        let (ccw_offset_loops, cw_offset_loops, offset_loops_index) =
+            self.create_offset_loops_with_index(offset, &options);
 
-        // generate offset loops
+        if ccw_offset_loops.is_empty() && cw_offset_loops.is_empty() {
+            return Self::empty();
+        }
+
+        let slice_point_sets = self.find_intersects_between_offset_loops(
+            &ccw_offset_loops,
+            &cw_offset_loops,
+            &offset_loops_index,
+            options.pos_equal_eps,
+        );
+
+        let slices_data = self.create_valid_slices_from_intersects(
+            &ccw_offset_loops,
+            &cw_offset_loops,
+            &slice_point_sets,
+            offset,
+            &options,
+        );
+
+        self.stitch_slices_together(
+            slices_data,
+            &ccw_offset_loops,
+            &cw_offset_loops,
+            options.pos_equal_eps,
+            options.slice_join_eps,
+        )
+    }
+
+    /// **Step 1** of the multipolyline offset algorithm: Creates offset loops with spatial index.
+    ///
+    /// This method generates offset polylines for each input polyline in the shape and creates
+    /// a spatial index for efficient intersection queries. The offset loops are separated into
+    /// counter-clockwise (positive area) and clockwise (negative area) collections based on
+    /// their orientation after offsetting.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// - `Vec<OffsetLoop<T>>` - Counter-clockwise offset loops
+    /// - `Vec<OffsetLoop<T>>` - Clockwise offset loops
+    /// - `StaticAABB2DIndex<T>` - Spatial index of all offset loop bounding boxes
+    ///
+    /// # Public Visibility
+    ///
+    /// This method is made public for visualization and testing purposes, allowing intermediate
+    /// results to be inspected during the offset algorithm execution.
+    pub fn create_offset_loops_with_index(
+        &self,
+        offset: T,
+        options: &ShapeOffsetOptions<T>,
+    ) -> (Vec<OffsetLoop<T>>, Vec<OffsetLoop<T>>, StaticAABB2DIndex<T>) {
         let mut ccw_offset_loops = Vec::new();
         let mut cw_offset_loops = Vec::new();
         let mut parent_idx = 0;
+
         for pline in self.ccw_plines.iter() {
-            for offset_pline in pline.parallel_offset_for_shape(offset, &options) {
+            for offset_pline in pline.parallel_offset_for_shape(offset, options) {
+                let area = offset_pline.area();
                 // check if orientation inverted (due to collapse of very narrow or small input)
                 // skip if inversion happened (ccw became cw while offsetting inward)
-                let area = offset_pline.area();
                 if offset > T::zero() && area < T::zero() {
                     continue;
                 }
@@ -204,14 +266,12 @@ where
                     ccw_offset_loops.push(offset_loop);
                 }
             }
-
             parent_idx += 1;
         }
 
         for pline in self.cw_plines.iter() {
-            for offset_pline in pline.parallel_offset_for_shape(offset, &options) {
+            for offset_pline in pline.parallel_offset_for_shape(offset, options) {
                 let area = offset_pline.area();
-
                 // check if orientation inverted (due to collapse of very narrow or small input)
                 // skip if inversion happened (cw became ccw while offsetting inward)
                 if offset < T::zero() && area > T::zero() {
@@ -232,13 +292,6 @@ where
             parent_idx += 1;
         }
 
-        let offset_loop_count = ccw_offset_loops.len() + cw_offset_loops.len();
-        if offset_loop_count == 0 {
-            // no offsets remaining
-            return Self::empty();
-        }
-
-        // build spatial index of offset loop approximate bounding boxes
         let offset_loops_index = {
             let mut b =
                 StaticAABB2DIndexBuilder::new(ccw_offset_loops.len() + cw_offset_loops.len());
@@ -262,17 +315,47 @@ where
                 .expect("failed to build spatial index of offset loop bounds")
         };
 
-        let mut ccw_plines_result = Vec::new();
-        let mut cw_plines_result = Vec::new();
+        (ccw_offset_loops, cw_offset_loops, offset_loops_index)
+    }
 
-        // find all intersects between all offsets to create slice points
+    /// **Step 2** of the multipolyline offset algorithm: Finds intersections between offset loops.
+    ///
+    /// This method uses spatial indexing to efficiently find all intersection points between
+    /// the offset polylines generated in Step 1. It performs pairwise intersection tests only
+    /// on polylines whose bounding boxes overlap, avoiding expensive computations on non-intersecting
+    /// pairs. Both basic intersections and overlapping segments are detected and converted into
+    /// slice points for further processing.
+    ///
+    /// # Arguments
+    ///
+    /// * `ccw_offset_loops` - Counter-clockwise offset loops from Step 1
+    /// * `cw_offset_loops` - Clockwise offset loops from Step 1
+    /// * `offset_loops_index` - Spatial index of offset loop bounding boxes from Step 1
+    /// * `pos_equal_eps` - Epsilon for position equality comparisons
+    ///
+    /// # Returns
+    ///
+    /// A vector of `SlicePointSet<T>` containing intersection data between pairs of offset loops.
+    /// Each set includes the loop indices and all intersection points between those loops.
+    ///
+    /// # Public Visibility
+    ///
+    /// This method is made public for visualization and testing purposes, allowing intersection
+    /// points to be displayed and the intersection detection logic to be independently tested.
+    pub fn find_intersects_between_offset_loops(
+        &self,
+        ccw_offset_loops: &[OffsetLoop<T>],
+        cw_offset_loops: &[OffsetLoop<T>],
+        offset_loops_index: &StaticAABB2DIndex<T>,
+        pos_equal_eps: T,
+    ) -> Vec<SlicePointSet<T>> {
+        let offset_loop_count = ccw_offset_loops.len() + cw_offset_loops.len();
         let mut slice_point_sets = Vec::new();
-        let mut slice_points_lookup = BTreeMap::<usize, Vec<usize>>::new();
         let mut visited_loop_pairs = BTreeSet::<(usize, usize)>::new();
         let mut query_stack = Vec::new();
 
         for i in 0..offset_loop_count {
-            let loop1 = Self::get_loop(i, &ccw_offset_loops, &cw_offset_loops);
+            let loop1 = Self::get_loop(i, ccw_offset_loops, cw_offset_loops);
             let spatial_idx1 = &loop1.indexed_pline.spatial_index;
             let bounds = spatial_idx1.bounds().expect("expect non-empty polyline");
             let query_results = offset_loops_index.query_with_stack(
@@ -297,7 +380,7 @@ where
 
                 visited_loop_pairs.insert((i, j));
 
-                let loop2 = Self::get_loop(j, &ccw_offset_loops, &cw_offset_loops);
+                let loop2 = Self::get_loop(j, ccw_offset_loops, cw_offset_loops);
 
                 let intrs_opts = FindIntersectsOptions {
                     pline1_aabb_index: Some(spatial_idx1),
@@ -343,23 +426,82 @@ where
                     slice_points,
                 };
 
-                slice_points_lookup
-                    .entry(i)
-                    .or_default()
-                    .push(slice_point_sets.len());
-
-                slice_points_lookup
-                    .entry(j)
-                    .or_default()
-                    .push(slice_point_sets.len());
-
                 slice_point_sets.push(slice_point_set);
             }
         }
 
-        // create slices from slice points
+        slice_point_sets
+    }
+
+    /// **Step 3** of the multipolyline offset algorithm: Creates valid slices from intersection points.
+    ///
+    /// This method processes the intersection points from Step 2 to create polyline slices that
+    /// represent valid portions of the offset geometry. Each offset loop is divided at intersection
+    /// points, and the resulting slices are validated to ensure they maintain the correct distance
+    /// from the original input polylines. Invalid slices (those that are too close to other input
+    /// polylines) are filtered out.
+    ///
+    /// The slices are represented as `PlineViewData<T>` to avoid cloning the underlying polyline
+    /// data, providing memory-efficient access to polyline segments.
+    ///
+    /// # Arguments
+    ///
+    /// * `ccw_offset_loops` - Counter-clockwise offset loops from Step 1
+    /// * `cw_offset_loops` - Clockwise offset loops from Step 1
+    /// * `slice_point_sets` - Intersection data from Step 2
+    /// * `offset` - The offset distance used for validation
+    /// * `options` - Offset options containing validation epsilons
+    ///
+    /// # Returns
+    ///
+    /// A vector of `DissectedSlice<T>` containing valid polyline slices that can be stitched
+    /// together to form the final offset result. This includes valid offset polylines that had
+    /// no intersection points (the entire polyline is preserved inside the `DissectedSlice<T>`).
+    ///
+    /// # Public Visibility
+    ///
+    /// This method is made public for visualization and testing purposes, allowing individual
+    /// slices to be displayed and the slice validation logic to be independently tested.
+    pub fn create_valid_slices_from_intersects(
+        &self,
+        ccw_offset_loops: &[OffsetLoop<T>],
+        cw_offset_loops: &[OffsetLoop<T>],
+        slice_point_sets: &[SlicePointSet<T>],
+        offset: T,
+        options: &ShapeOffsetOptions<T>,
+    ) -> Vec<DissectedSlice<T>> {
+        let offset_loop_count = ccw_offset_loops.len() + cw_offset_loops.len();
+        let pos_equal_eps = options.pos_equal_eps;
+        let offset_dist_eps = options.offset_dist_eps;
+
+        let mut slice_points_lookup = BTreeMap::<usize, Vec<usize>>::new();
+        for (set_idx, set) in slice_point_sets.iter().enumerate() {
+            slice_points_lookup
+                .entry(set.loop_idx1)
+                .or_default()
+                .push(set_idx);
+            slice_points_lookup
+                .entry(set.loop_idx2)
+                .or_default()
+                .push(set_idx);
+        }
+
         let mut sorted_intrs = Vec::new();
         let mut slices_data = Vec::new();
+        let mut query_stack = Vec::new();
+
+        /// A point where an offset loop should be divided during slice creation.
+        ///
+        /// This structure represents a specific location on a polyline where an intersection
+        /// occurs, defined by both the segment index and the exact position. These points
+        /// are used to divide offset loops into valid slices.
+        #[derive(Debug, Clone, Copy)]
+        struct DissectionPoint<T> {
+            /// Index of the polyline segment containing this point
+            seg_idx: usize,
+            /// Exact 2D position of the dissection point
+            pos: Vector2<T>,
+        }
 
         let create_slice = |pt1: &DissectionPoint<T>,
                             pt2: &DissectionPoint<T>,
@@ -405,13 +547,12 @@ where
                     return false;
                 }
             }
-
             true
         };
 
         for loop_idx in 0..offset_loop_count {
             sorted_intrs.clear();
-            let curr_loop = Self::get_loop(loop_idx, &ccw_offset_loops, &cw_offset_loops);
+            let curr_loop = Self::get_loop(loop_idx, ccw_offset_loops, cw_offset_loops);
 
             if let Some(slice_point_set_idxs) = slice_points_lookup.get(&loop_idx) {
                 // gather all the intersects for the current loop
@@ -507,20 +648,59 @@ where
                     curr_loop.parent_loop_idx,
                     &mut query_stack,
                 ) {
-                    // Take/consume the loop to avoid allocation and copy required to clone
-                    if loop_idx < ccw_offset_loops.len() {
-                        let r = std::mem::take(&mut ccw_offset_loops[loop_idx]).indexed_pline;
-                        ccw_plines_result.push(r);
-                    } else {
-                        let i = loop_idx - ccw_offset_loops.len();
-                        let r = std::mem::take(&mut cw_offset_loops[i]).indexed_pline;
-                        cw_plines_result.push(r)
-                    }
+                    slices_data.push(DissectedSlice {
+                        source_idx: loop_idx,
+                        v_data,
+                    });
                 }
             }
         }
 
-        // stitch slices together
+        slices_data
+    }
+
+    /// **Step 4** of the multipolyline offset algorithm: Stitches slices together into final shapes.
+    ///
+    /// This method takes the valid slices from Step 3 and connects them end-to-end to form
+    /// complete offset polylines. It uses spatial indexing to efficiently find adjacent slice
+    /// endpoints and stitches them together, handling both simple connections and complex
+    /// cases where multiple slices need to be joined.
+    ///
+    /// The method processes each unvisited slice, following the chain of connected slices until
+    /// a closed loop is formed or no more connections can be found. The resulting polylines
+    /// are then classified by orientation and returned as part of a complete `Shape`.
+    ///
+    /// # Arguments
+    ///
+    /// * `slices_data` - Valid slices from Step 3 (consumed by this method)
+    /// * `ccw_offset_loops` - Counter-clockwise offset loops of shape (for slice source lookup)
+    /// * `cw_offset_loops` - Clockwise offset loops of shape (for slice source lookup)
+    /// * `pos_equal_eps` - Epsilon for position equality when extending polylines
+    /// * `slice_join_eps` - Epsilon for finding adjacent slice endpoints
+    ///
+    /// # Returns
+    ///
+    /// A complete `Shape` containing the final offset result with properly oriented polylines.
+    ///
+    /// # Public Visibility
+    ///
+    /// This method is made public for visualization and testing purposes, allowing the stitching
+    /// process to be observed and the final assembly logic to be independently tested.
+    pub fn stitch_slices_together(
+        &self,
+        slices_data: Vec<DissectedSlice<T>>,
+        ccw_offset_loops: &[OffsetLoop<T>],
+        cw_offset_loops: &[OffsetLoop<T>],
+        pos_equal_eps: T,
+        slice_join_eps: T,
+    ) -> Self {
+        if slices_data.is_empty() {
+            return Self::empty();
+        }
+
+        let mut ccw_plines_result = Vec::new();
+        let mut cw_plines_result = Vec::new();
+
         let slice_starts_aabb_index = {
             let mut builder = StaticAABB2DIndexBuilder::new(slices_data.len());
             for slice in slices_data.iter() {
@@ -534,8 +714,11 @@ where
             }
             builder.build().unwrap()
         };
+
         let mut visited_slices_idxs = vec![false; slices_data.len()];
         let mut query_results = Vec::new();
+        let mut query_stack = Vec::new();
+
         for slice_idx in 0..slices_data.len() {
             if visited_slices_idxs[slice_idx] {
                 continue;
@@ -546,6 +729,7 @@ where
             let mut loop_count = 0;
             let max_loop_count = slices_data.len();
             let mut current_pline = Polyline::new();
+
             loop {
                 if loop_count > max_loop_count {
                     // prevent infinite loop
@@ -557,7 +741,7 @@ where
 
                 let curr_slice = &slices_data[current_index];
                 let source_loop =
-                    Self::get_loop(curr_slice.source_idx, &ccw_offset_loops, &cw_offset_loops);
+                    Self::get_loop(curr_slice.source_idx, ccw_offset_loops, cw_offset_loops);
                 let slice_view = curr_slice.v_data.view(&source_loop.indexed_pline.polyline);
                 let slice_userdata_values = slice_view.get_userdata_values();
                 current_pline.extend_remove_repeat(&slice_view, pos_equal_eps);
@@ -650,22 +834,40 @@ where
     }
 }
 
-// intersects between two offset loops
+/// Intersection data between two offset loops.
+///
+/// This structure contains all intersection points found between a pair of offset loops,
+/// including both basic intersections and overlapping segment intersections. The data
+/// is used to create slices by dividing the offset loops at these intersection points.
+///
+/// # Public Visibility
+///
+/// This struct is made public for visualization and testing purposes, allowing
+/// intersection data to be inspected and displayed during algorithm execution.
 #[derive(Debug, Clone)]
 pub struct SlicePointSet<T> {
-    loop_idx1: usize,
-    loop_idx2: usize,
-    slice_points: Vec<PlineBasicIntersect<T>>,
+    /// Index of the first offset loop in the intersection pair
+    pub loop_idx1: usize,
+    /// Index of the second offset loop in the intersection pair
+    pub loop_idx2: usize,
+    /// All intersection points between the two loops
+    pub slice_points: Vec<PlineBasicIntersect<T>>,
 }
 
+/// A validated slice of an offset polyline ready for stitching.
+///
+/// This structure represents a portion of an offset loop that has been validated
+/// to maintain the correct distance from the original input polylines. The slice
+/// is represented as a view into the source polyline to avoid unnecessary copying.
+///
+/// # Public Visibility
+///
+/// This struct is made public for visualization and testing purposes, allowing
+/// individual slices to be displayed before the final stitching step.
 #[derive(Debug, Clone, Copy)]
-struct DissectionPoint<T> {
-    seg_idx: usize,
-    pos: Vector2<T>,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct DissectedSlice<T> {
-    source_idx: usize,
-    v_data: PlineViewData<T>,
+pub struct DissectedSlice<T: Real> {
+    /// Index of the source offset loop this slice comes from
+    pub source_idx: usize,
+    /// View data defining the slice boundaries within the source polyline
+    pub v_data: PlineViewData<T>,
 }

@@ -1,20 +1,39 @@
 use cavalier_contours::{
     pline_closed,
-    polyline::{PlineSource, PlineSourceMut, Polyline},
+    polyline::{PlineCreation, PlineSource, PlineSourceMut, Polyline},
     shape_algorithms::{Shape, ShapeOffsetOptions},
 };
-use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, Slider, Ui, Vec2};
+use eframe::egui::{Color32, Rect, ScrollArea, Slider, Ui, Vec2};
 use egui::Id;
-use egui_plot::{Plot, PlotPoint};
+use egui_plot::{Plot, PlotPoint, PlotPoints};
 
-use crate::plotting::PlinesPlotItem;
+use crate::plotting::{PlinePlotData, PlinesPlotItem};
 
 use super::{
     super::plotting::PLOT_VERTEX_RADIUS, Scene, controls_side_panel, scene_settings::SceneSettings,
 };
 
+#[derive(Clone, Copy, PartialEq, Default)]
+enum Mode {
+    #[default]
+    Offset,
+    OffsetIntersects,
+    Slices,
+}
+
+impl Mode {
+    fn label(&self) -> &'static str {
+        match self {
+            Mode::Offset => "Offset",
+            Mode::OffsetIntersects => "Offset Intersects",
+            Mode::Slices => "Slices",
+        }
+    }
+}
+
 pub struct MultiPlineOffsetScene {
     plines: Vec<Polyline>,
+    mode: Mode,
     max_offset_count: usize,
     offset: f64,
     interaction_state: InteractionState,
@@ -24,6 +43,22 @@ struct InteractionState {
     grabbed_vertex: Option<(usize, usize)>,
     dragging: bool,
     zoom_to_fit: bool,
+}
+
+enum SceneState {
+    Offset {
+        shape: Shape<f64>,
+        offset_shapes: Vec<Shape<f64>>,
+    },
+    OffsetIntersects {
+        shape: Shape<f64>,
+        offset_loops: Vec<Polyline>,
+        intersects: Vec<PlotPoint>,
+    },
+    Slices {
+        slice_plines: Vec<Polyline>,
+    },
+    NoOp,
 }
 
 impl Default for MultiPlineOffsetScene {
@@ -62,6 +97,7 @@ impl Default for MultiPlineOffsetScene {
 
         Self {
             plines,
+            mode: Mode::default(),
             max_offset_count: 25,
             offset: 2.0,
             interaction_state: InteractionState {
@@ -81,18 +117,20 @@ impl Scene for MultiPlineOffsetScene {
     fn ui(&mut self, ui: &mut Ui, settings: &SceneSettings, init: bool) {
         let MultiPlineOffsetScene {
             plines,
+            mode,
             max_offset_count,
             offset,
             interaction_state,
         } = self;
 
-        controls_panel(ui, max_offset_count, offset, interaction_state);
+        controls_panel(ui, mode, max_offset_count, offset, interaction_state);
 
         interaction_state.zoom_to_fit |= init;
         plot_area(
             ui,
             settings,
             plines,
+            mode,
             max_offset_count,
             offset,
             interaction_state,
@@ -102,6 +140,7 @@ impl Scene for MultiPlineOffsetScene {
 
 fn controls_panel(
     ui: &mut Ui,
+    mode: &mut Mode,
     max_offset_count: &mut usize,
     offset: &mut f64,
     interaction_state: &mut InteractionState,
@@ -110,6 +149,17 @@ fn controls_panel(
         .show_inside(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
+
+                egui::ComboBox::from_label("Mode")
+                    .selected_text(mode.label())
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(mode, Mode::Offset, "Offset")
+                            .on_hover_text("Final offset result");
+                        ui.selectable_value(mode, Mode::OffsetIntersects, "Offset Intersects")
+                            .on_hover_text("Shows offset for each polyline in shape and intersect points between the polylines");
+                        ui.selectable_value(mode, Mode::Slices, "Slices")
+                            .on_hover_text("Shows slices remaining, each with different color, after discarding invalid slices");
+                    });
 
                 // state used to fill available width within the scroll area
                 let last_others_width_id = Id::new("panel_width_state");
@@ -131,18 +181,20 @@ fn controls_panel(
                         ui.add(Slider::new(offset, -100.0..=100.0).step_by(0.5));
                     });
 
-                egui::Frame::default()
-                    .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
-                    .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
-                    .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
-                    .show(ui, |ui| {
-                        ui.label("Max Offset Count").on_hover_text("Maximum number of parallel offsets to generate (stops early when orientation changes)");
-                        ui.add(
-                            Slider::new(max_offset_count, 0..=100)
-                                .integer()
-                                .step_by(1.0),
-                        );
-                    });
+                if *mode == Mode::Offset {
+                    egui::Frame::default()
+                        .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                        .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
+                        .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
+                        .show(ui, |ui| {
+                            ui.label("Max Offset Count").on_hover_text("Maximum number of parallel offsets to generate (stops early when orientation changes)");
+                            ui.add(
+                                Slider::new(max_offset_count, 0..=100)
+                                    .integer()
+                                    .step_by(1.0),
+                            );
+                        });
+                }
 
                 interaction_state.zoom_to_fit = ui
                     .button("Zoom to Fit")
@@ -159,10 +211,12 @@ fn controls_panel(
         });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn plot_area(
     ui: &mut Ui,
     settings: &SceneSettings,
     plines: &mut [Polyline],
+    mode: &Mode,
     max_offset_count: &usize,
     offset: &f64,
     interaction_state: &mut InteractionState,
@@ -173,117 +227,248 @@ fn plot_area(
         zoom_to_fit,
     } = interaction_state;
 
-    // TODO: cache scene state to only update when necessary due to modified polyline or offset
-    let (shape, offset_shapes) = build_offsets(plines, offset, max_offset_count);
+    let scene_state = build_scene_state(plines, offset, max_offset_count, mode);
+    let plot = settings
+        .apply_to_plot(Plot::new("multi_pline_offset_scene"))
+        .data_aspect(1.0)
+        .allow_drag(false);
 
-    CentralPanel::default().show_inside(ui, |ui| {
-        let plot = settings
-            .apply_to_plot(Plot::new("multi_pline_offset_scene"))
-            .data_aspect(1.0)
-            .allow_drag(false);
+    plot.show(ui, |plot_ui| {
+        plot_ui.set_auto_bounds([false, false]);
 
-        plot.show(ui, |plot_ui| {
-            plot_ui.set_auto_bounds([false, false]);
-
-            if plot_ui.ctx().input(|i| i.pointer.any_released()) {
-                if grabbed_vertex.is_none() {
-                    *dragging = false;
-                } else {
-                    // release vertex when pointer released
-                    *grabbed_vertex = None;
-                }
+        if plot_ui.ctx().input(|i| i.pointer.any_released()) {
+            if grabbed_vertex.is_none() {
+                *dragging = false;
+            } else {
+                // release vertex when pointer released
+                *grabbed_vertex = None;
             }
+        }
 
-            if let Some((grabbed_pl, grabbed_idx)) = *grabbed_vertex {
-                // move grabbed point by drag delta by offsetting point position
-                let delta = plot_ui.pointer_coordinate_drag_delta();
-                let pline = plines.get_mut(grabbed_pl).unwrap();
-                let grabbed_vertex = pline.get(grabbed_idx).unwrap();
-                pline.set(
-                    grabbed_idx,
-                    grabbed_vertex.x + delta.x as f64,
-                    grabbed_vertex.y + delta.y as f64,
-                    grabbed_vertex.bulge,
-                );
-            } else if *dragging {
-                plot_ui.translate_bounds(-plot_ui.pointer_coordinate_drag_delta());
-            } else if plot_ui.ctx().input(|i| i.pointer.any_pressed()) {
-                // pointer pressed, check if point grabbed by iterating through points and checking
-                // if point considered "hit"
-                if let Some(coord) = plot_ui.ctx().pointer_interact_pos() {
-                    let iter = plines.iter().enumerate().flat_map(|(pl_idx, pl)| {
-                        // required for closure move
-                        let plot_ui = &plot_ui;
-                        pl.iter_vertexes().enumerate().map(move |(i, v)| {
-                            (
-                                // pline index
-                                pl_idx,
-                                // vertex index
-                                i,
-                                // vertex position
-                                plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y)),
-                            )
-                        })
-                    });
-
-                    for (pl_idx, i, pt) in iter {
-                        let hit_size =
-                            2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
-
-                        let hit_box = Rect::from_center_size(pt, Vec2::splat(hit_size));
-
-                        if hit_box.contains(coord) {
-                            // update grabbed point
-                            *grabbed_vertex = Some((pl_idx, i));
-                            break;
-                        }
-                    }
-
-                    *dragging = grabbed_vertex.is_none();
-                }
-            }
-
-            plot_ui.add(
-                PlinesPlotItem::new(&shape)
-                    .stroke_color(Color32::GOLD)
-                    .vertex_color(Color32::LIGHT_GREEN),
+        if let Some((grabbed_pl, grabbed_idx)) = *grabbed_vertex {
+            // move grabbed point by drag delta by offsetting point position
+            let delta = plot_ui.pointer_coordinate_drag_delta();
+            let pline = plines.get_mut(grabbed_pl).unwrap();
+            let grabbed_vertex = pline.get(grabbed_idx).unwrap();
+            pline.set(
+                grabbed_idx,
+                grabbed_vertex.x + delta.x as f64,
+                grabbed_vertex.y + delta.y as f64,
+                grabbed_vertex.bulge,
             );
+        } else if *dragging {
+            plot_ui.translate_bounds(-plot_ui.pointer_coordinate_drag_delta());
+        } else if plot_ui.ctx().input(|i| i.pointer.any_pressed()) {
+            // pointer pressed, check if point grabbed by iterating through points and checking
+            // if point considered "hit"
+            if let Some(coord) = plot_ui.ctx().pointer_interact_pos() {
+                let iter = plines.iter().enumerate().flat_map(|(pl_idx, pl)| {
+                    // required for closure move
+                    let plot_ui = &plot_ui;
+                    pl.iter_vertexes().enumerate().map(move |(i, v)| {
+                        (
+                            // pline index
+                            pl_idx,
+                            // vertex index
+                            i,
+                            // vertex position
+                            plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y)),
+                        )
+                    })
+                });
 
-            for shape in offset_shapes.iter() {
-                plot_ui.add(PlinesPlotItem::new(shape).stroke_color(Color32::LIGHT_BLUE));
-            }
+                for (pl_idx, i, pt) in iter {
+                    let hit_size =
+                        2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
 
-            if *zoom_to_fit {
-                plot_ui.set_auto_bounds([true, true]);
+                    let hit_box = Rect::from_center_size(pt, Vec2::splat(hit_size));
+
+                    if hit_box.contains(coord) {
+                        // update grabbed point
+                        *grabbed_vertex = Some((pl_idx, i));
+                        break;
+                    }
+                }
+
+                *dragging = grabbed_vertex.is_none();
             }
-        });
+        }
+
+        match &scene_state {
+            SceneState::Offset {
+                shape,
+                offset_shapes,
+            } => {
+                plot_ui.add(
+                    PlinesPlotItem::new(shape)
+                        .stroke_color(Color32::GOLD)
+                        .vertex_color(Color32::LIGHT_GREEN),
+                );
+
+                for shape in offset_shapes.iter() {
+                    plot_ui.add(PlinesPlotItem::new(shape).stroke_color(Color32::LIGHT_BLUE));
+                }
+            }
+            SceneState::OffsetIntersects {
+                shape,
+                offset_loops,
+                intersects,
+            } => {
+                plot_ui.add(
+                    PlinesPlotItem::new(shape)
+                        .stroke_color(Color32::GOLD)
+                        .vertex_color(Color32::LIGHT_GREEN),
+                );
+                for pline in offset_loops {
+                    plot_ui.add(
+                        PlinesPlotItem::new(PlinePlotData::new(pline))
+                            .stroke_color(Color32::LIGHT_BLUE),
+                    );
+                }
+                // plot intersects
+                let points = egui_plot::Points::new(PlotPoints::from(intersects.as_slice()))
+                    .radius(PLOT_VERTEX_RADIUS)
+                    .color(Color32::RED);
+                plot_ui.points(points);
+            }
+            SceneState::Slices { slice_plines } => {
+                // plot slices
+                let colors = [
+                    Color32::from_rgb(0, 191, 255),  // DeepSkyBlue
+                    Color32::from_rgb(50, 205, 50),  // LimeGreen
+                    Color32::from_rgb(255, 20, 147), // DeepPink
+                    Color32::from_rgb(255, 165, 0),  // Orange
+                    Color32::from_rgb(138, 43, 226), // BlueViolet
+                ];
+
+                for (i, slice_pline) in slice_plines.iter().enumerate() {
+                    plot_ui.add(
+                        PlinesPlotItem::new(PlinePlotData::new(slice_pline))
+                            .stroke_color(colors[i % colors.len()]),
+                    );
+                }
+            }
+            SceneState::NoOp => {
+                // plot original plines directly
+                for pline in plines {
+                    plot_ui.add(
+                        PlinesPlotItem::new(PlinePlotData::new(pline))
+                            .stroke_color(Color32::GOLD)
+                            .vertex_color(Color32::LIGHT_GREEN),
+                    );
+                }
+            }
+        }
+
+        if *zoom_to_fit {
+            plot_ui.set_auto_bounds([true, true]);
+        }
     });
 }
 
-fn build_offsets(
+fn build_scene_state(
     plines: &[Polyline],
     offset: &f64,
     max_offset_count: &usize,
-) -> (Shape<f64>, Vec<Shape<f64>>) {
+    mode: &Mode,
+) -> SceneState {
     let shape = Shape::from_plines(plines.iter().cloned());
-    let mut offset_shapes = Vec::new();
-    if *max_offset_count == 0 {
-        return (shape, offset_shapes);
-    }
-
-    let mut curr_offset = shape.parallel_offset(*offset, ShapeOffsetOptions::default());
-
-    while !curr_offset.ccw_plines.is_empty() || !curr_offset.cw_plines.is_empty() {
-        offset_shapes.push(curr_offset);
-        if offset_shapes.len() >= *max_offset_count {
-            break;
+    if *mode == Mode::Offset {
+        let mut offset_shapes = Vec::new();
+        if *max_offset_count == 0 {
+            return SceneState::Offset {
+                shape,
+                offset_shapes,
+            };
         }
 
-        curr_offset = offset_shapes
-            .last()
-            .unwrap()
-            .parallel_offset(*offset, ShapeOffsetOptions::default());
+        let mut curr_offset = shape.parallel_offset(*offset, ShapeOffsetOptions::default());
+
+        while !curr_offset.ccw_plines.is_empty() || !curr_offset.cw_plines.is_empty() {
+            offset_shapes.push(curr_offset);
+            if offset_shapes.len() >= *max_offset_count {
+                break;
+            }
+
+            curr_offset = offset_shapes
+                .last()
+                .unwrap()
+                .parallel_offset(*offset, ShapeOffsetOptions::default());
+        }
+        return SceneState::Offset {
+            shape,
+            offset_shapes,
+        };
     }
 
-    (shape, offset_shapes)
+    let options = ShapeOffsetOptions::default();
+
+    // Step 1: Create offset loops with spatial index
+    let (ccw_offset_loops, cw_offset_loops, offset_loops_index) =
+        shape.create_offset_loops_with_index(*offset, &options);
+
+    if ccw_offset_loops.is_empty() && cw_offset_loops.is_empty() {
+        return SceneState::NoOp;
+    }
+
+    // Step 2: Find intersects between offset loops
+    let slice_point_sets = shape.find_intersects_between_offset_loops(
+        &ccw_offset_loops,
+        &cw_offset_loops,
+        &offset_loops_index,
+        options.pos_equal_eps,
+    );
+
+    // Convert offset loops to simple polylines for display purposes
+    let mut offset_loops: Vec<Polyline> = ccw_offset_loops
+        .iter()
+        .map(|l| l.indexed_pline.polyline.clone())
+        .collect();
+    offset_loops.extend(
+        cw_offset_loops
+            .iter()
+            .map(|l| l.indexed_pline.polyline.clone()),
+    );
+
+    if *mode == Mode::OffsetIntersects {
+        let intersects = slice_point_sets
+            .iter()
+            .flat_map(|s| {
+                s.slice_points
+                    .iter()
+                    .map(|p| PlotPoint::new(p.point.x, p.point.y))
+            })
+            .collect();
+        return SceneState::OffsetIntersects {
+            shape,
+            offset_loops,
+            intersects,
+        };
+    }
+
+    // Step 3: Create valid slices from intersects
+    let slices_data = shape.create_valid_slices_from_intersects(
+        &ccw_offset_loops,
+        &cw_offset_loops,
+        &slice_point_sets,
+        *offset,
+        &options,
+    );
+
+    let slice_plines = slices_data
+        .iter()
+        .map(|slice| {
+            let source_loop = if slice.source_idx < ccw_offset_loops.len() {
+                &ccw_offset_loops[slice.source_idx].indexed_pline.polyline
+            } else {
+                &cw_offset_loops[slice.source_idx - ccw_offset_loops.len()]
+                    .indexed_pline
+                    .polyline
+            };
+            let slice_view = slice.v_data.view(source_loop);
+            Polyline::create_from(&slice_view)
+        })
+        .collect();
+
+    SceneState::Slices { slice_plines }
 }
