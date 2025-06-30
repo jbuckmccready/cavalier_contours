@@ -23,6 +23,10 @@ pub struct Polyline<T = f64> {
     // Vec of user-provided u64 values. Preserved across offset calls. Note that a Polyline that was
     // composed out of multiple slices of other Polylines will have userdata values from each source
     // polyline, and as such userdata values may appear repeatedly.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Vec::is_empty")
+    )]
     pub userdata: Vec<u64>,
 }
 
