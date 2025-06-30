@@ -673,8 +673,8 @@ where
     /// # Arguments
     ///
     /// * `slices_data` - Valid slices from Step 3 (consumed by this method)
-    /// * `ccw_offset_loops` - Counter-clockwise offset loops of shape (for slice source lookup)
-    /// * `cw_offset_loops` - Clockwise offset loops of shape (for slice source lookup)
+    /// * `ccw_offset_loops` - Counter-clockwise offset loops of the shape (for slice source lookup)
+    /// * `cw_offset_loops` - Clockwise offset loops of the shape (for slice source lookup)
     /// * `pos_equal_eps` - Epsilon for position equality when extending polylines
     /// * `slice_join_eps` - Epsilon for finding adjacent slice endpoints
     ///
