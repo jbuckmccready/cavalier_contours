@@ -3,7 +3,7 @@ use cavalier_contours::{
     polyline::{BooleanOp, BooleanResult, PlineSource, PlineSourceMut, Polyline},
     shape_algorithms::Shape,
 };
-use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, Ui, Vec2};
+use eframe::egui::{CentralPanel, Rect, ScrollArea, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint};
 
 use crate::plotting::{PlinePlotData, PlinesPlotItem};
@@ -176,6 +176,7 @@ fn plot_area(
     show_vertexes: &bool,
     interaction_state: &mut InteractionState,
 ) {
+    let colors = settings.colors();
     let InteractionState {
         grabbed_vertex,
         dragging,
@@ -255,8 +256,8 @@ fn plot_area(
             }
 
             // TODO: color pickers
-            let color1 = Color32::LIGHT_BLUE;
-            let color2 = Color32::LIGHT_RED;
+            let color1 = colors.primary_stroke;
+            let color2 = colors.secondary_stroke;
             let opacity = 0.8;
             let fill_color1 = color1.gamma_multiply(opacity);
             let fill_color2 = color2.gamma_multiply(opacity);

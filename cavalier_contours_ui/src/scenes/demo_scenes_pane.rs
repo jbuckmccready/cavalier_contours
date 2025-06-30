@@ -41,6 +41,9 @@ impl DemoScenes {
             selected,
         } = self;
 
+        // Apply theme to egui context
+        ctx.set_visuals(settings.theme.to_egui_visuals());
+
         let selected_before = *selected;
         let mut sel = selected.unwrap_or(0);
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {

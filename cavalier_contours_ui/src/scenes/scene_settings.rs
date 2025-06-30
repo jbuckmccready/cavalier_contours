@@ -1,7 +1,10 @@
+use crate::theme::Theme;
+
 pub struct SceneSettings {
     pub show_grid: bool,
     pub show_axes: bool,
     pub show_cursor_pos: bool,
+    pub theme: Theme,
 }
 
 impl Default for SceneSettings {
@@ -10,6 +13,7 @@ impl Default for SceneSettings {
             show_grid: true,
             show_axes: true,
             show_cursor_pos: true,
+            theme: Theme::default(),
         }
     }
 }
@@ -32,6 +36,10 @@ impl SceneSettings {
             .show_y(self.show_cursor_pos)
     }
 
+    pub fn colors(&self) -> crate::theme::ThemeColors {
+        self.theme.colors()
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui) {
         ui.checkbox(&mut self.show_grid, "Show Grid")
             .on_hover_text("Show grid lines in the canvas");
@@ -39,6 +47,20 @@ impl SceneSettings {
             .on_hover_text("Show x and y axes values along edge of the canvas");
         ui.checkbox(&mut self.show_cursor_pos, "Show Cursor Position")
             .on_hover_text("Show the current cursor crosshair with (x, y) position");
+
+        ui.separator();
+
+        ui.horizontal(|ui| {
+            ui.label("Theme:");
+            if ui
+                .button(self.theme.label())
+                .on_hover_text("Click to toggle between light and dark theme")
+                .clicked()
+            {
+                self.theme.toggle();
+            }
+        });
+
         if ui
             .button("Reset Default")
             .on_hover_text("Reset to default settings")

@@ -3,7 +3,7 @@ use cavalier_contours::{
     polyline::{PlineCreation, PlineSource, PlineSourceMut, Polyline},
     shape_algorithms::{Shape, ShapeOffsetOptions},
 };
-use eframe::egui::{Color32, Rect, ScrollArea, Slider, Ui, Vec2};
+use eframe::egui::{Rect, ScrollArea, Slider, Ui, Vec2};
 use egui::Id;
 use egui_plot::{Plot, PlotPoint, PlotPoints};
 
@@ -221,6 +221,7 @@ fn plot_area(
     offset: &f64,
     interaction_state: &mut InteractionState,
 ) {
+    let colors = settings.colors();
     let InteractionState {
         grabbed_vertex,
         dragging,
@@ -301,12 +302,12 @@ fn plot_area(
             } => {
                 plot_ui.add(
                     PlinesPlotItem::new(shape)
-                        .stroke_color(Color32::GOLD)
-                        .vertex_color(Color32::LIGHT_GREEN),
+                        .stroke_color(colors.accent_stroke)
+                        .vertex_color(colors.vertex_color),
                 );
 
                 for shape in offset_shapes.iter() {
-                    plot_ui.add(PlinesPlotItem::new(shape).stroke_color(Color32::LIGHT_BLUE));
+                    plot_ui.add(PlinesPlotItem::new(shape).stroke_color(colors.primary_stroke));
                 }
             }
             SceneState::OffsetIntersects {
@@ -316,35 +317,27 @@ fn plot_area(
             } => {
                 plot_ui.add(
                     PlinesPlotItem::new(shape)
-                        .stroke_color(Color32::GOLD)
-                        .vertex_color(Color32::LIGHT_GREEN),
+                        .stroke_color(colors.accent_stroke)
+                        .vertex_color(colors.vertex_color),
                 );
                 for pline in offset_loops {
                     plot_ui.add(
                         PlinesPlotItem::new(PlinePlotData::new(pline))
-                            .stroke_color(Color32::LIGHT_BLUE),
+                            .stroke_color(colors.primary_stroke),
                     );
                 }
                 // plot intersects
                 let points = egui_plot::Points::new(PlotPoints::from(intersects.as_slice()))
                     .radius(PLOT_VERTEX_RADIUS)
-                    .color(Color32::RED);
+                    .color(colors.error_color);
                 plot_ui.points(points);
             }
             SceneState::Slices { slice_plines } => {
                 // plot slices
-                let colors = [
-                    Color32::from_rgb(0, 191, 255),  // DeepSkyBlue
-                    Color32::from_rgb(50, 205, 50),  // LimeGreen
-                    Color32::from_rgb(255, 20, 147), // DeepPink
-                    Color32::from_rgb(255, 165, 0),  // Orange
-                    Color32::from_rgb(138, 43, 226), // BlueViolet
-                ];
-
                 for (i, slice_pline) in slice_plines.iter().enumerate() {
                     plot_ui.add(
                         PlinesPlotItem::new(PlinePlotData::new(slice_pline))
-                            .stroke_color(colors[i % colors.len()]),
+                            .stroke_color(colors.get_multi_color(i)),
                     );
                 }
             }
@@ -353,8 +346,8 @@ fn plot_area(
                 for pline in plines {
                     plot_ui.add(
                         PlinesPlotItem::new(PlinePlotData::new(pline))
-                            .stroke_color(Color32::GOLD)
-                            .vertex_color(Color32::LIGHT_GREEN),
+                            .stroke_color(colors.accent_stroke)
+                            .vertex_color(colors.vertex_color),
                     );
                 }
             }

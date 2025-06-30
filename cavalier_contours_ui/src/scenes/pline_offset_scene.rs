@@ -7,7 +7,7 @@ use cavalier_contours::{
         },
     },
 };
-use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, Slider, TextEdit, Ui, Vec2, Window};
+use eframe::egui::{CentralPanel, Rect, ScrollArea, Slider, TextEdit, Ui, Vec2, Window};
 use egui::Id;
 use egui_plot::{Plot, PlotPoint};
 use std::hash::{Hash, Hasher};
@@ -252,6 +252,7 @@ fn plot_area(
     interaction_state: &mut InteractionState,
     json_editor: &mut JsonEditor,
 ) {
+    let colors = settings.colors();
     let InteractionState {
         grabbed_vertex,
         dragging,
@@ -325,9 +326,8 @@ fn plot_area(
 
             plot_ui.add(
                 PlinesPlotItem::new(PlinePlotData::new(pline))
-                    .stroke_color(Color32::GOLD)
-                    //.fill_color(Color32::LIGHT_YELLOW)
-                    .vertex_color(Color32::LIGHT_GREEN),
+                    .stroke_color(colors.accent_stroke)
+                    .vertex_color(colors.vertex_color),
             );
 
             // TODO: color pickers
@@ -335,9 +335,9 @@ fn plot_area(
                 SceneState::Offset { all_offset_plines } => {
                     for (pl, same_orientation) in all_offset_plines.iter() {
                         let color = if *same_orientation {
-                            Color32::LIGHT_BLUE
+                            colors.primary_stroke
                         } else {
-                            Color32::LIGHT_RED
+                            colors.secondary_stroke
                         };
 
                         plot_ui
@@ -347,14 +347,14 @@ fn plot_area(
                 SceneState::RawOffset { raw_offset_pline } => {
                     plot_ui.add(
                         PlinesPlotItem::new(PlinePlotData::new(raw_offset_pline))
-                            .stroke_color(Color32::LIGHT_GRAY),
+                            .stroke_color(colors.primary_stroke),
                     );
                 }
                 SceneState::RawOffsetSegments { segments } => {
                     plot_ui.add(
                         RawPlineOffsetSegsPlotItem::new(&segments[..])
-                            .color(Color32::MAGENTA)
-                            .collapsed_color(Color32::LIGHT_RED),
+                            .color(colors.raw_offset_color)
+                            .collapsed_color(colors.collapsed_color),
                     );
                 }
             };
@@ -366,7 +366,7 @@ fn plot_area(
     });
 
     // Show table editor window if requested
-    show_table_editor_window(ui.ctx(), pline, json_editor);
+    show_table_editor_window(ui.ctx(), pline, json_editor, &colors);
 }
 
 fn build_offset(
@@ -476,6 +476,7 @@ fn show_table_editor_window(
     ctx: &egui::Context,
     pline: &mut Polyline,
     json_editor: &mut JsonEditor,
+    colors: &crate::theme::ThemeColors,
 ) {
     let mut open = json_editor.show_window;
 
@@ -508,15 +509,15 @@ fn show_table_editor_window(
 
             // Show error if any
             if let Some(error) = &json_editor.json_error {
-                ui.colored_label(Color32::RED, format!("Error: {error}"));
+                ui.colored_label(colors.error_color, format!("Error: {error}"));
             }
 
             match json_editor.active_tab {
                 EditorTab::Table => {
-                    show_table_editor_tab(ui, pline, json_editor);
+                    show_table_editor_tab(ui, pline, json_editor, colors);
                 }
                 EditorTab::Json => {
-                    show_json_editor_tab(ui, pline, json_editor);
+                    show_json_editor_tab(ui, pline, json_editor, colors);
                 }
             }
         });
@@ -524,7 +525,12 @@ fn show_table_editor_window(
     json_editor.show_window = open;
 }
 
-fn show_table_editor_tab(ui: &mut Ui, pline: &mut Polyline, json_editor: &mut JsonEditor) {
+fn show_table_editor_tab(
+    ui: &mut Ui,
+    pline: &mut Polyline,
+    json_editor: &mut JsonEditor,
+    colors: &crate::theme::ThemeColors,
+) {
     ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         ui.label("Edit polyline vertices:");
 
@@ -550,9 +556,14 @@ fn show_table_editor_tab(ui: &mut Ui, pline: &mut Polyline, json_editor: &mut Js
             }
 
             // Show pending changes indicator and cancel button
-            show_pending_changes_ui(ui, has_pending_changes, || {
-                json_editor.vertex_data = json_editor.applied_vertex_data.clone();
-            });
+            show_pending_changes_ui(
+                ui,
+                has_pending_changes,
+                || {
+                    json_editor.vertex_data = json_editor.applied_vertex_data.clone();
+                },
+                colors,
+            );
         });
 
         ui.separator();
@@ -564,7 +575,12 @@ fn show_table_editor_tab(ui: &mut Ui, pline: &mut Polyline, json_editor: &mut Js
     });
 }
 
-fn show_json_editor_tab(ui: &mut Ui, pline: &mut Polyline, json_editor: &mut JsonEditor) {
+fn show_json_editor_tab(
+    ui: &mut Ui,
+    pline: &mut Polyline,
+    json_editor: &mut JsonEditor,
+    colors: &crate::theme::ThemeColors,
+) {
     ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
         ui.label("JSON Editor:");
 
@@ -581,9 +597,14 @@ fn show_json_editor_tab(ui: &mut Ui, pline: &mut Polyline, json_editor: &mut Jso
             }
 
             // Show pending changes indicator and cancel button
-            show_pending_changes_ui(ui, has_pending_changes, || {
-                json_editor.json_text = json_editor.applied_json_text.clone();
-            });
+            show_pending_changes_ui(
+                ui,
+                has_pending_changes,
+                || {
+                    json_editor.json_text = json_editor.applied_json_text.clone();
+                },
+                colors,
+            );
         });
 
         ui.separator();
@@ -682,8 +703,12 @@ fn apply_json_changes_to_polyline(pline: &mut Polyline, json_editor: &mut JsonEd
     }
 }
 
-fn show_pending_changes_ui<F>(ui: &mut Ui, has_pending_changes: bool, cancel_action: F)
-where
+fn show_pending_changes_ui<F>(
+    ui: &mut Ui,
+    has_pending_changes: bool,
+    cancel_action: F,
+    colors: &crate::theme::ThemeColors,
+) where
     F: FnOnce(),
 {
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -700,7 +725,7 @@ where
             ui.separator();
 
             // Pending changes indicator
-            ui.colored_label(Color32::YELLOW, "⚠ Changes pending");
+            ui.colored_label(colors.warning_color, "⚠ Changes pending");
         }
     });
 }
