@@ -18,10 +18,10 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
 cavalier_contours = {path = "../cavalier_contours", features = ["serde"]}
-egui = "0.31"
+egui = "0.31.1"
 egui_plot = "0.31"
-egui_extras = "0.31"
-eframe = { version = "0.31", default-features = false, features = [
+egui_extras = "0.31.1"
+eframe = { version = "0.31.1", default-features = false, features = [
     "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
