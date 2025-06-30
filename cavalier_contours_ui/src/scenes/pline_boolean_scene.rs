@@ -6,6 +6,7 @@ use cavalier_contours::{
 use eframe::egui::{CentralPanel, Rect, ScrollArea, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint};
 
+use crate::editor::PolylineEditor;
 use crate::plotting::{PlinePlotData, PlinesPlotItem};
 
 use super::{
@@ -13,12 +14,12 @@ use super::{
 };
 
 pub struct PlineBooleanScene {
-    pline1: Polyline,
-    pline2: Polyline,
+    plines: Vec<Polyline>,
     mode: Mode,
     fill: bool,
     show_vertexes: bool,
     interaction_state: InteractionState,
+    polyline_editor: PolylineEditor,
 }
 
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -80,9 +81,12 @@ impl Default for PlineBooleanScene {
 
         pline2.scale_mut(0.5);
 
+        let plines = vec![pline1.clone(), pline2.clone()];
+        let mut polyline_editor = PolylineEditor::dual("Polyline Editor");
+        polyline_editor.initialize_with_polylines(plines.clone());
+
         Self {
-            pline1,
-            pline2,
+            plines,
             mode: Mode::default(),
             fill: true,
             show_vertexes: true,
@@ -91,6 +95,7 @@ impl Default for PlineBooleanScene {
                 dragging: false,
                 zoom_to_fit: false,
             },
+            polyline_editor,
         }
     }
 }
@@ -102,26 +107,33 @@ impl Scene for PlineBooleanScene {
 
     fn ui(&mut self, ui: &mut Ui, settings: &SceneSettings, init: bool) {
         let PlineBooleanScene {
-            pline1,
-            pline2,
+            plines,
             mode,
             fill,
             show_vertexes,
             interaction_state,
+            polyline_editor,
         } = self;
 
-        controls_panel(ui, mode, fill, show_vertexes, interaction_state);
+        controls_panel(
+            ui,
+            mode,
+            fill,
+            show_vertexes,
+            interaction_state,
+            polyline_editor,
+        );
 
         interaction_state.zoom_to_fit |= init;
         plot_area(
             ui,
             settings,
-            pline1,
-            pline2,
+            plines,
             mode,
             fill,
             show_vertexes,
             interaction_state,
+            polyline_editor,
         );
     }
 }
@@ -132,6 +144,7 @@ fn controls_panel(
     fill: &mut bool,
     show_vertexes: &mut bool,
     interaction_state: &mut InteractionState,
+    polyline_editor: &mut PolylineEditor,
 ) {
     controls_side_panel("pline_boolean_controls")
         .show_inside(ui, |ui| {
@@ -164,6 +177,11 @@ fn controls_panel(
                     .button("Zoom to Fit")
                     .on_hover_text("Zoom to fit contents")
                     .clicked();
+
+                // Dual polyline editor button
+                if ui.button("Edit Polylines").on_hover_text("Edit both polylines vertex data").clicked() {
+                    polyline_editor.show_window();
+                }
             })
         });
 }
@@ -172,12 +190,12 @@ fn controls_panel(
 fn plot_area(
     ui: &mut Ui,
     settings: &SceneSettings,
-    pline1: &mut Polyline,
-    pline2: &mut Polyline,
+    plines: &mut Vec<Polyline>,
     mode: &Mode,
     fill: &bool,
     show_vertexes: &bool,
     interaction_state: &mut InteractionState,
+    polyline_editor: &mut PolylineEditor,
 ) {
     let colors = settings.colors(ui.ctx());
     let InteractionState {
@@ -185,6 +203,10 @@ fn plot_area(
         dragging,
         zoom_to_fit,
     } = interaction_state;
+
+    let [pline1, pline2] = plines.get_mut(0..2).expect("Expected two polylines") else {
+        panic!("Expected two polylines, but found less");
+    };
 
     // TODO: cache scene state to only update when necessary due to modified polylines
     let scene_state = build_boolean_result(pline1, pline2, mode);
@@ -309,6 +331,9 @@ fn plot_area(
             }
         });
     });
+
+    // Show dual polyline editor window if requested
+    polyline_editor.ui_show(ui.ctx(), plines, &settings.colors(ui.ctx()));
 }
 
 fn build_boolean_result(pline1: &Polyline, pline2: &Polyline, mode: &Mode) -> SceneState {

@@ -7,6 +7,7 @@ use eframe::egui::{Rect, ScrollArea, Slider, Ui, Vec2};
 use egui::Id;
 use egui_plot::{Plot, PlotPoint, PlotPoints};
 
+use crate::editor::PolylineEditor;
 use crate::plotting::{PlinePlotData, PlinesPlotItem};
 
 use super::{
@@ -37,6 +38,7 @@ pub struct MultiPlineOffsetScene {
     max_offset_count: usize,
     offset: f64,
     interaction_state: InteractionState,
+    polyline_editor: PolylineEditor,
 }
 
 struct InteractionState {
@@ -95,6 +97,9 @@ impl Default for MultiPlineOffsetScene {
             ],
         ];
 
+        let mut polyline_editor = PolylineEditor::multi("Multi-Polyline Editor");
+        polyline_editor.initialize_with_polylines(plines.clone());
+
         Self {
             plines,
             mode: Mode::default(),
@@ -105,6 +110,7 @@ impl Default for MultiPlineOffsetScene {
                 dragging: false,
                 zoom_to_fit: false,
             },
+            polyline_editor,
         }
     }
 }
@@ -121,11 +127,24 @@ impl Scene for MultiPlineOffsetScene {
             max_offset_count,
             offset,
             interaction_state,
+            polyline_editor,
         } = self;
 
-        controls_panel(ui, mode, max_offset_count, offset, interaction_state);
+        controls_panel(
+            ui,
+            mode,
+            max_offset_count,
+            offset,
+            interaction_state,
+            polyline_editor,
+        );
 
         interaction_state.zoom_to_fit |= init;
+
+        // Show multi-polyline editor window if requested
+        let colors = settings.colors(ui.ctx());
+        polyline_editor.ui_show(ui.ctx(), plines, &colors);
+
         plot_area(
             ui,
             settings,
@@ -144,6 +163,7 @@ fn controls_panel(
     max_offset_count: &mut usize,
     offset: &mut f64,
     interaction_state: &mut InteractionState,
+    polyline_editor: &mut PolylineEditor,
 ) {
     controls_side_panel("multi_pline_offset_panel")
         .show_inside(ui, |ui| {
@@ -204,6 +224,11 @@ fn controls_panel(
                     .on_hover_text("Zoom to fit contents")
                     .clicked();
 
+                // Multi-polyline editor button
+                if ui.button("Edit Polylines").on_hover_text("Edit all polylines vertex data").clicked() {
+                    polyline_editor.show_window();
+                }
+
                 ui.data_mut(|data| {
                     data.insert_temp(
                         last_others_width_id,
@@ -214,7 +239,6 @@ fn controls_panel(
         });
 }
 
-#[allow(clippy::too_many_arguments)]
 fn plot_area(
     ui: &mut Ui,
     settings: &SceneSettings,
