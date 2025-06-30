@@ -36,8 +36,8 @@ impl SceneSettings {
             .show_y(self.show_cursor_pos)
     }
 
-    pub fn colors(&self) -> crate::theme::ThemeColors {
-        self.theme.colors()
+    pub fn colors(&self, ctx: &egui::Context) -> crate::theme::ThemeColors {
+        self.theme.colors(ctx)
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) {
@@ -52,13 +52,13 @@ impl SceneSettings {
 
         ui.horizontal(|ui| {
             ui.label("Theme:");
-            if ui
-                .button(self.theme.label())
-                .on_hover_text("Click to toggle between light and dark theme")
-                .clicked()
-            {
-                self.theme.toggle();
-            }
+            egui::ComboBox::from_id_salt("theme_combo")
+                .selected_text(self.theme.label())
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.theme, Theme::Light, Theme::Light.label());
+                    ui.selectable_value(&mut self.theme, Theme::Dark, Theme::Dark.label());
+                    ui.selectable_value(&mut self.theme, Theme::System, Theme::System.label());
+                });
         });
 
         if ui

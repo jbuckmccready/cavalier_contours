@@ -221,7 +221,7 @@ fn plot_area(
     offset: &f64,
     interaction_state: &mut InteractionState,
 ) {
-    let colors = settings.colors();
+    let colors = settings.colors(ui.ctx());
     let InteractionState {
         grabbed_vertex,
         dragging,

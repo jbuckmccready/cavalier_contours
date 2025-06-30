@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub enum Theme {
     Light,
-    #[default]
     Dark,
+    #[default]
+    System,
 }
 
 impl Theme {
@@ -13,27 +14,44 @@ impl Theme {
         match self {
             Theme::Light => "☀ Light",
             Theme::Dark => "🌙 Dark",
+            Theme::System => "🖥 System",
         }
     }
 
-    pub fn toggle(&mut self) {
-        *self = match self {
-            Theme::Light => Theme::Dark,
-            Theme::Dark => Theme::Light,
-        };
+    /// Helper method to determine if system theme should use dark mode
+    /// Defaults to dark when system theme detection fails
+    fn system_is_dark(ctx: &egui::Context) -> bool {
+        match ctx.system_theme() {
+            Some(egui::Theme::Light) => false,
+            Some(egui::Theme::Dark) | None => true,
+        }
     }
 
-    pub fn to_egui_visuals(&self) -> egui::Visuals {
+    pub fn to_egui_visuals(&self, ctx: &egui::Context) -> egui::Visuals {
         match self {
             Theme::Light => egui::Visuals::light(),
             Theme::Dark => egui::Visuals::dark(),
+            Theme::System => {
+                if Self::system_is_dark(ctx) {
+                    egui::Visuals::dark()
+                } else {
+                    egui::Visuals::light()
+                }
+            }
         }
     }
 
-    pub fn colors(&self) -> ThemeColors {
+    pub fn colors(&self, ctx: &egui::Context) -> ThemeColors {
         match self {
             Theme::Light => ThemeColors::light(),
             Theme::Dark => ThemeColors::dark(),
+            Theme::System => {
+                if Self::system_is_dark(ctx) {
+                    ThemeColors::dark()
+                } else {
+                    ThemeColors::light()
+                }
+            }
         }
     }
 }

@@ -252,7 +252,7 @@ fn plot_area(
     interaction_state: &mut InteractionState,
     json_editor: &mut JsonEditor,
 ) {
-    let colors = settings.colors();
+    let colors = settings.colors(ui.ctx());
     let InteractionState {
         grabbed_vertex,
         dragging,
