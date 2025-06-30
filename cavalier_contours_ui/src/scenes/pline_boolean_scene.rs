@@ -138,21 +138,24 @@ fn controls_panel(
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
 
-                egui::ComboBox::from_label("Mode")
-                    .selected_text(mode.label())
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(mode, Mode::None, "None")
-                            .on_hover_text("No boolean operation performed");
-                        ui.selectable_value(mode, Mode::Or, "Or")
-                            .on_hover_text("Union (OR) the closed polylines, keeping both areas");
-                        ui.selectable_value(mode, Mode::And, "And").on_hover_text(
-                            "Intersection (AND) the closed polylines, keeping only the overlapping area",
-                        );
-                        ui.selectable_value(mode, Mode::Not, "Not")
-                            .on_hover_text("Difference (NOT) the closed polylines, keeping only the area of the first polyline not overlapped by the second polyline");
-                        ui.selectable_value(mode, Mode::Xor, "Xor")
-                            .on_hover_text("Symmetric Difference (XOR) the closed polylines, keeping only the areas not overlapped by both polylines");
-                    });
+                ui.horizontal(|ui| {
+                    ui.label("Mode:");
+                    egui::ComboBox::from_id_salt("mode_combo")
+                        .selected_text(mode.label())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(mode, Mode::None, Mode::None.label())
+                                .on_hover_text("No boolean operation performed");
+                            ui.selectable_value(mode, Mode::Or, Mode::Or.label())
+                                .on_hover_text("Union (OR) the closed polylines, keeping both areas");
+                            ui.selectable_value(mode, Mode::And, Mode::And.label()).on_hover_text(
+                                "Intersection (AND) the closed polylines, keeping only the overlapping area",
+                            );
+                            ui.selectable_value(mode, Mode::Not, Mode::Not.label())
+                                .on_hover_text("Difference (NOT) the closed polylines, keeping only the area of the first polyline not overlapped by the second polyline");
+                            ui.selectable_value(mode, Mode::Xor, Mode::Xor.label())
+                                .on_hover_text("Symmetric Difference (XOR) the closed polylines, keeping only the areas not overlapped by both polylines");
+                        });
+                });
 
                 ui.checkbox(fill, "Fill").on_hover_text("Fill resulting polyline areas");
                 ui.checkbox(show_vertexes, "Show Vertexes").on_hover_text("Show polyline vertexes");

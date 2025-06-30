@@ -173,13 +173,16 @@ fn controls_panel(
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
 
-                egui::ComboBox::from_label("Mode")
-                    .selected_text(mode.label())
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(mode, Mode::offset_default(), "Offset").on_hover_text("Generate parallel offsets");
-                        ui.selectable_value(mode, Mode::RawOffset, "Raw Offset").on_hover_text("Generate single raw offset polyline");
-                        ui.selectable_value(mode, Mode::RawOffsetSegments, "Raw Offset Segments").on_hover_text("Generate the raw offset polyline segments");
-                    });
+                ui.horizontal(|ui| {
+                    ui.label("Mode:");
+                    egui::ComboBox::from_id_salt("mode_combo")
+                        .selected_text(mode.label())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(mode, Mode::offset_default(), Mode::offset_default().label()).on_hover_text("Generate parallel offsets");
+                            ui.selectable_value(mode, Mode::RawOffset, Mode::RawOffset.label()).on_hover_text("Generate single raw offset polyline");
+                            ui.selectable_value(mode, Mode::RawOffsetSegments, Mode::RawOffsetSegments.label()).on_hover_text("Generate the raw offset polyline segments");
+                        });
+                });
 
                 // state used to fill available width within the scroll area
                 let last_others_width_id = Id::new("panel_width_state");

@@ -150,16 +150,19 @@ fn controls_panel(
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
 
-                egui::ComboBox::from_label("Mode")
-                    .selected_text(mode.label())
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(mode, Mode::Offset, "Offset")
-                            .on_hover_text("Final offset result");
-                        ui.selectable_value(mode, Mode::OffsetIntersects, "Offset Intersects")
-                            .on_hover_text("Shows offset for each polyline in shape and intersect points between the polylines");
-                        ui.selectable_value(mode, Mode::Slices, "Slices")
-                            .on_hover_text("Shows slices remaining, each with different color, after discarding invalid slices");
-                    });
+                ui.horizontal(|ui| {
+                    ui.label("Mode:");
+                    egui::ComboBox::from_id_salt("mode_combo")
+                        .selected_text(mode.label())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(mode, Mode::Offset, Mode::Offset.label())
+                                .on_hover_text("Final offset result");
+                            ui.selectable_value(mode, Mode::OffsetIntersects, Mode::OffsetIntersects.label())
+                                .on_hover_text("Shows offset for each polyline in shape and intersect points between the polylines");
+                            ui.selectable_value(mode, Mode::Slices, Mode::Slices.label())
+                                .on_hover_text("Shows slices remaining, each with different color, after discarding invalid slices");
+                        });
+                });
 
                 // state used to fill available width within the scroll area
                 let last_others_width_id = Id::new("panel_width_state");
