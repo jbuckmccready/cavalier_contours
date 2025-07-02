@@ -4,6 +4,7 @@ use static_aabb2d_index::{
 
 use crate::{
     core::{
+        Control,
         math::{
             Vector2, angle, angle_from_bulge, bulge_from_angle, delta_angle, dist_squared, is_left,
             is_left_or_equal, point_on_circle,
@@ -11,7 +12,7 @@ use crate::{
         traits::{ControlFlow, FuzzyEq, FuzzyOrd, Real},
     },
     polyline::{
-        PlineContainmentOptions, PlineContainmentResult, SelfIntersectsInclude,
+        PlineContainmentOptions, PlineContainmentResult, PlineIntersect, SelfIntersectsInclude,
         seg_arc_radius_and_center,
     },
 };
@@ -386,6 +387,18 @@ pub trait PlineSource {
     ///
     /// This method just uses the [PlineSource::area] function to determine directionality of a closed
     /// polyline which may not yield a useful result if the polyline has self intersects.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// let mut polyline = Polyline::new_closed();
+    /// polyline.add(0.0, 0.0, 1.0);
+    /// polyline.add(1.0, 0.0, 1.0);
+    /// assert_eq!(polyline.orientation(), PlineOrientation::CounterClockwise);
+    /// polyline.invert_direction_mut();
+    /// assert_eq!(polyline.orientation(), PlineOrientation::Clockwise);
+    /// ```
     fn orientation(&self) -> PlineOrientation {
         if !self.is_closed() {
             return PlineOrientation::Open;
@@ -1205,6 +1218,19 @@ pub trait PlineSource {
     /// `error_distance` is the maximum distance from any line segment to the arc it is
     /// approximating. Line segments are circumscribed by the arc (all line end points lie on the
     /// arc path).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// let mut polyline = Polyline::new();
+    /// // half circle
+    /// polyline.add(0.0, 0.0, 1.0);
+    /// polyline.add(2.0, 0.0, 0.0);
+    /// let lines = polyline.arcs_to_approx_lines(0.1).unwrap();
+    /// assert!(lines.vertex_count() > 2);
+    /// assert!(lines.iter_vertexes().all(|v| v.bulge == 0.0));
+    /// ```
     fn arcs_to_approx_lines(&self, error_distance: Self::Num) -> Option<Self::OutputPolyline> {
         use num_traits::real::Real;
         let mut result = Self::OutputPolyline::with_capacity(0, self.is_closed());
@@ -1267,6 +1293,34 @@ pub trait PlineSource {
     /// # Panics
     ///
     /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::*;
+    /// # use cavalier_contours::core::math::*;
+    /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 2.0, 0.0);
+    /// polyline.add(1.0, 1.0, 0.0);
+    /// polyline.add(-1.0, 1.0, 0.0);
+    ///
+    /// let mut visited_intersects = 0;
+    /// // NOTE: FnMut(PlineIntersect) implements PlineInteresectVisitor trait
+    /// polyline.visit_self_intersects(&mut |intersect: PlineIntersect<f64>| {
+    ///    visited_intersects += 1;
+    ///    match intersect {
+    ///        PlineIntersect::Basic(intr) => assert!(intr.point.fuzzy_eq_eps(Vector2::new(0.0, 1.0), 1e-5)),
+    ///        PlineIntersect::Overlapping(_) => panic!("Unexpected overlapping intersection"),
+    ///    }
+    ///    // stop visiting intersects on first intersect found by returning Control::Break
+    ///    // NOTE: use Control::Continue or return () to continue visiting
+    ///    Control::Break(())
+    /// });
+    ///
+    /// assert_eq!(visited_intersects, 1);
+    /// ```
     #[inline]
     fn visit_self_intersects<C, V>(&self, visitor: &mut V) -> C
     where
@@ -1320,6 +1374,68 @@ pub trait PlineSource {
         ));
 
         visit_global_self_intersects(self, index, visitor, options.pos_equal_eps)
+    }
+
+    /// Scan for self intersects using default options.
+    /// Returns true on the first one found; false if there are none.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::*;
+    /// # use cavalier_contours::core::math::*;
+    /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 2.0, 0.0);
+    /// polyline.add(1.0, 1.0, 0.0);
+    /// polyline.add(-1.0, 1.0, 0.0);
+    ///
+    /// assert!(polyline.scan_for_self_intersection());
+    /// ```
+    #[inline]
+    fn scan_for_self_intersection(&self) -> bool {
+        self.scan_for_self_intersection_opt(&Default::default())
+    }
+
+    /// Scan for self intersects using options provided.
+    /// Returns true on the first one found; false if there are none.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::*;
+    /// # use cavalier_contours::core::math::*;
+    /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 2.0, 0.0);
+    /// polyline.add(1.0, 1.0, 0.0);
+    /// polyline.add(-1.0, 1.0, 0.0);
+    ///
+    /// assert!(polyline.scan_for_self_intersection_opt(&Default::default()));
+    /// ```
+    fn scan_for_self_intersection_opt(
+        &self,
+        options: &PlineSelfIntersectOptions<Self::Num>,
+    ) -> bool {
+        let mut found_intersects = false;
+        self.visit_self_intersects_opt(
+            &mut |_intersect: PlineIntersect<Self::Num>| {
+                found_intersects = true;
+                Control::Break(())
+            },
+            options,
+        );
+        found_intersects
     }
 
     /// Find all intersects between two polylines using default options.
@@ -1508,9 +1624,9 @@ pub trait PlineSource {
 
     /// Determine if this polyline fully contains another using default options.
     ///
-    /// Note that [polyline_contains] uses the infrastructure of the boolean processor to do it's work; and that
-    /// [PlineContainmentOptions] is an alias for [PlineBooleanOptions]. See [PlineSource::boolean_opt] for more information.
-    /// 
+    /// Caution: Polylines with self-intersections may generate unexpected results.
+    /// Use scan_for_self_intersection() to find and reject self-intersecting polylines
+    /// if this is a possibility for your input data.
     ///
     /// # Panics
     ///
@@ -1547,9 +1663,9 @@ pub trait PlineSource {
 
     /// Determine if this polyline fully contains another with options provided.
     ///
-    /// Note that [polyline_contains] uses the infrastructure of the boolean processor to do it's work; and that
-    /// [PlineContainmentOptions] is an alias for [PlineBooleanOptions]. See [PlineSource::boolean_opt] for more information.
-    /// 
+    /// Caution: Polylines with self-intersections may generate unexpected results.
+    /// Use scan_for_self_intersection() to find and reject self-intersecting polylines
+    /// if this is a possibility for your input data.
     ///
     /// # Panics
     ///
@@ -1571,7 +1687,7 @@ pub trait PlineSource {
     /// let triangle = pline_closed![(3.1340, 4.5, 0.0), (4.0, 3.0, 0.0), (4.8660, 4.5, 0.0)];
     ///
     /// let rectangle_aabb_index = rectangle.create_approx_aabb_index();
-    /// let rectangle_options = PlineBooleanOptions {
+    /// let rectangle_options = PlineContainmentOptions {
     ///     // passing in existing spatial index of the polyline segments for the first polyline
     ///     pline1_aabb_index: Some(&rectangle_aabb_index),
     ///     ..Default::default()
@@ -1580,7 +1696,7 @@ pub trait PlineSource {
     /// assert_eq!(rectangle.contains_opt(&circle, &rectangle_options), Pline2InsidePline1);
     ///
     /// let circle_aabb_index = circle.create_approx_aabb_index();
-    /// let circle_options = PlineBooleanOptions {
+    /// let circle_options = PlineContainmentOptions {
     ///     // passing in existing spatial index of the polyline segments for the first polyline
     ///     pline1_aabb_index: Some(&circle_aabb_index),
     ///     ..Default::default()
@@ -1613,6 +1729,20 @@ pub trait PlineSource {
     ///
     /// Returns `Err((total_path_length))` if `target_path_length` is greater than total path
     /// length of the polyline.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::math::Vector2;
+    /// # use cavalier_contours::core::traits::FuzzyEq;
+    /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(10.0, 0.0, 0.0);
+    /// let (seg_index, point) = polyline.find_point_at_path_length(5.0).unwrap();
+    /// assert_eq!(seg_index, 0);
+    /// assert!(point.fuzzy_eq(Vector2::new(5.0, 0.0)));
+    /// ```
     fn find_point_at_path_length(
         &self,
         target_path_length: Self::Num,
@@ -1665,6 +1795,16 @@ pub trait PlineSourceMut: PlineSource {
     fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>);
 
     /// Set the vertex data at the given `index` position of the polyline.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.set_vertex(0, PlineVertex::new(1.0, 1.0, 1.0));
+    /// assert!(polyline.at(0).fuzzy_eq(PlineVertex::new(1.0, 1.0, 1.0)));
+    /// ```
     fn set_vertex(&mut self, index: usize, vertex: PlineVertex<Self::Num>);
 
     /// Same as [PlineSourceMut::set_vertex] but accepts each component of the vertex rather than a
@@ -1708,6 +1848,17 @@ pub trait PlineSourceMut: PlineSource {
     }
 
     /// Clear all vertexes of the polyline.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// assert_eq!(polyline.vertex_count(), 1);
+    /// polyline.clear();
+    /// assert_eq!(polyline.vertex_count(), 0);
+    /// ```
     fn clear(&mut self);
 
     /// Add a vertex to the end of the polyline.
@@ -1733,6 +1884,19 @@ pub trait PlineSourceMut: PlineSource {
         I: IntoIterator<Item = PlineVertex<Self::Num>>;
 
     /// Copy all vertexes from `other` to the end of this polyline.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// let mut polyline1 = Polyline::new();
+    /// polyline1.add(0.0, 0.0, 0.0);
+    /// let mut polyline2 = Polyline::new();
+    /// polyline2.add(1.0, 1.0, 0.0);
+    /// polyline1.extend(&polyline2);
+    /// assert_eq!(polyline1.vertex_count(), 2);
+    /// assert!(polyline1.at(1).fuzzy_eq(PlineVertex::new(1.0, 1.0, 0.0)));
+    /// ```
     #[inline]
     fn extend<P>(&mut self, other: &P)
     where
@@ -1792,6 +1956,16 @@ pub trait PlineSourceMut: PlineSource {
     }
 
     /// Set whether the polyline is closed (`is_closed = true`) or open (`is_closed = false`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// let mut polyline: Polyline = Polyline::new();
+    /// assert!(!polyline.is_closed());
+    /// polyline.set_is_closed(true);
+    /// assert!(polyline.is_closed());
+    /// ```
     fn set_is_closed(&mut self, is_closed: bool);
 
     /// Uniformly scale the polyline (mutably) in the xy plane by `scale_factor`.
@@ -1844,6 +2018,20 @@ pub trait PlineSourceMut: PlineSource {
     /// the vertexes, and inverting the sign of all the bulge values. E.g. after reversing the
     /// vertex the bulge at index 0 becomes negative bulge at index 1. The end result for a is_closed
     /// polyline is the direction will be changed from clockwise to counter clockwise or vice versa.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 0.0, 0.5);
+    /// polyline.add(1.0, 1.0, 0.0);
+    /// polyline.invert_direction_mut();
+    /// let mut expected = Polyline::new();
+    /// expected.add(1.0, 1.0, -0.5);
+    /// expected.add(0.0, 0.0, 0.5);
+    /// assert!(polyline.fuzzy_eq(&expected));
+    /// ```
     fn invert_direction_mut(&mut self) {
         let vc = self.vertex_count();
         if vc < 2 {

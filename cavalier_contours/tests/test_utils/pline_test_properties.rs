@@ -156,8 +156,8 @@ pub fn property_sets_match(
     }
 
     if !sets_match {
-        eprintln!("result:\n{:?}", result_set);
-        eprintln!("expected:\n{:?}", expected_set);
+        eprintln!("result:\n{result_set:?}");
+        eprintln!("expected:\n{expected_set:?}");
     }
 
     sets_match
@@ -190,8 +190,8 @@ pub fn property_sets_match_abs_a(
     }
 
     if !sets_match {
-        eprintln!("result:\n{:?}", result_set);
-        eprintln!("expected:\n{:?}", expected_set);
+        eprintln!("result:\n{result_set:?}");
+        eprintln!("expected:\n{expected_set:?}");
     }
 
     sets_match

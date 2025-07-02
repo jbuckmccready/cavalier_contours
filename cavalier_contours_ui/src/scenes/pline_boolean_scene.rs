@@ -3,9 +3,10 @@ use cavalier_contours::{
     polyline::{BooleanOp, BooleanResult, PlineSource, PlineSourceMut, Polyline},
     shape_algorithms::Shape,
 };
-use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, Ui, Vec2};
+use eframe::egui::{CentralPanel, Rect, ScrollArea, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint};
 
+use crate::editor::PolylineEditor;
 use crate::plotting::{PlinePlotData, PlinesPlotItem};
 
 use super::{
@@ -13,12 +14,12 @@ use super::{
 };
 
 pub struct PlineBooleanScene {
-    pline1: Polyline,
-    pline2: Polyline,
+    plines: Vec<Polyline>,
     mode: Mode,
     fill: bool,
     show_vertexes: bool,
     interaction_state: InteractionState,
+    polyline_editor: PolylineEditor,
 }
 
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -80,9 +81,12 @@ impl Default for PlineBooleanScene {
 
         pline2.scale_mut(0.5);
 
+        let plines = vec![pline1.clone(), pline2.clone()];
+        let mut polyline_editor = PolylineEditor::dual("Polyline Editor");
+        polyline_editor.initialize_with_polylines(plines.clone());
+
         Self {
-            pline1,
-            pline2,
+            plines,
             mode: Mode::default(),
             fill: true,
             show_vertexes: true,
@@ -91,6 +95,7 @@ impl Default for PlineBooleanScene {
                 dragging: false,
                 zoom_to_fit: false,
             },
+            polyline_editor,
         }
     }
 }
@@ -102,26 +107,33 @@ impl Scene for PlineBooleanScene {
 
     fn ui(&mut self, ui: &mut Ui, settings: &SceneSettings, init: bool) {
         let PlineBooleanScene {
-            pline1,
-            pline2,
+            plines,
             mode,
             fill,
             show_vertexes,
             interaction_state,
+            polyline_editor,
         } = self;
 
-        controls_panel(ui, mode, fill, show_vertexes, interaction_state);
+        controls_panel(
+            ui,
+            mode,
+            fill,
+            show_vertexes,
+            interaction_state,
+            polyline_editor,
+        );
 
         interaction_state.zoom_to_fit |= init;
         plot_area(
             ui,
             settings,
-            pline1,
-            pline2,
+            plines,
             mode,
             fill,
             show_vertexes,
             interaction_state,
+            polyline_editor,
         );
     }
 }
@@ -132,27 +144,31 @@ fn controls_panel(
     fill: &mut bool,
     show_vertexes: &mut bool,
     interaction_state: &mut InteractionState,
+    polyline_editor: &mut PolylineEditor,
 ) {
     controls_side_panel("pline_boolean_controls")
         .show_inside(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
 
-                egui::ComboBox::from_label("Mode")
-                    .selected_text(mode.label())
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(mode, Mode::None, "None")
-                            .on_hover_text("No boolean operation performed");
-                        ui.selectable_value(mode, Mode::Or, "Or")
-                            .on_hover_text("Union (OR) the closed polylines, keeping both areas");
-                        ui.selectable_value(mode, Mode::And, "And").on_hover_text(
-                            "Intersection (AND) the closed polylines, keeping only the overlapping area",
-                        );
-                        ui.selectable_value(mode, Mode::Not, "Not")
-                            .on_hover_text("Difference (NOT) the closed polylines, keeping only the area of the first polyline not overlapped by the second polyline");
-                        ui.selectable_value(mode, Mode::Xor, "Xor")
-                            .on_hover_text("Symmetric Difference (XOR) the closed polylines, keeping only the areas not overlapped by both polylines");
-                    });
+                ui.horizontal(|ui| {
+                    ui.label("Mode:");
+                    egui::ComboBox::from_id_salt("mode_combo")
+                        .selected_text(mode.label())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(mode, Mode::None, Mode::None.label())
+                                .on_hover_text("No boolean operation performed");
+                            ui.selectable_value(mode, Mode::Or, Mode::Or.label())
+                                .on_hover_text("Union (OR) the closed polylines, keeping both areas");
+                            ui.selectable_value(mode, Mode::And, Mode::And.label()).on_hover_text(
+                                "Intersection (AND) the closed polylines, keeping only the overlapping area",
+                            );
+                            ui.selectable_value(mode, Mode::Not, Mode::Not.label())
+                                .on_hover_text("Difference (NOT) the closed polylines, keeping only the area of the first polyline not overlapped by the second polyline");
+                            ui.selectable_value(mode, Mode::Xor, Mode::Xor.label())
+                                .on_hover_text("Symmetric Difference (XOR) the closed polylines, keeping only the areas not overlapped by both polylines");
+                        });
+                });
 
                 ui.checkbox(fill, "Fill").on_hover_text("Fill resulting polyline areas");
                 ui.checkbox(show_vertexes, "Show Vertexes").on_hover_text("Show polyline vertexes");
@@ -161,6 +177,11 @@ fn controls_panel(
                     .button("Zoom to Fit")
                     .on_hover_text("Zoom to fit contents")
                     .clicked();
+
+                // Dual polyline editor button
+                if ui.button("Edit Polylines").on_hover_text("Edit both polylines vertex data").clicked() {
+                    polyline_editor.show_window();
+                }
             })
         });
 }
@@ -169,18 +190,23 @@ fn controls_panel(
 fn plot_area(
     ui: &mut Ui,
     settings: &SceneSettings,
-    pline1: &mut Polyline,
-    pline2: &mut Polyline,
+    plines: &mut Vec<Polyline>,
     mode: &Mode,
     fill: &bool,
     show_vertexes: &bool,
     interaction_state: &mut InteractionState,
+    polyline_editor: &mut PolylineEditor,
 ) {
+    let colors = settings.colors(ui.ctx());
     let InteractionState {
         grabbed_vertex,
         dragging,
         zoom_to_fit,
     } = interaction_state;
+
+    let [pline1, pline2] = plines.get_mut(0..2).expect("Expected two polylines") else {
+        panic!("Expected two polylines, but found less");
+    };
 
     // TODO: cache scene state to only update when necessary due to modified polylines
     let scene_state = build_boolean_result(pline1, pline2, mode);
@@ -255,8 +281,8 @@ fn plot_area(
             }
 
             // TODO: color pickers
-            let color1 = Color32::LIGHT_BLUE;
-            let color2 = Color32::LIGHT_RED;
+            let color1 = colors.primary_stroke;
+            let color2 = colors.secondary_stroke;
             let opacity = 0.8;
             let fill_color1 = color1.gamma_multiply(opacity);
             let fill_color2 = color2.gamma_multiply(opacity);
@@ -305,6 +331,9 @@ fn plot_area(
             }
         });
     });
+
+    // Show dual polyline editor window if requested
+    polyline_editor.ui_show(ui.ctx(), plines, &settings.colors(ui.ctx()));
 }
 
 fn build_boolean_result(pline1: &Polyline, pline2: &Polyline, mode: &Mode) -> SceneState {

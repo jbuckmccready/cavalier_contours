@@ -26,8 +26,8 @@ impl<'a> RawPlineOffsetSegsPlotItem<'a> {
     pub fn new(segs: &'a [RawPlineOffsetSeg<f64>]) -> Self {
         Self {
             segs,
-            color: epaint::Color32::PURPLE,
-            collapsed_color: epaint::Color32::LIGHT_RED,
+            color: epaint::Color32::GRAY,
+            collapsed_color: epaint::Color32::DARK_GRAY,
             id: None,
         }
     }

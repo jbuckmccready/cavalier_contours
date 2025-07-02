@@ -43,8 +43,7 @@ impl ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'_> {
         );
         assert!(
             property_sets_match(&offset_results, self.expected_properties_set),
-            "property sets do not match, modified state: {:?}",
-            pline_state
+            "property sets do not match, modified state: {pline_state:?}"
         );
 
         if modified_pline.is_closed() {
@@ -56,8 +55,7 @@ impl ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'_> {
             );
             assert!(
                 property_sets_match(&offset_results, self.expected_properties_set),
-                "property sets do not match with handle_self_intersects set to true, modified state: {:?}",
-                pline_state
+                "property sets do not match with handle_self_intersects set to true, modified state: {pline_state:?}"
             );
         }
     }

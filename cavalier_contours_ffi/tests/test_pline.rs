@@ -1234,3 +1234,103 @@ fn shape_eval_ffi() {
         }
     }
 }
+
+#[test]
+fn self_intersection_scan_ffi() {}
+
+#[test]
+fn pline_contains_ffi() {
+    let rectangle = create_pline(
+        &[
+            (-2.0, -2.0, 0.0),
+            (2.0, -2.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (-2.0, 2.0, 0.0),
+        ],
+        true,
+    );
+
+    let circle = create_pline(&[(-1.0, 0.0, 1.0), (1.0, 0.0, 1.0)], true);
+
+    let triangle = create_pline(
+        &[(3.1340, 4.5, 0.0), (4.0, 3.0, 0.0), (4.8660, 4.5, 0.0)],
+        true,
+    );
+
+    unsafe {
+        let mut result: u32 = 0;
+
+        assert_eq!(
+            cavc_pline_contains(rectangle, circle, ptr::null(), &mut result as *mut u32),
+            0
+        );
+        assert_eq!(result, CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1);
+
+        assert_eq!(
+            cavc_pline_contains(circle, rectangle, ptr::null(), &mut result as *mut u32),
+            0
+        );
+        assert_eq!(result, CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2);
+
+        assert_eq!(
+            cavc_pline_contains(rectangle, triangle, ptr::null(), &mut result as *mut u32),
+            0
+        );
+        assert_eq!(result, CAVC_CONTAINS_RESULT_DISJOINT);
+
+        let mut rectangle_options: *mut cavc_pline_contains_o = ptr::null_mut();
+        let mut rectangle_index: *const cavc_aabbindex = ptr::null_mut();
+
+        assert_eq!(cavc_pline_contains_o_create(&mut rectangle_options), 0);
+        assert_eq!(
+            cavc_pline_create_approx_aabbindex(rectangle, &mut rectangle_index),
+            0
+        );
+        (*rectangle_options).pline1_aabb_index = rectangle_index;
+
+        assert_eq!(
+            cavc_pline_contains(
+                rectangle,
+                circle,
+                rectangle_options,
+                &mut result as *mut u32
+            ),
+            0
+        );
+        assert_eq!(result, CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1);
+
+        let mut circle_options: *mut cavc_pline_contains_o = ptr::null_mut();
+        let mut circle_index: *const cavc_aabbindex = ptr::null_mut();
+
+        assert_eq!(cavc_pline_contains_o_create(&mut circle_options), 0);
+        assert_eq!(
+            cavc_pline_create_approx_aabbindex(circle, &mut circle_index),
+            0
+        );
+        (*circle_options).pline1_aabb_index = circle_index;
+
+        assert_eq!(
+            cavc_pline_contains(circle, rectangle, circle_options, &mut result as *mut u32),
+            0
+        );
+        assert_eq!(result, CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2);
+
+        assert_eq!(
+            cavc_pline_contains(
+                rectangle,
+                triangle,
+                rectangle_options,
+                &mut result as *mut u32
+            ),
+            0
+        );
+        assert_eq!(result, CAVC_CONTAINS_RESULT_DISJOINT);
+
+        cavc_pline_contains_o_f(rectangle_options);
+        cavc_pline_contains_o_f(circle_options);
+
+        cavc_pline_f(rectangle);
+        cavc_pline_f(circle);
+        cavc_pline_f(triangle);
+    }
+}

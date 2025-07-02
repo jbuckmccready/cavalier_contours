@@ -6,7 +6,12 @@ use crate::polyline::{
 use crate::core::{math::Vector2, traits::Real};
 
 /// Determine if pline1 contains pline2.
+///
 /// Note that overlapping segments are considered intersections by this function.
+///
+/// Caution: Polylines with self-intersections may generate unexpected results.
+/// Use scan_for_self_intersection() to find and reject self-intersecting polylines
+/// if this is a possibility for your input data.
 pub fn polyline_contains<P, R, T>(
     pline1: &P,
     pline2: &R,

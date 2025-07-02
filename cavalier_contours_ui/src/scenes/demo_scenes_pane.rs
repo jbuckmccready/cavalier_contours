@@ -8,7 +8,6 @@ use super::scene_settings::SceneSettings;
 pub struct DemoScenes {
     settings: SceneSettings,
     settings_open: bool,
-    //#[cfg_attr(feature = "serde", serde(skip))]
     scenes: Vec<Box<dyn Scene>>,
     selected: Option<usize>,
 }
@@ -39,7 +38,11 @@ impl DemoScenes {
             settings_open,
             scenes,
             selected,
+            ..
         } = self;
+
+        // Apply theme to egui context
+        ctx.set_visuals(settings.theme.to_egui_visuals(ctx));
 
         let selected_before = *selected;
         let mut sel = selected.unwrap_or(0);

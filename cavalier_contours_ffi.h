@@ -3,6 +3,18 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+/**
+ * FFI representation of SelfIntersectsInclude enum
+ */
+#define CAVC_SELF_INTERSECTS_INCLUDE_ALL 0
+
+#define CAVC_SELF_INTERSECTS_INCLUDE_LOCAL 1
+
+#define CAVC_SELF_INTERSECTS_INCLUDE_GLOBAL 2
+
+/**
+ * FFI Representation of PlineContainmentResult enum
+ */
 #define CAVC_CONTAINS_RESULT_INVALID_INPUT 0
 
 #define CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2 1
@@ -11,7 +23,7 @@
 
 #define CAVC_CONTAINS_RESULT_DISJOINT 3
 
-#define CAVC_CONTAINS_RESULT_INTERSECTED 5
+#define CAVC_CONTAINS_RESULT_INTERSECTED 4
 
 /**
  * Opaque type that wraps a [StaticAABB2DIndex].
@@ -65,9 +77,21 @@ typedef struct cavc_pline_boolean_o {
 } cavc_pline_boolean_o;
 
 /**
- * The cavc_pline_contains() function uses the boolean infrastructure internally.
+ * FFI representation of [PlineSelfIntersectOptions].
  */
-typedef struct cavc_pline_boolean_o cavc_pline_contains_o;
+typedef struct cavc_pline_self_intersect_o {
+  const struct cavc_aabbindex *pline_aabb_index;
+  double pos_equal_eps;
+  uint32_t include;
+} cavc_pline_self_intersect_o;
+
+/**
+ * FFI representation of [PlineBooleanOptions].
+ */
+typedef struct cavc_pline_contains_o {
+  const struct cavc_aabbindex *pline1_aabb_index;
+  double pos_equal_eps;
+} cavc_pline_contains_o;
 
 /**
  * Represents a polyline vertex holding x, y, and bulge.
@@ -86,6 +110,30 @@ typedef struct cavc_shape_offset_o {
   double offset_dist_eps;
   double slice_join_eps;
 } cavc_shape_offset_o;
+
+/**
+ * Create a new [cavc_pline_parallel_offset_o] object.
+ *
+ * # Safety
+ *
+ * `options` must point to a valid place in memory to be written.
+ */
+int32_t cavc_pline_parallel_offset_o_create(struct cavc_pline_parallel_offset_o **options);
+
+/**
+ * Free an existing [cavc_pline_parallel_offset_o] object.
+ *
+ * Nothing happens if `options` is null.
+ *
+ * Note that this does NOT free the aabb index that the [cavc_pline_parallel_offset_o] points to.
+ * You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_parallel_offset_o] object.
+ *
+ * # Safety
+ *
+ * `options` must be null or a valid cavc_pline_parallel_offset_o object that was created with [cavc_pline_parallel_offset_o_create] and
+ * has not already been freed.
+ */
+void cavc_pline_parallel_offset_o_f(struct cavc_pline_parallel_offset_o *options);
 
 /**
  * Write default option values to a [cavc_pline_parallel_offset_o].
@@ -113,6 +161,9 @@ int32_t cavc_pline_boolean_o_create(struct cavc_pline_boolean_o **options);
  *
  * Nothing happens if `options` is null.
  *
+ * Note that this does NOT free the aabb index that the [cavc_pline_boolean_o] points to.
+ * You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_boolean_o] object.
+ *
  * # Safety
  *
  * `options` must be null or a valid cavc_pline_boolean_o object that was created with [cavc_pline_boolean_o_create] and
@@ -133,25 +184,64 @@ void cavc_pline_boolean_o_f(struct cavc_pline_boolean_o *options);
 int32_t cavc_pline_boolean_o_init(struct cavc_pline_boolean_o *options);
 
 /**
+ * Create a new [cavc_pline_self_intersect_o] object.
+ *
+ * # Safety
+ *
+ * `options` must point to a valid place in memory to be written.
+ */
+int32_t cavc_pline_self_intersect_o_create(struct cavc_pline_self_intersect_o **options);
+
+/**
+ * Free an existing [cavc_pline_self_intersect_o] object.
+ *
+ * Nothing happens if `options` is null.
+ *
+ * Note that this does NOT free the aabb index that the [cavc_pline_self_intersect_o] points to.
+ * You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_self_intersect_o] object.
+ *
+ * # Safety
+ *
+ * `options` must be null or a valid cavc_pline_self_intersect_o object that was created with [cavc_pline_self_intersect_o_create] and
+ * has not already been freed.
+ */
+void cavc_pline_self_intersect_o_f(struct cavc_pline_self_intersect_o *options);
+
+/**
+ * Write default option values to a [cavc_pline_self_intersect_o].
+ *
+ * ## Specific Error Codes
+ * * 1 = `options` is null.
+ *
+ * # Safety
+ *
+ * `options` must point to a valid place in memory to be written.
+ */
+int32_t cavc_pline_self_intersect_o_init(struct cavc_pline_self_intersect_o *options);
+
+/**
  * Create a new [cavc_pline_contains_o] object.
  *
  * # Safety
  *
  * `options` must point to a valid place in memory to be written.
  */
-int32_t cavc_pline_contains_o_create(cavc_pline_contains_o **options);
+int32_t cavc_pline_contains_o_create(struct cavc_pline_contains_o **options);
 
 /**
  * Free an existing [cavc_pline_contains_o] object.
  *
  * Nothing happens if `options` is null.
  *
+ * Note that this does NOT free the aabb index that the [cavc_pline_contains_o] points to.
+ * You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_contains_o] object.
+ *
  * # Safety
  *
  * `options` must be null or a valid cavc_pline_contains_o object that was created with [cavc_pline_contains_o_create] and
  * has not already been freed.
  */
-void cavc_pline_contains_o_f(cavc_pline_contains_o *options);
+void cavc_pline_contains_o_f(struct cavc_pline_contains_o *options);
 
 /**
  * Write default option values to a [cavc_pline_contains_o].
@@ -163,7 +253,7 @@ void cavc_pline_contains_o_f(cavc_pline_contains_o *options);
  *
  * `options` must point to a valid place in memory to be written.
  */
-int32_t cavc_pline_contains_o_init(cavc_pline_contains_o *options);
+int32_t cavc_pline_contains_o_init(struct cavc_pline_contains_o *options);
 
 /**
  * Create a new polyline object.
@@ -634,6 +724,24 @@ int32_t cavc_pline_boolean(const struct cavc_pline *pline1,
                            const struct cavc_plinelist **neg_plines);
 
 /**
+ * Wraps [PlineSource::scan_for_self_intersection_opt].
+ *
+ * `options` is allowed to be null (default options will be used).
+ *
+ * ## Specific Error Codes
+ * * 1 = `pline1` is null.
+ *
+ * # Safety
+ *
+ * `pline` must be null or a valid cavc_pline object that was created with
+ * [cavc_pline_create] and has not been freed.
+ * `is_self_intersecting` must point to a valid place in memory to be written.
+ */
+int32_t cavc_pline_scan_for_self_intersection(const struct cavc_pline *pline,
+                                              const struct cavc_pline_self_intersect_o *options,
+                                              uint8_t *is_self_intersecting);
+
+/**
  * Wraps [PlineSource::contains_opt].
  *
  * `options` is allowed to be null (default options will be used).
@@ -649,6 +757,10 @@ int32_t cavc_pline_boolean(const struct cavc_pline *pline1,
  * ## Specific Error Codes
  * * 1 = `pline1` and/or `pline2` is null. In case of an error, if result is not null it will be set to CAVC_CONTAINS_RESULT_INVALID_INPUT.
  *
+ * Caution: Polylines with self-intersections may generate unexpected results.
+ * Use cavc_pline_scan_for_self_intersection() to find and reject self-intersecting polylines
+ * if this is a possibility for your input data.
+ *
  * # Safety
  *
  * `pline1` and `pline2` must each be null or a valid cavc_pline object that was created with
@@ -657,7 +769,7 @@ int32_t cavc_pline_boolean(const struct cavc_pline *pline1,
  */
 int32_t cavc_pline_contains(const struct cavc_pline *pline1,
                             const struct cavc_pline *pline2,
-                            const cavc_pline_contains_o *options,
+                            const struct cavc_pline_contains_o *options,
                             uint32_t *result);
 
 /**

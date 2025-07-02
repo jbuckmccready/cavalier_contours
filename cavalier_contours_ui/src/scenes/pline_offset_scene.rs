@@ -7,10 +7,12 @@ use cavalier_contours::{
         },
     },
 };
-use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, Slider, Ui, Vec2};
+use eframe::egui::{CentralPanel, Rect, ScrollArea, Slider, Ui, Vec2};
 use egui::Id;
 use egui_plot::{Plot, PlotPoint};
+use std::borrow::Cow;
 
+use crate::editor::PolylineEditor;
 use crate::plotting::{PlinePlotData, PlinesPlotItem, RawPlineOffsetSegsPlotItem};
 
 use super::{
@@ -18,10 +20,12 @@ use super::{
 };
 
 pub struct PlineOffsetScene {
-    pline: Polyline,
+    // NOTE: just one polyline but Vec used for passing into editor
+    pline: Vec<Polyline>,
     mode: Mode,
     offset: f64,
     interaction_state: InteractionState,
+    polyline_editor: PolylineEditor,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -82,6 +86,10 @@ impl Default for PlineOffsetScene {
             (28.0, 12.0, 0.5),
         ];
 
+        let pline = vec![pline];
+        let mut polyline_editor = PolylineEditor::single("Vertex Editor");
+        polyline_editor.initialize_with_polylines(pline.clone());
+
         Self {
             pline,
             mode: Mode::Offset {
@@ -94,6 +102,7 @@ impl Default for PlineOffsetScene {
                 dragging: false,
                 zoom_to_fit: false,
             },
+            polyline_editor,
         }
     }
 }
@@ -109,12 +118,21 @@ impl Scene for PlineOffsetScene {
             mode,
             offset,
             interaction_state,
+            polyline_editor,
         } = self;
 
-        controls_panel(ui, mode, offset, interaction_state);
+        controls_panel(ui, mode, offset, interaction_state, polyline_editor);
 
         interaction_state.zoom_to_fit |= init;
-        plot_area(ui, settings, pline, mode, offset, interaction_state);
+        plot_area(
+            ui,
+            settings,
+            pline,
+            mode,
+            offset,
+            interaction_state,
+            polyline_editor,
+        );
     }
 }
 
@@ -123,19 +141,23 @@ fn controls_panel(
     mode: &mut Mode,
     offset: &mut f64,
     interaction_state: &mut InteractionState,
+    polyline_editor: &mut PolylineEditor,
 ) {
     controls_side_panel("pline_offset_controls")
         .show_inside(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
 
-                egui::ComboBox::from_label("Mode")
-                    .selected_text(mode.label())
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(mode, Mode::offset_default(), "Offset").on_hover_text("Generate parallel offsets");
-                        ui.selectable_value(mode, Mode::RawOffset, "Raw Offset").on_hover_text("Generate single raw offset polyline");
-                        ui.selectable_value(mode, Mode::RawOffsetSegments, "Raw Offset Segments").on_hover_text("Generate the raw offset polyline segments");
-                    });
+                ui.horizontal(|ui| {
+                    ui.label("Mode:");
+                    egui::ComboBox::from_id_salt("mode_combo")
+                        .selected_text(mode.label())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(mode, Mode::offset_default(), Mode::offset_default().label()).on_hover_text("Generate parallel offsets");
+                            ui.selectable_value(mode, Mode::RawOffset, Mode::RawOffset.label()).on_hover_text("Generate single raw offset polyline");
+                            ui.selectable_value(mode, Mode::RawOffsetSegments, Mode::RawOffsetSegments.label()).on_hover_text("Generate the raw offset polyline segments");
+                        });
+                });
 
                 // state used to fill available width within the scroll area
                 let last_others_width_id = Id::new("panel_width_state");
@@ -184,6 +206,11 @@ fn controls_panel(
                     .on_hover_text("Zoom to fit contents")
                     .clicked();
 
+                // Table editor button
+                if ui.button("Edit Vertexes").on_hover_text("Edit the polyline vertex data").clicked() {
+                    polyline_editor.show_window();
+                }
+
                 ui.data_mut(|data| {
                     data.insert_temp(
                         last_others_width_id,
@@ -197,16 +224,22 @@ fn controls_panel(
 fn plot_area(
     ui: &mut Ui,
     settings: &SceneSettings,
-    pline: &mut Polyline,
+    plines: &mut Vec<Polyline>,
     mode: &Mode,
     offset: &f64,
     interaction_state: &mut InteractionState,
+    polyline_editor: &mut PolylineEditor,
 ) {
+    let colors = settings.colors(ui.ctx());
     let InteractionState {
         grabbed_vertex,
         dragging,
         zoom_to_fit,
     } = interaction_state;
+
+    let pline = plines
+        .get_mut(0)
+        .expect("PlineOffsetScene should always have at least one polyline");
 
     // TODO: cache scene state to only update when necessary due to modified polyline or offset
     let scene_state = match mode {
@@ -275,9 +308,8 @@ fn plot_area(
 
             plot_ui.add(
                 PlinesPlotItem::new(PlinePlotData::new(pline))
-                    .stroke_color(Color32::GOLD)
-                    //.fill_color(Color32::LIGHT_YELLOW)
-                    .vertex_color(Color32::LIGHT_GREEN),
+                    .stroke_color(colors.accent_stroke)
+                    .vertex_color(colors.vertex_color),
             );
 
             // TODO: color pickers
@@ -285,9 +317,9 @@ fn plot_area(
                 SceneState::Offset { all_offset_plines } => {
                     for (pl, same_orientation) in all_offset_plines.iter() {
                         let color = if *same_orientation {
-                            Color32::LIGHT_BLUE
+                            colors.primary_stroke
                         } else {
-                            Color32::LIGHT_RED
+                            colors.secondary_stroke
                         };
 
                         plot_ui
@@ -297,14 +329,14 @@ fn plot_area(
                 SceneState::RawOffset { raw_offset_pline } => {
                     plot_ui.add(
                         PlinesPlotItem::new(PlinePlotData::new(raw_offset_pline))
-                            .stroke_color(Color32::LIGHT_GRAY),
+                            .stroke_color(colors.primary_stroke),
                     );
                 }
                 SceneState::RawOffsetSegments { segments } => {
                     plot_ui.add(
                         RawPlineOffsetSegsPlotItem::new(&segments[..])
-                            .color(Color32::MAGENTA)
-                            .collapsed_color(Color32::LIGHT_RED),
+                            .color(colors.raw_offset_color)
+                            .collapsed_color(colors.collapsed_color),
                     );
                 }
             };
@@ -314,6 +346,9 @@ fn plot_area(
             }
         });
     });
+
+    // Show table editor window if requested
+    polyline_editor.ui_show(ui.ctx(), plines, &colors);
 }
 
 fn build_offset(
@@ -327,6 +362,13 @@ fn build_offset(
         handle_self_intersects: *handle_self_intersects,
         ..Default::default()
     };
+
+    // remove redundant vertices if necessary to avoid any problems with offsetting (sanitizing
+    // input)
+    let mut pline = Cow::Borrowed(pline);
+    if let Some(pl) = pline.remove_redundant(offset_opt.pos_equal_eps) {
+        pline = Cow::Owned(pl);
+    }
 
     let orientation = pline.orientation();
 

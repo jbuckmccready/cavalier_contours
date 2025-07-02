@@ -469,11 +469,6 @@ where
         &constructed_index1
     };
 
-    // last polyline segment starting indexes for open polylines (used to check when skipping
-    // intersects at end points of polyline segments)
-    let open1_last_idx = pline1.vertex_count() - 2;
-    let open2_last_idx = pline2.vertex_count() - 2;
-
     for (i2, j2) in pline2.iter_segment_indexes() {
         let p2v1 = pline2.at(i2);
         let p2v2 = pline2.at(j2);
@@ -482,33 +477,19 @@ where
             let p1v1 = pline1.at(i1);
             let p1v2 = pline1.at(j1);
 
-            let skip_intr_at_end = |intr: Vector2<T>| -> bool {
-                // skip intersect at end point of pline segment since it will be found again by the
-                // segment with it as its start point (unless the polyline is open and we're looking
-                // at the very end point of the polyline, then include the intersect)
-                (p1v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
-                    && (pline1.is_closed() || i1 != open1_last_idx))
-                    || (p2v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
-                        && (pline2.is_closed() || i2 != open2_last_idx))
-            };
-
             match pline_seg_intr(p1v1, p1v2, p2v1, p2v2, pos_equal_eps) {
                 PlineSegIntr::NoIntersect => {}
-                PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
-                    if !skip_intr_at_end(point) {
-                        found_intersection = true;
-                        return aabb_index::Control::Break(());
-                    }
+                PlineSegIntr::TangentIntersect { point: _ }
+                | PlineSegIntr::OneIntersect { point: _ } => {
+                    found_intersection = true;
+                    return aabb_index::Control::Break(());
                 }
-                PlineSegIntr::TwoIntersects { point1, point2 } => {
-                    if !skip_intr_at_end(point1) {
-                        found_intersection = true;
-                        return aabb_index::Control::Break(());
-                    }
-                    if !skip_intr_at_end(point2) {
-                        found_intersection = true;
-                        return aabb_index::Control::Break(());
-                    }
+                PlineSegIntr::TwoIntersects {
+                    point1: _,
+                    point2: _,
+                } => {
+                    found_intersection = true;
+                    return aabb_index::Control::Break(());
                 }
                 PlineSegIntr::OverlappingLines {
                     point1: _,

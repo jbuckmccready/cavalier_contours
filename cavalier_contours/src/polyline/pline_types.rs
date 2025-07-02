@@ -92,8 +92,54 @@ where
 }
 
 // The containment functions use the same underlying mechinsims as the boolean functions.
-pub use BooleanResultInfo as PlineContainmentResult;
-pub use PlineBooleanOptions as PlineContainmentOptions;
+/// Information about what happened during the boolean operation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlineContainmentResult {
+    /// Input was not valid to perform containment test operation.
+    InvalidInput,
+    /// Pline1 entirely inside of pline2 with no intersects.
+    Pline1InsidePline2,
+    /// Pline2 entirely inside of pline1 with no intersects.
+    Pline2InsidePline1,
+    /// Pline1 is disjoint from pline2 (no intersects and neither polyline is inside of the other).
+    Disjoint,
+    /// Pline1 intersects with pline2 in at least one place.
+    Intersected,
+}
+
+#[derive(Debug)]
+pub struct PlineContainmentOptions<'a, T = f64>
+where
+    T: Real,
+{
+    /// Spatial index for `self`
+    pub pline1_aabb_index: Option<&'a StaticAABB2DIndex<T>>,
+    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    pub pos_equal_eps: T,
+}
+
+impl<T> PlineContainmentOptions<'_, T>
+where
+    T: Real,
+{
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            pline1_aabb_index: None,
+            pos_equal_eps: T::from(1e-5).unwrap(),
+        }
+    }
+}
+
+impl<T> Default for PlineContainmentOptions<'_, T>
+where
+    T: Real,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Boolean operation to apply to polylines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -44,8 +44,7 @@ fn run_same_boolean_test(
 
         assert!(
             passed,
-            "boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 
@@ -55,8 +54,7 @@ fn run_same_boolean_test(
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
-            "boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 
@@ -81,8 +79,7 @@ fn run_same_boolean_test(
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
         assert!(
             passed,
-            "disjoint test failed, boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "disjoint test failed, boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 
@@ -94,8 +91,7 @@ fn run_same_boolean_test(
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
-            "disjoint test failed, boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "disjoint test failed, boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 
@@ -110,8 +106,7 @@ fn run_same_boolean_test(
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
         assert!(
             passed,
-            "disjoint test failed, boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "disjoint test failed, boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 
@@ -126,8 +121,7 @@ fn run_same_boolean_test(
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
         assert!(
             passed,
-            "disjoint test failed, boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "disjoint test failed, boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 
@@ -151,8 +145,7 @@ fn run_same_boolean_test(
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
         assert!(
             passed,
-            "enclosed test failed, boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "enclosed test failed, boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 
@@ -170,8 +163,7 @@ fn run_same_boolean_test(
             property_sets_match_abs_a(&result_properties, expected) && result.neg_plines.is_empty();
         assert!(
             passed,
-            "enclosed test failed, boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "enclosed test failed, boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 
@@ -191,8 +183,7 @@ fn run_same_boolean_test(
             && property_sets_match_abs_a(&neg_pline_result_properties, neg_expected);
         assert!(
             passed,
-            "enclosed test failed, boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "enclosed test failed, boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 
@@ -207,8 +198,7 @@ fn run_same_boolean_test(
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();
         assert!(
             passed,
-            "enclosed test failed, boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "enclosed test failed, boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 
@@ -228,8 +218,7 @@ fn run_same_boolean_test(
             && property_sets_match_abs_a(&neg_pline_result_properties, neg_expected);
         assert!(
             passed,
-            "enclosed test failed, boolean op: {:?}, modified state1: {:?}, modified state2: {:?}",
-            op, self1_state, self2_state
+            "enclosed test failed, boolean op: {op:?}, modified state1: {self1_state:?}, modified state2: {self2_state:?}"
         );
     }
 }
@@ -362,9 +351,7 @@ fn verify_slice_set(
 
     assert!(
         expected_properties.fuzzy_eq_eps(&stitched_properties, PlineProperties::PROP_CMP_EPS),
-        "slices stitched together do not match result polyline, expected: {:?}, actual: {:?}",
-        expected_properties,
-        stitched_properties
+        "slices stitched together do not match result polyline, expected: {expected_properties:?}, actual: {stitched_properties:?}"
     );
 }
 
@@ -401,11 +388,10 @@ fn run_pline_boolean_tests(
                     && property_sets_match_abs_a(&neg_set_result, neg_set_expected);
                 assert!(
                     passed,
-                    "property sets do not match\nop: {:?}\nstate1: {:?}\nstate2: {:?}",
-                    op, state1, state2
+                    "property sets do not match\nop: {op:?}\nstate1: {state1:?}\nstate2: {state2:?}"
                 );
 
-                println!("{:?}", op);
+                println!("{op:?}");
                 verify_all_slices(&modified_pline1, &modified_pline2, &result);
             }
         });

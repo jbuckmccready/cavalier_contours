@@ -882,10 +882,10 @@ where
                 pos_equal_eps,
             );
 
-            if let Some(s) = slice {
-                if slice_is_valid(&s, &mut query_stack) {
-                    result.push(s);
-                }
+            if let Some(s) = slice
+                && slice_is_valid(&s, &mut query_stack)
+            {
+                result.push(s);
             }
         }
 
@@ -909,10 +909,10 @@ where
             pos_equal_eps,
         );
 
-        if let Some(s) = slice {
-            if slice_is_valid(&s, &mut query_stack) {
-                result.push(s);
-            }
+        if let Some(s) = slice
+            && slice_is_valid(&s, &mut query_stack)
+        {
+            result.push(s);
         }
     }
 
@@ -1253,10 +1253,10 @@ where
             pos_equal_eps,
         );
 
-        if let Some(s) = slice {
-            if slice_is_valid(&s, &mut query_stack) {
-                result.push(s);
-            }
+        if let Some(s) = slice
+            && slice_is_valid(&s, &mut query_stack)
+        {
+            result.push(s);
         }
     }
 
@@ -1272,10 +1272,10 @@ where
                 pos_equal_eps,
             );
 
-            if let Some(s) = slice {
-                if slice_is_valid(&s, &mut query_stack) {
-                    result.push(s);
-                }
+            if let Some(s) = slice
+                && slice_is_valid(&s, &mut query_stack)
+            {
+                result.push(s);
             }
         }
 
@@ -1298,10 +1298,10 @@ where
                     raw_offset_polyline.vertex_count() - 1,
                     pos_equal_eps,
                 );
-                if let Some(s) = slice {
-                    if slice_is_valid(&s, &mut query_stack) {
-                        result.push(s);
-                    }
+                if let Some(s) = slice
+                    && slice_is_valid(&s, &mut query_stack)
+                {
+                    result.push(s);
                 }
                 return result;
             };
@@ -1315,10 +1315,10 @@ where
             pos_equal_eps,
         );
 
-        if let Some(s) = slice {
-            if slice_is_valid(&s, &mut query_stack) {
-                result.push(s);
-            }
+        if let Some(s) = slice
+            && slice_is_valid(&s, &mut query_stack)
+        {
+            result.push(s);
         }
     }
 

@@ -71,4 +71,15 @@ mod test_pline_contains {
         assert_eq!(bad1.contains(&bad2), InvalidInput);
         assert_eq!(bad2.contains(&bad1), InvalidInput);
     }
+
+    #[test]
+    fn test_self_intersection_scan() {
+        let hourglass = pline_closed![
+            (0.0, 2.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (1.0, 2.0, 0.0)
+        ];
+        assert!(hourglass.scan_for_self_intersection());
+    }
 }
