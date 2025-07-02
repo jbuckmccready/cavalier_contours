@@ -474,11 +474,6 @@ pub unsafe extern "C" fn cavc_pline_contains_o_create(
 pub unsafe extern "C" fn cavc_pline_contains_o_f(options: *mut cavc_pline_contains_o) {
     if !options.is_null() {
         unsafe {
-            if !(*options).pline1_aabb_index.is_null() {
-                drop(Box::from_raw(
-                    (*options).pline1_aabb_index as *mut cavc_aabbindex,
-                ));
-            }
             drop(Box::from_raw(options));
         }
     }

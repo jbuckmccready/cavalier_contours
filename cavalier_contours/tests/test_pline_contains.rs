@@ -65,7 +65,6 @@ mod test_pline_contains {
     #[test]
     fn test_invalid() {
         let bad1 = pline_open![(0.0, 0.0, 0.0),];
-
         let bad2 = pline_open![(-2.0, -2.0, 0.0),];
 
         assert_eq!(bad1.contains(&bad2), InvalidInput);
