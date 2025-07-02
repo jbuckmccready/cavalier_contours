@@ -94,7 +94,7 @@ where
 // The containment functions use the same underlying mechinsims as the boolean functions.
 /// Information about what happened during the boolean operation.
 #[derive(Debug, Clone, PartialEq)]
-pub enum PlineContainmentResult {
+pub enum PlineContainsResult {
     /// Input was not valid to perform containment test operation.
     InvalidInput,
     /// Pline1 entirely inside of pline2 with no intersects.
@@ -108,7 +108,7 @@ pub enum PlineContainmentResult {
 }
 
 #[derive(Debug)]
-pub struct PlineContainmentOptions<'a, T = f64>
+pub struct PlineContainsOptions<'a, T = f64>
 where
     T: Real,
 {
@@ -118,7 +118,7 @@ where
     pub pos_equal_eps: T,
 }
 
-impl<T> PlineContainmentOptions<'_, T>
+impl<T> PlineContainsOptions<'_, T>
 where
     T: Real,
 {
@@ -131,7 +131,7 @@ where
     }
 }
 
-impl<T> Default for PlineContainmentOptions<'_, T>
+impl<T> Default for PlineContainsOptions<'_, T>
 where
     T: Real,
 {
@@ -187,7 +187,7 @@ where
 }
 
 /// Information about what happened during the boolean operation.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum BooleanResultInfo {
     /// Input was not valid to perform boolean operation.
     InvalidInput,

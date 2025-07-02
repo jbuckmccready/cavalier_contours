@@ -1,7 +1,7 @@
 mod test_utils;
 
 mod test_pline_contains {
-    use cavalier_contours::polyline::PlineContainmentResult::*;
+    use cavalier_contours::polyline::PlineContainsResult::*;
     use cavalier_contours::polyline::*;
     use cavalier_contours::{pline_closed, pline_open};
 

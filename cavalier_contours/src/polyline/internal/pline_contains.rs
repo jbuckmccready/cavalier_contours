@@ -1,5 +1,5 @@
 use crate::polyline::{
-    FindIntersectsOptions, PlineContainmentOptions, PlineContainmentResult, PlineSource,
+    FindIntersectsOptions, PlineContainsOptions, PlineContainsResult, PlineSource,
     internal::pline_intersects::scan_for_intersection,
 };
 
@@ -15,8 +15,8 @@ use crate::core::{math::Vector2, traits::Real};
 pub fn polyline_contains<P, R, T>(
     pline1: &P,
     pline2: &R,
-    options: &PlineContainmentOptions<T>,
-) -> PlineContainmentResult
+    options: &PlineContainsOptions<T>,
+) -> PlineContainsResult
 where
     P: PlineSource<Num = T> + ?Sized,
     R: PlineSource<Num = T> + ?Sized,
@@ -27,7 +27,7 @@ where
         || pline2.vertex_count() < 2
         || !pline2.is_closed()
     {
-        return PlineContainmentResult::InvalidInput;
+        return PlineContainsResult::InvalidInput;
     }
     let pos_equal_eps = options.pos_equal_eps;
     let constructed_index;
@@ -54,12 +54,12 @@ where
             pos_equal_eps,
         },
     ) {
-        PlineContainmentResult::Intersected
+        PlineContainsResult::Intersected
     } else if is_pline2_in_pline1() {
-        PlineContainmentResult::Pline2InsidePline1
+        PlineContainsResult::Pline2InsidePline1
     } else if is_pline1_in_pline2() {
-        PlineContainmentResult::Pline1InsidePline2
+        PlineContainsResult::Pline1InsidePline2
     } else {
-        PlineContainmentResult::Disjoint
+        PlineContainsResult::Disjoint
     }
 }

@@ -3,7 +3,7 @@
 use cavalier_contours::{
     core::math::Vector2,
     polyline::{
-        BooleanOp, PlineBooleanOptions, PlineContainmentOptions, PlineOffsetOptions,
+        BooleanOp, PlineBooleanOptions, PlineContainsOptions, PlineOffsetOptions,
         PlineSelfIntersectOptions, PlineSource, PlineSourceMut, PlineVertex, Polyline,
         SelfIntersectsInclude,
     },
@@ -407,7 +407,7 @@ pub unsafe extern "C" fn cavc_pline_self_intersect_o_init(
     })
 }
 
-/// FFI representation of [PlineBooleanOptions].
+/// FFI representation of [PlineContainsOptions].
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_pline_contains_o {
@@ -421,9 +421,9 @@ impl cavc_pline_contains_o {
     /// # Safety
     ///
     /// `pline1_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
-    pub unsafe fn to_internal(&self) -> PlineContainmentOptions<f64> {
+    pub unsafe fn to_internal(&self) -> PlineContainsOptions<f64> {
         let pline1_aabb_index = unsafe { self.pline1_aabb_index.as_ref().map(|w| &w.0) };
-        PlineContainmentOptions {
+        PlineContainsOptions {
             pline1_aabb_index,
             pos_equal_eps: self.pos_equal_eps,
         }
@@ -432,7 +432,7 @@ impl cavc_pline_contains_o {
 
 impl Default for cavc_pline_contains_o {
     fn default() -> Self {
-        let d = PlineContainmentOptions::default();
+        let d = PlineContainsOptions::default();
         Self {
             pline1_aabb_index: std::ptr::null(),
             pos_equal_eps: d.pos_equal_eps,
@@ -1496,7 +1496,7 @@ pub unsafe extern "C" fn cavc_pline_scan_for_self_intersection(
     })
 }
 
-/// FFI Representation of PlineContainmentResult enum
+/// FFI Representation of PlineContainsResult enum
 pub const CAVC_CONTAINS_RESULT_INVALID_INPUT: u32 = 0;
 pub const CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2: u32 = 1;
 pub const CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1: u32 = 2;

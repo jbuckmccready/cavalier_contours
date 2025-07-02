@@ -13,7 +13,7 @@
 #define CAVC_SELF_INTERSECTS_INCLUDE_GLOBAL 2
 
 /**
- * FFI Representation of PlineContainmentResult enum
+ * FFI Representation of PlineContainsResult enum
  */
 #define CAVC_CONTAINS_RESULT_INVALID_INPUT 0
 
@@ -86,7 +86,7 @@ typedef struct cavc_pline_self_intersect_o {
 } cavc_pline_self_intersect_o;
 
 /**
- * FFI representation of [PlineBooleanOptions].
+ * FFI representation of [PlineContainsOptions].
  */
 typedef struct cavc_pline_contains_o {
   const struct cavc_aabbindex *pline1_aabb_index;

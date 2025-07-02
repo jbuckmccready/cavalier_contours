@@ -12,7 +12,7 @@ use crate::{
         traits::{ControlFlow, FuzzyEq, FuzzyOrd, Real},
     },
     polyline::{
-        PlineContainmentOptions, PlineContainmentResult, PlineIntersect, SelfIntersectsInclude,
+        PlineContainsOptions, PlineContainsResult, PlineIntersect, SelfIntersectsInclude,
         seg_arc_radius_and_center,
     },
 };
@@ -1637,7 +1637,7 @@ pub trait PlineSource {
     /// # use cavalier_contours::core::traits::*;
     /// # use cavalier_contours::polyline::*;
     /// # use cavalier_contours::pline_closed;
-    /// # use cavalier_contours::polyline::PlineContainmentResult::*;
+    /// # use cavalier_contours::polyline::PlineContainsResult::*;
     /// let rectangle = pline_closed![
     ///     (-2.0, -2.0, 0.0),
     ///     (2.0, -2.0, 0.0),
@@ -1654,7 +1654,7 @@ pub trait PlineSource {
     /// // since the triangle is outside the rectangle, and not containing it, we get back Disjoint
     /// assert_eq!(rectangle.contains(&triangle), Disjoint);
     /// ```
-    fn contains<P>(&self, other: &P) -> PlineContainmentResult
+    fn contains<P>(&self, other: &P) -> PlineContainsResult
     where
         P: PlineSource<Num = Self::Num> + ?Sized,
     {
@@ -1676,7 +1676,7 @@ pub trait PlineSource {
     /// # use cavalier_contours::core::traits::*;
     /// # use cavalier_contours::polyline::*;
     /// # use cavalier_contours::pline_closed;
-    /// # use cavalier_contours::polyline::{PlineContainmentOptions, PlineContainmentResult::*};
+    /// # use cavalier_contours::polyline::{PlineContainsOptions, PlineContainsResult::*};
     /// let rectangle = pline_closed![
     ///     (-2.0, -2.0, 0.0),
     ///     (2.0, -2.0, 0.0),
@@ -1687,7 +1687,7 @@ pub trait PlineSource {
     /// let triangle = pline_closed![(3.1340, 4.5, 0.0), (4.0, 3.0, 0.0), (4.8660, 4.5, 0.0)];
     ///
     /// let rectangle_aabb_index = rectangle.create_approx_aabb_index();
-    /// let rectangle_options = PlineContainmentOptions {
+    /// let rectangle_options = PlineContainsOptions {
     ///     // passing in existing spatial index of the polyline segments for the first polyline
     ///     pline1_aabb_index: Some(&rectangle_aabb_index),
     ///     ..Default::default()
@@ -1696,7 +1696,7 @@ pub trait PlineSource {
     /// assert_eq!(rectangle.contains_opt(&circle, &rectangle_options), Pline2InsidePline1);
     ///
     /// let circle_aabb_index = circle.create_approx_aabb_index();
-    /// let circle_options = PlineContainmentOptions {
+    /// let circle_options = PlineContainsOptions {
     ///     // passing in existing spatial index of the polyline segments for the first polyline
     ///     pline1_aabb_index: Some(&circle_aabb_index),
     ///     ..Default::default()
@@ -1711,8 +1711,8 @@ pub trait PlineSource {
     fn contains_opt<P>(
         &self,
         other: &P,
-        options: &PlineContainmentOptions<Self::Num>,
-    ) -> PlineContainmentResult
+        options: &PlineContainsOptions<Self::Num>,
+    ) -> PlineContainsResult
     where
         P: PlineSource<Num = Self::Num> + ?Sized,
     {
