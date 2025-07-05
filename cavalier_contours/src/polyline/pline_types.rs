@@ -6,7 +6,7 @@ use crate::{
         math::Vector2,
         traits::{ControlFlow, Real},
     },
-    polyline::{PlineCreation, PlineSource, ViewDataValidation},
+    polyline::{PlineCreation, PlineSegIntr, PlineSource, ViewDataValidation},
 };
 use static_aabb2d_index::StaticAABB2DIndex;
 
@@ -487,6 +487,47 @@ where
     #[inline]
     fn visit_overlapping_intr(&mut self, intr: PlineOverlappingIntersect<T>) -> C {
         self(PlineIntersect::Overlapping(intr))
+    }
+}
+
+// Simple struct that bundles up the context information for visiting intersections of two polylines.
+// Note: two of these are used when making a visit, one for each polyline.
+#[derive(Default, Copy, Clone)]
+pub struct PlineIntersectVisitContext<T> {
+    pub vertex_index: usize,
+    pub v1: PlineVertex<T>,
+    pub v2: PlineVertex<T>,
+}
+
+/// Visitor trait used to visit intersections of two plines.
+pub trait TwoPlinesIntersectVisitor<T, C>
+where
+    T: Real,
+    C: ControlFlow,
+{
+    /// Visit the intersection.
+    fn visit(
+        &mut self,
+        intersection: PlineSegIntr<T>,
+        pline1_context: &PlineIntersectVisitContext<T>,
+        pline2_context: &PlineIntersectVisitContext<T>,
+    ) -> C;
+}
+
+impl<T, C, F> TwoPlinesIntersectVisitor<T, C> for F
+where
+    T: Real,
+    C: ControlFlow,
+    F: FnMut(PlineSegIntr<T>, &PlineIntersectVisitContext<T>, &PlineIntersectVisitContext<T>) -> C,
+{
+    #[inline]
+    fn visit(
+        &mut self,
+        intersection: PlineSegIntr<T>,
+        pline1_context: &PlineIntersectVisitContext<T>,
+        pline2_context: &PlineIntersectVisitContext<T>,
+    ) -> C {
+        self(intersection, pline1_context, pline2_context)
     }
 }
 
