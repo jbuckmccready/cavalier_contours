@@ -201,7 +201,7 @@ fn controls_panel(
                     .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
                     .show(ui, |ui| {
                         ui.label("Offset").on_hover_text("Parallel offset distance, positive value will offset to the left of curve direction");
-                        ui.add(Slider::new(offset, -100.0..=100.0).step_by(0.5));
+                        ui.add(Slider::new(offset, -100.0..=100.0));
                     });
 
                 if *mode == Mode::Offset {
