@@ -519,20 +519,11 @@ where
                        _: &PlineIntersectVisitContext<T>| {
         match intersection {
             PlineSegIntr::NoIntersect => aabb_index::Control::Continue,
-            PlineSegIntr::TangentIntersect { point: _ }
-            | PlineSegIntr::OneIntersect { point: _ }
-            | PlineSegIntr::TwoIntersects {
-                point1: _,
-                point2: _,
-            }
-            | PlineSegIntr::OverlappingLines {
-                point1: _,
-                point2: _,
-            }
-            | PlineSegIntr::OverlappingArcs {
-                point1: _,
-                point2: _,
-            } => {
+            PlineSegIntr::TangentIntersect { .. }
+            | PlineSegIntr::OneIntersect { .. }
+            | PlineSegIntr::TwoIntersects { .. }
+            | PlineSegIntr::OverlappingLines { .. }
+            | PlineSegIntr::OverlappingArcs { .. } => {
                 found_intersection = true;
                 aabb_index::Control::Break(())
             }
