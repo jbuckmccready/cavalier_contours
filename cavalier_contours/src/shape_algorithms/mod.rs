@@ -523,7 +523,31 @@ where
                               query_stack: &mut Vec<usize>|
          -> bool {
             let slice_view = v_data.view(offset_loop);
-            let midpoint = seg_midpoint(slice_view.at(0), slice_view.at(1));
+            // ideally we don't want a segment created by the intersection point as it may be very
+            // short with the midpoint essentially on top of the intersection point which leads to
+            // the slice being considered valid when it shouldn't be (distance from intersection
+            // point to polyline is always equal to the offset distance)
+            //
+            // to help with this we first check if we can use a segment that is not created by the
+            // intersection point (index not at start or end of the slice)
+            // if that's not possible then we check all both segments midpoints of the slice
+
+            let vertex_count = slice_view.vertex_count();
+            let (midpoint1, midpoint2) = if vertex_count > 3 {
+                // if slice has more than 2 segments then we can use segment not created by
+                // an intersection (arbitrarily picking segment from index 1 to index 2)
+                (seg_midpoint(slice_view.at(1), slice_view.at(2)), None)
+            } else if vertex_count == 3 {
+                // if slice has exactly 3 points then we test both segment midpoints
+                (
+                    seg_midpoint(slice_view.at(0), slice_view.at(1)),
+                    Some(seg_midpoint(slice_view.at(1), slice_view.at(2))),
+                )
+            } else {
+                // if slice has only 2 points then we can only use the midpoint of the segment
+                (seg_midpoint(slice_view.at(0), slice_view.at(1)), None)
+            };
+
             // loop through input polylines and check if slice is too close (skipping parent
             // polyline since it's never too close)
             for input_loop_idx in
@@ -539,12 +563,26 @@ where
                     &parent_loop.polyline,
                     offset,
                     &parent_loop.spatial_index,
-                    midpoint,
+                    midpoint1,
                     query_stack,
                     pos_equal_eps,
                     offset_dist_eps,
                 ) {
                     return false;
+                }
+
+                if let Some(midpoint2) = midpoint2 {
+                    if !point_valid_for_offset(
+                        &parent_loop.polyline,
+                        offset,
+                        &parent_loop.spatial_index,
+                        midpoint2,
+                        query_stack,
+                        pos_equal_eps,
+                        offset_dist_eps,
+                    ) {
+                        return false;
+                    }
                 }
             }
             true
