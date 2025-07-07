@@ -6,7 +6,7 @@ use crate::{
         math::Vector2,
         traits::{ControlFlow, Real},
     },
-    polyline::{PlineCreation, PlineSource, ViewDataValidation},
+    polyline::{PlineCreation, PlineSegIntr, PlineSource, ViewDataValidation},
 };
 use static_aabb2d_index::StaticAABB2DIndex;
 
@@ -91,8 +91,58 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// The containment functions use the same underlying mechinsims as the boolean functions.
+/// Information about what happened during the boolean operation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlineContainsResult {
+    /// Input was not valid to perform containment test operation.
+    InvalidInput,
+    /// Pline1 entirely inside of pline2 with no intersects.
+    Pline1InsidePline2,
+    /// Pline2 entirely inside of pline1 with no intersects.
+    Pline2InsidePline1,
+    /// Pline1 is disjoint from pline2 (no intersects and neither polyline is inside of the other).
+    Disjoint,
+    /// Pline1 intersects with pline2 in at least one place.
+    Intersected,
+}
+
+#[derive(Debug)]
+pub struct PlineContainsOptions<'a, T = f64>
+where
+    T: Real,
+{
+    /// Spatial index for `self`
+    pub pline1_aabb_index: Option<&'a StaticAABB2DIndex<T>>,
+    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    pub pos_equal_eps: T,
+}
+
+impl<T> PlineContainsOptions<'_, T>
+where
+    T: Real,
+{
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            pline1_aabb_index: None,
+            pos_equal_eps: T::from(1e-5).unwrap(),
+        }
+    }
+}
+
+impl<T> Default for PlineContainsOptions<'_, T>
+where
+    T: Real,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Boolean operation to apply to polylines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BooleanOp {
     /// Return the union of the polylines.
     Or,
@@ -437,6 +487,47 @@ where
     #[inline]
     fn visit_overlapping_intr(&mut self, intr: PlineOverlappingIntersect<T>) -> C {
         self(PlineIntersect::Overlapping(intr))
+    }
+}
+
+// Simple struct that bundles up the context information for visiting intersections of two polylines.
+// Note: two of these are used when making a visit, one for each polyline.
+#[derive(Default, Copy, Clone)]
+pub struct PlineIntersectVisitContext<T> {
+    pub vertex_index: usize,
+    pub v1: PlineVertex<T>,
+    pub v2: PlineVertex<T>,
+}
+
+/// Visitor trait used to visit intersections of two plines.
+pub trait TwoPlinesIntersectVisitor<T, C>
+where
+    T: Real,
+    C: ControlFlow,
+{
+    /// Visit the intersection.
+    fn visit(
+        &mut self,
+        intersect: PlineSegIntr<T>,
+        pline1_context: &PlineIntersectVisitContext<T>,
+        pline2_context: &PlineIntersectVisitContext<T>,
+    ) -> C;
+}
+
+impl<T, C, F> TwoPlinesIntersectVisitor<T, C> for F
+where
+    T: Real,
+    C: ControlFlow,
+    F: FnMut(PlineSegIntr<T>, &PlineIntersectVisitContext<T>, &PlineIntersectVisitContext<T>) -> C,
+{
+    #[inline]
+    fn visit(
+        &mut self,
+        intersect: PlineSegIntr<T>,
+        pline1_context: &PlineIntersectVisitContext<T>,
+        pline2_context: &PlineIntersectVisitContext<T>,
+    ) -> C {
+        self(intersect, pline1_context, pline2_context)
     }
 }
 

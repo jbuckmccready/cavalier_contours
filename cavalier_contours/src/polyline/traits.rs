@@ -4,13 +4,17 @@ use static_aabb2d_index::{
 
 use crate::{
     core::{
+        Control,
         math::{
             Vector2, angle, angle_from_bulge, bulge_from_angle, delta_angle, dist_squared, is_left,
             is_left_or_equal, point_on_circle,
         },
         traits::{ControlFlow, FuzzyEq, FuzzyOrd, Real},
     },
-    polyline::{SelfIntersectsInclude, seg_arc_radius_and_center},
+    polyline::{
+        PlineContainsOptions, PlineContainsResult, PlineIntersect, SelfIntersectsInclude,
+        TwoPlinesIntersectVisitor, seg_arc_radius_and_center,
+    },
 };
 
 use super::{
@@ -19,8 +23,10 @@ use super::{
     PlineSelfIntersectOptions, PlineVertex, arc_seg_bounding_box,
     internal::{
         pline_boolean::polyline_boolean,
+        pline_contains::polyline_contains,
         pline_intersects::{
-            find_intersects, visit_global_self_intersects, visit_local_self_intersects,
+            find_intersects, visit_global_self_intersects, visit_intersects,
+            visit_local_self_intersects,
         },
         pline_offset::parallel_offset,
     },
@@ -1371,6 +1377,99 @@ pub trait PlineSource {
         visit_global_self_intersects(self, index, visitor, options.pos_equal_eps)
     }
 
+    /// Visit all intersects between two polylines using default options.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    #[inline]
+    fn visit_intersects<P, V, C>(&self, other: &P, visitor: &mut V)
+    where
+        P: PlineSource<Num = Self::Num> + ?Sized,
+        V: TwoPlinesIntersectVisitor<Self::Num, C>,
+        C: ControlFlow,
+    {
+        self.visit_intersects_opt(other, visitor, &Default::default());
+    }
+
+    /// Visit all intersects between two polylines using the options provided.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    #[inline]
+    fn visit_intersects_opt<P, V, C>(
+        &self,
+        other: &P,
+        visitor: &mut V,
+        options: &FindIntersectsOptions<Self::Num>,
+    ) where
+        P: PlineSource<Num = Self::Num> + ?Sized,
+        V: TwoPlinesIntersectVisitor<Self::Num, C>,
+        C: ControlFlow,
+    {
+        visit_intersects(self, other, visitor, options);
+    }
+
+    /// Scan for self intersects using default options.
+    /// Returns true on the first one found; false if there are none.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::*;
+    /// # use cavalier_contours::core::math::*;
+    /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 2.0, 0.0);
+    /// polyline.add(1.0, 1.0, 0.0);
+    /// polyline.add(-1.0, 1.0, 0.0);
+    ///
+    /// assert!(polyline.scan_for_self_intersect());
+    /// ```
+    #[inline]
+    fn scan_for_self_intersect(&self) -> bool {
+        self.scan_for_self_intersect_opt(&Default::default())
+    }
+
+    /// Scan for self intersects using options provided.
+    /// Returns true on the first one found; false if there are none.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::core::*;
+    /// # use cavalier_contours::core::math::*;
+    /// let mut polyline = Polyline::new();
+    /// polyline.add(0.0, 0.0, 0.0);
+    /// polyline.add(0.0, 2.0, 0.0);
+    /// polyline.add(1.0, 1.0, 0.0);
+    /// polyline.add(-1.0, 1.0, 0.0);
+    ///
+    /// assert!(polyline.scan_for_self_intersect_opt(&Default::default()));
+    /// ```
+    fn scan_for_self_intersect_opt(&self, options: &PlineSelfIntersectOptions<Self::Num>) -> bool {
+        let mut found_intersects = false;
+        self.visit_self_intersects_opt(
+            &mut |_intersect: PlineIntersect<Self::Num>| {
+                found_intersects = true;
+                Control::Break(())
+            },
+            options,
+        );
+        found_intersects
+    }
+
     /// Find all intersects between two polylines using default options.
     ///
     /// # Panics
@@ -1553,6 +1652,103 @@ pub trait PlineSource {
         P: PlineSource<Num = Self::Num> + ?Sized,
     {
         polyline_boolean(self, other, operation, options)
+    }
+
+    /// Determine if this polyline fully contains another using default options.
+    ///
+    /// Caution: Polylines with self-intersections may generate unexpected results.
+    /// Use scan_for_self_intersect() to find and reject self-intersecting polylines
+    /// if this is a possibility for your input data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
+    /// # Examples
+    /// ```
+    /// # use cavalier_contours::core::traits::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::pline_closed;
+    /// # use cavalier_contours::polyline::PlineContainsResult::*;
+    /// let rectangle = pline_closed![
+    ///     (-2.0, -2.0, 0.0),
+    ///     (2.0, -2.0, 0.0),
+    ///     (2.0, 2.0, 0.0),
+    ///     (-2.0, 2.0, 0.0),
+    /// ];
+    /// let circle = pline_closed![(-1.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
+    /// let triangle = pline_closed![(3.1340, 4.5, 0.0), (4.0, 3.0, 0.0), (4.8660, 4.5, 0.0)];
+    ///
+    /// // since the circle is inside the rectangle we get back Pline2InsidePline1
+    /// assert_eq!(rectangle.contains(&circle), Pline2InsidePline1);
+    /// // since the rectangle is outside the circle, but containing, it we get back Pline1InsidePline2
+    /// assert_eq!(circle.contains(&rectangle), Pline1InsidePline2);
+    /// // since the triangle is outside the rectangle, and not containing it, we get back Disjoint
+    /// assert_eq!(rectangle.contains(&triangle), Disjoint);
+    /// ```
+    fn contains<P>(&self, other: &P) -> PlineContainsResult
+    where
+        P: PlineSource<Num = Self::Num> + ?Sized,
+    {
+        self.contains_opt(other, &Default::default())
+    }
+
+    /// Determine if this polyline fully contains another with options provided.
+    ///
+    /// Caution: Polylines with self-intersections may generate unexpected results.
+    /// Use scan_for_self_intersect() to find and reject self-intersecting polylines
+    /// if this is a possibility for your input data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    ///
+    /// # Examples
+    /// ```
+    /// # use cavalier_contours::core::traits::*;
+    /// # use cavalier_contours::polyline::*;
+    /// # use cavalier_contours::pline_closed;
+    /// # use cavalier_contours::polyline::{PlineContainsOptions, PlineContainsResult::*};
+    /// let rectangle = pline_closed![
+    ///     (-2.0, -2.0, 0.0),
+    ///     (2.0, -2.0, 0.0),
+    ///     (2.0, 2.0, 0.0),
+    ///     (-2.0, 2.0, 0.0),
+    /// ];
+    /// let circle = pline_closed![(-1.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
+    /// let triangle = pline_closed![(3.1340, 4.5, 0.0), (4.0, 3.0, 0.0), (4.8660, 4.5, 0.0)];
+    ///
+    /// let rectangle_aabb_index = rectangle.create_approx_aabb_index();
+    /// let rectangle_options = PlineContainsOptions {
+    ///     // passing in existing spatial index of the polyline segments for the first polyline
+    ///     pline1_aabb_index: Some(&rectangle_aabb_index),
+    ///     ..Default::default()
+    /// };
+    /// // since the circle is inside the rectangle we get back Pline2InsidePline1
+    /// assert_eq!(rectangle.contains_opt(&circle, &rectangle_options), Pline2InsidePline1);
+    ///
+    /// let circle_aabb_index = circle.create_approx_aabb_index();
+    /// let circle_options = PlineContainsOptions {
+    ///     // passing in existing spatial index of the polyline segments for the first polyline
+    ///     pline1_aabb_index: Some(&circle_aabb_index),
+    ///     ..Default::default()
+    /// };
+    /// // since the rectangle is outside the circle, but containing, it we get back Pline1InsidePline2
+    /// assert_eq!(circle.contains_opt(&rectangle, &circle_options), Pline1InsidePline2);
+    ///
+    /// // since the triangle is outside the rectangle, and not containing it, we get back Disjoint
+    /// assert_eq!(rectangle.contains_opt(&triangle, &rectangle_options), Disjoint);
+    ///
+    /// ```
+    fn contains_opt<P>(
+        &self,
+        other: &P,
+        options: &PlineContainsOptions<Self::Num>,
+    ) -> PlineContainsResult
+    where
+        P: PlineSource<Num = Self::Num> + ?Sized,
+    {
+        polyline_contains(self, other, options)
     }
 
     /// Find the segment index and point on the polyline corresponding to the path length given.

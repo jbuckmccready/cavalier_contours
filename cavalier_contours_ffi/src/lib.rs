@@ -3,8 +3,9 @@
 use cavalier_contours::{
     core::math::Vector2,
     polyline::{
-        BooleanOp, PlineBooleanOptions, PlineOffsetOptions, PlineSource, PlineSourceMut,
-        PlineVertex, Polyline,
+        BooleanOp, PlineBooleanOptions, PlineContainsOptions, PlineOffsetOptions,
+        PlineSelfIntersectOptions, PlineSource, PlineSourceMut, PlineVertex, Polyline,
+        SelfIntersectsInclude,
     },
     shape_algorithms::{Shape, ShapeOffsetOptions},
     static_aabb2d_index::StaticAABB2DIndex,
@@ -116,6 +117,47 @@ impl Default for cavc_pline_parallel_offset_o {
     }
 }
 
+/// Create a new [cavc_pline_parallel_offset_o] object.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_parallel_offset_o_create(
+    options: *mut *mut cavc_pline_parallel_offset_o,
+) -> i32 {
+    ffi_catch_unwind!({
+        unsafe {
+            let result = cavc_pline_parallel_offset_o::default();
+            options.write(Box::into_raw(Box::new(result)));
+        }
+        0
+    })
+}
+
+/// Free an existing [cavc_pline_parallel_offset_o] object.
+///
+/// Nothing happens if `options` is null.
+///
+/// Note that this does NOT free the aabb index that the [cavc_pline_parallel_offset_o] points to.
+/// You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_parallel_offset_o] object.
+///
+/// # Safety
+///
+/// `options` must be null or a valid cavc_pline_parallel_offset_o object that was created with [cavc_pline_parallel_offset_o_create] and
+/// has not already been freed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cavc_pline_parallel_offset_o_f(
+    options: *mut cavc_pline_parallel_offset_o,
+) {
+    if !options.is_null() {
+        unsafe {
+            drop(Box::from_raw(options));
+        }
+    }
+}
+
 /// Write default option values to a [cavc_pline_parallel_offset_o].
 ///
 /// ## Specific Error Codes
@@ -197,6 +239,9 @@ pub unsafe extern "C" fn cavc_pline_boolean_o_create(
 ///
 /// Nothing happens if `options` is null.
 ///
+/// Note that this does NOT free the aabb index that the [cavc_pline_boolean_o] points to.
+/// You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_boolean_o] object.
+///
 /// # Safety
 ///
 /// `options` must be null or a valid cavc_pline_boolean_o object that was created with [cavc_pline_boolean_o_create] and
@@ -245,6 +290,215 @@ fn boolean_op_from_u32(i: u32) -> Option<BooleanOp> {
     } else {
         None
     }
+}
+
+/// FFI representation of SelfIntersectsInclude enum
+pub const CAVC_SELF_INTERSECTS_INCLUDE_ALL: u32 = 0;
+pub const CAVC_SELF_INTERSECTS_INCLUDE_LOCAL: u32 = 1;
+pub const CAVC_SELF_INTERSECTS_INCLUDE_GLOBAL: u32 = 2;
+
+/// FFI representation of [PlineSelfIntersectOptions].
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct cavc_pline_self_intersect_o {
+    pub pline_aabb_index: *const cavc_aabbindex,
+    pub pos_equal_eps: f64,
+    pub include: u32,
+}
+
+impl cavc_pline_self_intersect_o {
+    /// Convert FFI self intersection options type to internal type.
+    ///
+    /// # Safety
+    ///
+    /// `pline_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
+    pub unsafe fn to_internal(&self) -> Option<PlineSelfIntersectOptions<f64>> {
+        let pline_aabb_index = unsafe { self.pline_aabb_index.as_ref().map(|w| &w.0) };
+        let include_value = match self.include {
+            0 => SelfIntersectsInclude::All,
+            1 => SelfIntersectsInclude::Local,
+            2 => SelfIntersectsInclude::Global,
+            _ => {
+                return None;
+            }
+        };
+
+        Some(PlineSelfIntersectOptions {
+            aabb_index: pline_aabb_index,
+            pos_equal_eps: self.pos_equal_eps,
+            include: include_value,
+        })
+    }
+}
+
+impl Default for cavc_pline_self_intersect_o {
+    fn default() -> Self {
+        let d = PlineSelfIntersectOptions::default();
+        Self {
+            pline_aabb_index: std::ptr::null(),
+            pos_equal_eps: d.pos_equal_eps,
+            include: d.include as u32,
+        }
+    }
+}
+
+/// Create a new [cavc_pline_self_intersect_o] object.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_self_intersect_o_create(
+    options: *mut *mut cavc_pline_self_intersect_o,
+) -> i32 {
+    ffi_catch_unwind!({
+        unsafe {
+            let result = cavc_pline_self_intersect_o::default();
+            options.write(Box::into_raw(Box::new(result)));
+        }
+        0
+    })
+}
+
+/// Free an existing [cavc_pline_self_intersect_o] object.
+///
+/// Nothing happens if `options` is null.
+///
+/// Note that this does NOT free the aabb index that the [cavc_pline_self_intersect_o] points to.
+/// You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_self_intersect_o] object.
+///
+/// # Safety
+///
+/// `options` must be null or a valid cavc_pline_self_intersect_o object that was created with [cavc_pline_self_intersect_o_create] and
+/// has not already been freed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cavc_pline_self_intersect_o_f(options: *mut cavc_pline_self_intersect_o) {
+    if !options.is_null() {
+        unsafe {
+            drop(Box::from_raw(options));
+        }
+    }
+}
+
+/// Write default option values to a [cavc_pline_self_intersect_o].
+///
+/// ## Specific Error Codes
+/// * 1 = `options` is null.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_self_intersect_o_init(
+    options: *mut cavc_pline_self_intersect_o,
+) -> i32 {
+    ffi_catch_unwind!({
+        if options.is_null() {
+            return 1;
+        }
+
+        unsafe {
+            options.write(Default::default());
+        }
+        0
+    })
+}
+
+/// FFI representation of [PlineContainsOptions].
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct cavc_pline_contains_o {
+    pub pline1_aabb_index: *const cavc_aabbindex,
+    pub pos_equal_eps: f64,
+}
+
+impl cavc_pline_contains_o {
+    /// Convert FFI contains options type to internal type.
+    ///
+    /// # Safety
+    ///
+    /// `pline1_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
+    pub unsafe fn to_internal(&self) -> PlineContainsOptions<f64> {
+        let pline1_aabb_index = unsafe { self.pline1_aabb_index.as_ref().map(|w| &w.0) };
+        PlineContainsOptions {
+            pline1_aabb_index,
+            pos_equal_eps: self.pos_equal_eps,
+        }
+    }
+}
+
+impl Default for cavc_pline_contains_o {
+    fn default() -> Self {
+        let d = PlineContainsOptions::default();
+        Self {
+            pline1_aabb_index: std::ptr::null(),
+            pos_equal_eps: d.pos_equal_eps,
+        }
+    }
+}
+
+/// Create a new [cavc_pline_contains_o] object.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_contains_o_create(
+    options: *mut *mut cavc_pline_contains_o,
+) -> i32 {
+    ffi_catch_unwind!({
+        unsafe {
+            let result = cavc_pline_contains_o::default();
+            options.write(Box::into_raw(Box::new(result)));
+        }
+        0
+    })
+}
+
+/// Free an existing [cavc_pline_contains_o] object.
+///
+/// Nothing happens if `options` is null.
+///
+/// Note that this does NOT free the aabb index that the [cavc_pline_contains_o] points to.
+/// You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_contains_o] object.
+///
+/// # Safety
+///
+/// `options` must be null or a valid cavc_pline_contains_o object that was created with [cavc_pline_contains_o_create] and
+/// has not already been freed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cavc_pline_contains_o_f(options: *mut cavc_pline_contains_o) {
+    if !options.is_null() {
+        unsafe {
+            drop(Box::from_raw(options));
+        }
+    }
+}
+
+/// Write default option values to a [cavc_pline_contains_o].
+///
+/// ## Specific Error Codes
+/// * 1 = `options` is null.
+///
+/// # Safety
+///
+/// `options` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_contains_o_init(options: *mut cavc_pline_contains_o) -> i32 {
+    ffi_catch_unwind!({
+        if options.is_null() {
+            return 1;
+        }
+
+        unsafe {
+            options.write(Default::default());
+        }
+        0
+    })
 }
 
 /// Opaque type that represents a list of [cavc_pline].
@@ -1191,6 +1445,119 @@ pub unsafe extern "C" fn cavc_pline_boolean(
                 results.neg_plines.into_iter().map(|p| p.pline),
             ));
         }
+        0
+    })
+}
+
+/// Wraps [PlineSource::scan_for_self_intersect_opt].
+///
+/// `options` is allowed to be null (default options will be used).
+///
+/// ## Specific Error Codes
+/// * 1 = `pline1` is null.
+/// * 2 = `options` is invalid.
+///
+/// # Safety
+///
+/// `pline` must be null or a valid cavc_pline object that was created with
+/// [cavc_pline_create] and has not been freed.
+/// `is_self_intersecting` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_scan_for_self_intersect(
+    pline: *const cavc_pline,
+    options: *const cavc_pline_self_intersect_o,
+    is_self_intersecting: *mut u8,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline.is_null() {
+            return 1;
+        }
+
+        let pline = unsafe { &(*pline).0 };
+
+        let computed_result;
+        if options.is_null() {
+            computed_result = pline.scan_for_self_intersect();
+        } else {
+            let options = unsafe { &(*options).to_internal() };
+            match options {
+                None => return 2, // invalid options were passed in.
+                Some(unpacked_options) => {
+                    computed_result = pline.scan_for_self_intersect_opt(unpacked_options)
+                }
+            }
+        };
+
+        unsafe {
+            is_self_intersecting.write(computed_result as u8);
+        }
+
+        0
+    })
+}
+
+/// FFI Representation of PlineContainsResult enum
+pub const CAVC_CONTAINS_RESULT_INVALID_INPUT: u32 = 0;
+pub const CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2: u32 = 1;
+pub const CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1: u32 = 2;
+pub const CAVC_CONTAINS_RESULT_DISJOINT: u32 = 3;
+pub const CAVC_CONTAINS_RESULT_INTERSECTED: u32 = 4;
+
+/// Wraps [PlineSource::contains_opt].
+///
+/// `options` is allowed to be null (default options will be used).
+///
+/// Possible values returned in result:
+///
+/// CAVC_CONTAINS_RESULT_INVALID_INPUT: Input was not valid to perform operation.
+/// CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2: Pline1 entirely inside of pline2 with no intersects.
+/// CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1: Pline2 entirely inside of pline1 with no intersects.
+/// CAVC_CONTAINS_RESULT_DISJOINT: Pline1 is disjoint from pline2 (no intersects and neither polyline is inside of the other).
+/// CAVC_CONTAINS_RESULT_INTERSECTED: Pline1 intersects with pline2 in at least one place.
+///
+/// ## Specific Error Codes
+/// * 1 = `pline1` and/or `pline2` is null. In case of an error, if result is not null it will be set to CAVC_CONTAINS_RESULT_INVALID_INPUT.
+///
+/// Caution: Polylines with self-intersections may generate unexpected results.
+/// Use cavc_pline_scan_for_self_intersect() to find and reject self-intersecting polylines
+/// if this is a possibility for your input data.
+///
+/// # Safety
+///
+/// `pline1` and `pline2` must each be null or a valid cavc_pline object that was created with
+/// [cavc_pline_create] and has not been freed.
+/// `result` must point to a valid place in memory to be written.
+#[unsafe(no_mangle)]
+#[must_use]
+pub unsafe extern "C" fn cavc_pline_contains(
+    pline1: *const cavc_pline,
+    pline2: *const cavc_pline,
+    options: *const cavc_pline_contains_o,
+    result: *mut u32,
+) -> i32 {
+    ffi_catch_unwind!({
+        if pline1.is_null() || pline2.is_null() {
+            if !result.is_null() {
+                unsafe { result.write(CAVC_CONTAINS_RESULT_INVALID_INPUT) };
+            }
+            return 1;
+        }
+
+        let pline1 = unsafe { &(*pline1).0 };
+        let pline2 = unsafe { &(*pline2).0 };
+
+        let computed_result = if options.is_null() {
+            pline1.contains(pline2)
+        } else {
+            let options = unsafe { &(*options).to_internal() };
+            pline1.contains_opt(pline2, options)
+        };
+
+        unsafe {
+            result.write(computed_result as u32);
+        }
+
         0
     })
 }
