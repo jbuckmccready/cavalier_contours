@@ -508,7 +508,7 @@ where
     /// Visit the intersection.
     fn visit(
         &mut self,
-        intersection: PlineSegIntr<T>,
+        intersect: PlineSegIntr<T>,
         pline1_context: &PlineIntersectVisitContext<T>,
         pline2_context: &PlineIntersectVisitContext<T>,
     ) -> C;
@@ -523,11 +523,11 @@ where
     #[inline]
     fn visit(
         &mut self,
-        intersection: PlineSegIntr<T>,
+        intersect: PlineSegIntr<T>,
         pline1_context: &PlineIntersectVisitContext<T>,
         pline2_context: &PlineIntersectVisitContext<T>,
     ) -> C {
-        self(intersection, pline1_context, pline2_context)
+        self(intersect, pline1_context, pline2_context)
     }
 }
 

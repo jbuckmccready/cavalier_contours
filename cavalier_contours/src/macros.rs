@@ -8,9 +8,9 @@ macro_rules! assert_fuzzy_eq {
             (left_val, right_val) => {
                 if !(left_val.fuzzy_eq(*right_val)) {
                     panic!(
-                        r#"assertion failed: `left.fuzzy_eq(right)`
-                          left: `{:?}`,
-                         right: `{:?}`"#,
+                        "assertion failed: `left.fuzzy_eq(right)`\n\
+                        left: `{:?}`\n\
+                        right: `{:?}`",
                         &*left_val, &*right_val
                     )
                 }
@@ -24,10 +24,10 @@ macro_rules! assert_fuzzy_eq {
             (left_val, right_val, eps_val) => {
                 if !(left_val.fuzzy_eq_eps(*right_val, *eps_val)) {
                     panic!(
-                        r#"assertion failed: `left.fuzzy_eq_eps(right, eps)`
-                          left: `{:?}`,
-                         right: `{:?}`
-                           eps: `{:?}`"#,
+                        "assertion failed: `left.fuzzy_eq_eps(right, eps)`\n\
+                        left: `{:?}`,\n\
+                        right: `{:?}`\n\
+                        eps: `{:?}`",
                         &*left_val, &*right_val, &*eps_val
                     )
                 }

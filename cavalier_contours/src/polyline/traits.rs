@@ -13,7 +13,7 @@ use crate::{
     },
     polyline::{
         PlineContainsOptions, PlineContainsResult, PlineIntersect, SelfIntersectsInclude,
-        seg_arc_radius_and_center,
+        TwoPlinesIntersectVisitor, seg_arc_radius_and_center,
     },
 };
 
@@ -25,7 +25,8 @@ use super::{
         pline_boolean::polyline_boolean,
         pline_contains::polyline_contains,
         pline_intersects::{
-            find_intersects, visit_global_self_intersects, visit_local_self_intersects,
+            find_intersects, visit_global_self_intersects, visit_intersects,
+            visit_local_self_intersects,
         },
         pline_offset::parallel_offset,
     },
@@ -1376,6 +1377,40 @@ pub trait PlineSource {
         visit_global_self_intersects(self, index, visitor, options.pos_equal_eps)
     }
 
+    /// Visit all intersects between two polylines using default options.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    #[inline]
+    fn visit_intersects<P, V, C>(&self, other: &P, visitor: &mut V)
+    where
+        P: PlineSource<Num = Self::Num> + ?Sized,
+        V: TwoPlinesIntersectVisitor<Self::Num, C>,
+        C: ControlFlow,
+    {
+        self.visit_intersects_opt(other, visitor, &Default::default());
+    }
+
+    /// Visit all intersects between two polylines using the options provided.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
+    #[inline]
+    fn visit_intersects_opt<P, V, C>(
+        &self,
+        other: &P,
+        visitor: &mut V,
+        options: &FindIntersectsOptions<Self::Num>,
+    ) where
+        P: PlineSource<Num = Self::Num> + ?Sized,
+        V: TwoPlinesIntersectVisitor<Self::Num, C>,
+        C: ControlFlow,
+    {
+        visit_intersects(self, other, visitor, options);
+    }
+
     /// Scan for self intersects using default options.
     /// Returns true on the first one found; false if there are none.
     ///
@@ -1395,11 +1430,11 @@ pub trait PlineSource {
     /// polyline.add(1.0, 1.0, 0.0);
     /// polyline.add(-1.0, 1.0, 0.0);
     ///
-    /// assert!(polyline.scan_for_self_intersection());
+    /// assert!(polyline.scan_for_self_intersect());
     /// ```
     #[inline]
-    fn scan_for_self_intersection(&self) -> bool {
-        self.scan_for_self_intersection_opt(&Default::default())
+    fn scan_for_self_intersect(&self) -> bool {
+        self.scan_for_self_intersect_opt(&Default::default())
     }
 
     /// Scan for self intersects using options provided.
@@ -1421,12 +1456,9 @@ pub trait PlineSource {
     /// polyline.add(1.0, 1.0, 0.0);
     /// polyline.add(-1.0, 1.0, 0.0);
     ///
-    /// assert!(polyline.scan_for_self_intersection_opt(&Default::default()));
+    /// assert!(polyline.scan_for_self_intersect_opt(&Default::default()));
     /// ```
-    fn scan_for_self_intersection_opt(
-        &self,
-        options: &PlineSelfIntersectOptions<Self::Num>,
-    ) -> bool {
+    fn scan_for_self_intersect_opt(&self, options: &PlineSelfIntersectOptions<Self::Num>) -> bool {
         let mut found_intersects = false;
         self.visit_self_intersects_opt(
             &mut |_intersect: PlineIntersect<Self::Num>| {
@@ -1625,7 +1657,7 @@ pub trait PlineSource {
     /// Determine if this polyline fully contains another using default options.
     ///
     /// Caution: Polylines with self-intersections may generate unexpected results.
-    /// Use scan_for_self_intersection() to find and reject self-intersecting polylines
+    /// Use scan_for_self_intersect() to find and reject self-intersecting polylines
     /// if this is a possibility for your input data.
     ///
     /// # Panics
@@ -1664,7 +1696,7 @@ pub trait PlineSource {
     /// Determine if this polyline fully contains another with options provided.
     ///
     /// Caution: Polylines with self-intersections may generate unexpected results.
-    /// Use scan_for_self_intersection() to find and reject self-intersecting polylines
+    /// Use scan_for_self_intersect() to find and reject self-intersecting polylines
     /// if this is a possibility for your input data.
     ///
     /// # Panics

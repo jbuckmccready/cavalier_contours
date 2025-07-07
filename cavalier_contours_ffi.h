@@ -724,12 +724,13 @@ int32_t cavc_pline_boolean(const struct cavc_pline *pline1,
                            const struct cavc_plinelist **neg_plines);
 
 /**
- * Wraps [PlineSource::scan_for_self_intersection_opt].
+ * Wraps [PlineSource::scan_for_self_intersect_opt].
  *
  * `options` is allowed to be null (default options will be used).
  *
  * ## Specific Error Codes
  * * 1 = `pline1` is null.
+ * * 2 = `options` is invalid.
  *
  * # Safety
  *
@@ -737,9 +738,9 @@ int32_t cavc_pline_boolean(const struct cavc_pline *pline1,
  * [cavc_pline_create] and has not been freed.
  * `is_self_intersecting` must point to a valid place in memory to be written.
  */
-int32_t cavc_pline_scan_for_self_intersection(const struct cavc_pline *pline,
-                                              const struct cavc_pline_self_intersect_o *options,
-                                              uint8_t *is_self_intersecting);
+int32_t cavc_pline_scan_for_self_intersect(const struct cavc_pline *pline,
+                                           const struct cavc_pline_self_intersect_o *options,
+                                           uint8_t *is_self_intersecting);
 
 /**
  * Wraps [PlineSource::contains_opt].
@@ -758,7 +759,7 @@ int32_t cavc_pline_scan_for_self_intersection(const struct cavc_pline *pline,
  * * 1 = `pline1` and/or `pline2` is null. In case of an error, if result is not null it will be set to CAVC_CONTAINS_RESULT_INVALID_INPUT.
  *
  * Caution: Polylines with self-intersections may generate unexpected results.
- * Use cavc_pline_scan_for_self_intersection() to find and reject self-intersecting polylines
+ * Use cavc_pline_scan_for_self_intersect() to find and reject self-intersecting polylines
  * if this is a possibility for your input data.
  *
  * # Safety

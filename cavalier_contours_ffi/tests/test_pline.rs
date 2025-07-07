@@ -1236,7 +1236,7 @@ fn shape_eval_ffi() {
 }
 
 #[test]
-fn self_intersection_scan_ffi() {
+fn self_intersect_scan_ffi() {
     let hourglass = create_pline(
         &[
             (0.0, 2.0, 0.0),
@@ -1261,21 +1261,13 @@ fn self_intersection_scan_ffi() {
         let mut is_self_intersecting: u8 = 0;
 
         assert_eq!(
-            cavc_pline_scan_for_self_intersection(
-                hourglass,
-                ptr::null(),
-                &mut is_self_intersecting
-            ),
+            cavc_pline_scan_for_self_intersect(hourglass, ptr::null(), &mut is_self_intersecting),
             0
         );
         assert_ne!(is_self_intersecting, 0);
 
         assert_eq!(
-            cavc_pline_scan_for_self_intersection(
-                rectangle,
-                ptr::null(),
-                &mut is_self_intersecting
-            ),
+            cavc_pline_scan_for_self_intersect(rectangle, ptr::null(), &mut is_self_intersecting),
             0
         );
         assert_eq!(is_self_intersecting, 0);
@@ -1294,7 +1286,7 @@ fn self_intersection_scan_ffi() {
         (*hourglass_options).pline_aabb_index = hourglass_index;
 
         assert_eq!(
-            cavc_pline_scan_for_self_intersection(
+            cavc_pline_scan_for_self_intersect(
                 hourglass,
                 hourglass_options,
                 &mut is_self_intersecting
@@ -1317,7 +1309,7 @@ fn self_intersection_scan_ffi() {
         (*rectangle_options).pline_aabb_index = rectangle_index;
 
         assert_eq!(
-            cavc_pline_scan_for_self_intersection(
+            cavc_pline_scan_for_self_intersect(
                 rectangle,
                 rectangle_options,
                 &mut is_self_intersecting

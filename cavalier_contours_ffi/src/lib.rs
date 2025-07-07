@@ -312,23 +312,22 @@ impl cavc_pline_self_intersect_o {
     /// # Safety
     ///
     /// `pline_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
-    pub unsafe fn to_internal(&self) -> PlineSelfIntersectOptions<f64> {
+    pub unsafe fn to_internal(&self) -> Option<PlineSelfIntersectOptions<f64>> {
         let pline_aabb_index = unsafe { self.pline_aabb_index.as_ref().map(|w| &w.0) };
         let include_value = match self.include {
             0 => SelfIntersectsInclude::All,
             1 => SelfIntersectsInclude::Local,
             2 => SelfIntersectsInclude::Global,
-            _ => panic!(
-                "Invalid include option in cavc_pline_self_intersect_options_o::to_internal: {}",
-                self.include
-            ),
+            _ => {
+                return None;
+            }
         };
 
-        PlineSelfIntersectOptions {
+        Some(PlineSelfIntersectOptions {
             aabb_index: pline_aabb_index,
             pos_equal_eps: self.pos_equal_eps,
             include: include_value,
-        }
+        })
     }
 }
 
@@ -1450,12 +1449,13 @@ pub unsafe extern "C" fn cavc_pline_boolean(
     })
 }
 
-/// Wraps [PlineSource::scan_for_self_intersection_opt].
+/// Wraps [PlineSource::scan_for_self_intersect_opt].
 ///
 /// `options` is allowed to be null (default options will be used).
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline1` is null.
+/// * 2 = `options` is invalid.
 ///
 /// # Safety
 ///
@@ -1464,7 +1464,7 @@ pub unsafe extern "C" fn cavc_pline_boolean(
 /// `is_self_intersecting` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
 #[must_use]
-pub unsafe extern "C" fn cavc_pline_scan_for_self_intersection(
+pub unsafe extern "C" fn cavc_pline_scan_for_self_intersect(
     pline: *const cavc_pline,
     options: *const cavc_pline_self_intersect_o,
     is_self_intersecting: *mut u8,
@@ -1476,11 +1476,17 @@ pub unsafe extern "C" fn cavc_pline_scan_for_self_intersection(
 
         let pline = unsafe { &(*pline).0 };
 
-        let computed_result = if options.is_null() {
-            pline.scan_for_self_intersection()
+        let computed_result;
+        if options.is_null() {
+            computed_result = pline.scan_for_self_intersect();
         } else {
             let options = unsafe { &(*options).to_internal() };
-            pline.scan_for_self_intersection_opt(options)
+            match options {
+                None => return 2, // invalid options were passed in.
+                Some(unpacked_options) => {
+                    computed_result = pline.scan_for_self_intersect_opt(unpacked_options)
+                }
+            }
         };
 
         unsafe {
@@ -1514,7 +1520,7 @@ pub const CAVC_CONTAINS_RESULT_INTERSECTED: u32 = 4;
 /// * 1 = `pline1` and/or `pline2` is null. In case of an error, if result is not null it will be set to CAVC_CONTAINS_RESULT_INVALID_INPUT.
 ///
 /// Caution: Polylines with self-intersections may generate unexpected results.
-/// Use cavc_pline_scan_for_self_intersection() to find and reject self-intersecting polylines
+/// Use cavc_pline_scan_for_self_intersect() to find and reject self-intersecting polylines
 /// if this is a possibility for your input data.
 ///
 /// # Safety

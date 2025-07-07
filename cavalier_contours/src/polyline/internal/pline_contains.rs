@@ -1,6 +1,6 @@
 use crate::polyline::{
     FindIntersectsOptions, PlineContainsOptions, PlineContainsResult, PlineSource,
-    internal::pline_intersects::scan_for_intersection,
+    internal::pline_intersects::scan_for_intersect,
 };
 
 use crate::core::{math::Vector2, traits::Real};
@@ -10,7 +10,7 @@ use crate::core::{math::Vector2, traits::Real};
 /// Note that overlapping segments are considered intersections by this function.
 ///
 /// Caution: Polylines with self-intersections may generate unexpected results.
-/// Use scan_for_self_intersection() to find and reject self-intersecting polylines
+/// Use scan_for_self_intersect() to find and reject self-intersecting polylines
 /// if this is a possibility for your input data.
 pub fn polyline_contains<P, R, T>(
     pline1: &P,
@@ -46,7 +46,7 @@ where
     let is_pline1_in_pline2 = || point_in_pline2(pline1.at(0).pos());
     let is_pline2_in_pline1 = || point_in_pline1(pline2.at(0).pos());
 
-    if scan_for_intersection(
+    if scan_for_intersect(
         pline1,
         pline2,
         &FindIntersectsOptions {

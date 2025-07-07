@@ -291,7 +291,7 @@ where
 }
 
 // Visit all intersections between two polylines.
-pub fn visit_intersections<P, O, T, C, V>(
+pub fn visit_intersects<P, O, T, C, V>(
     pline1: &P,
     pline2: &O,
     visitor: &mut V,
@@ -408,7 +408,7 @@ where
     let open1_last_idx = pline1.vertex_count() - 2;
     let open2_last_idx = pline2.vertex_count() - 2;
 
-    let mut visitor = |intersection: PlineSegIntr<T>,
+    let mut visitor = |intersect: PlineSegIntr<T>,
                        pline1_context: &PlineIntersectVisitContext<T>,
                        pline2_context: &PlineIntersectVisitContext<T>| {
         let i1 = pline1_context.vertex_index;
@@ -424,7 +424,7 @@ where
                     && (pline2.is_closed() || i2 != open2_last_idx))
         };
 
-        match intersection {
+        match intersect {
             PlineSegIntr::NoIntersect => {}
             PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
                 if !skip_intr_at_end(point) {
@@ -465,7 +465,7 @@ where
         }
     };
 
-    visit_intersections(pline1, pline2, &mut visitor, options);
+    visit_intersects(pline1, pline2, &mut visitor, options);
 
     if possible_duplicates1.is_empty() && possible_duplicates2.is_empty() {
         return result;
@@ -501,8 +501,8 @@ where
 /// Find if two polylines have any intersections.
 ///
 /// Any overlapping segments will be treated as an intersection and cause
-/// scan_for_intersection() to return true.
-pub fn scan_for_intersection<P, O, T>(
+/// scan_for_intersect() to return true.
+pub fn scan_for_intersect<P, O, T>(
     pline1: &P,
     pline2: &O,
     options: &FindIntersectsOptions<T>,
@@ -512,27 +512,27 @@ where
     O: PlineSource<Num = T> + ?Sized,
     T: Real,
 {
-    let mut found_intersection = false;
+    let mut found_intersect = false;
 
-    let mut visitor = |intersection: PlineSegIntr<T>,
+    let mut visitor = |intersect: PlineSegIntr<T>,
                        _: &PlineIntersectVisitContext<T>,
                        _: &PlineIntersectVisitContext<T>| {
-        match intersection {
+        match intersect {
             PlineSegIntr::NoIntersect => aabb_index::Control::Continue,
             PlineSegIntr::TangentIntersect { .. }
             | PlineSegIntr::OneIntersect { .. }
             | PlineSegIntr::TwoIntersects { .. }
             | PlineSegIntr::OverlappingLines { .. }
             | PlineSegIntr::OverlappingArcs { .. } => {
-                found_intersection = true;
+                found_intersect = true;
                 aabb_index::Control::Break(())
             }
         }
     };
 
-    visit_intersections(pline1, pline2, &mut visitor, options);
+    visit_intersects(pline1, pline2, &mut visitor, options);
 
-    found_intersection
+    found_intersect
 }
 
 /// Represents an open polyline slice where there was overlap between polylines across one or more

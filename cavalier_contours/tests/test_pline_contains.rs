@@ -72,13 +72,13 @@ mod test_pline_contains {
     }
 
     #[test]
-    fn test_self_intersection_scan() {
+    fn test_self_intersect_scan() {
         let hourglass = pline_closed![
             (0.0, 2.0, 0.0),
             (1.0, 1.0, 0.0),
             (0.0, 1.0, 0.0),
             (1.0, 2.0, 0.0)
         ];
-        assert!(hourglass.scan_for_self_intersection());
+        assert!(hourglass.scan_for_self_intersect());
     }
 }
