@@ -1,10 +1,14 @@
 use cavalier_contours::{
     pline_closed,
-    polyline::{BooleanOp, BooleanResult, PlineSource, PlineSourceMut, Polyline},
+    polyline::{
+        BooleanOp, BooleanPlineSlice, BooleanResult, PlineCreation, PlineSource, PlineSourceMut,
+        PlineViewData, Polyline,
+        internal::pline_boolean::{process_for_boolean, prune_slices, slice_at_intersects},
+    },
     shape_algorithms::Shape,
 };
 use eframe::egui::{CentralPanel, Rect, ScrollArea, Ui, Vec2};
-use egui_plot::{Plot, PlotPoint};
+use egui_plot::{Plot, PlotPoint, PlotPoints};
 
 use crate::editor::PolylineEditor;
 use crate::plotting::{PlinePlotData, PlinesPlotItem};
@@ -18,6 +22,7 @@ pub struct PlineBooleanScene {
     mode: Mode,
     fill: bool,
     show_vertexes: bool,
+    show_pruned_slices: bool,
     interaction_state: InteractionState,
     polyline_editor: PolylineEditor,
 }
@@ -30,6 +35,8 @@ enum Mode {
     And,
     Not,
     Xor,
+    Intersects,
+    Slices,
 }
 
 impl Mode {
@@ -40,7 +47,16 @@ impl Mode {
             Mode::And => "And",
             Mode::Not => "Not",
             Mode::Xor => "Xor",
+            Mode::Intersects => "Intersects",
+            Mode::Slices => "Slices",
         }
+    }
+
+    fn supports_pruned_slices(&self) -> bool {
+        matches!(
+            self,
+            Mode::None | Mode::Or | Mode::And | Mode::Not | Mode::Xor
+        )
     }
 }
 
@@ -53,6 +69,21 @@ struct InteractionState {
 enum SceneState {
     NoOp,
     BooleanResult(BooleanResult<Polyline>),
+    BooleanResultWithPrunedSlices {
+        result: BooleanResult<Polyline>,
+        pruned_slices: Vec<BooleanPlineSlice<f64>>,
+        start_of_pline2_slices: usize,
+        start_of_pline1_overlapping_slices: usize,
+        start_of_pline2_overlapping_slices: usize,
+    },
+    Intersects {
+        intersects: Vec<PlotPoint>,
+        overlapping_slices: Vec<(PlineViewData<f64>, bool)>,
+    },
+    Slices {
+        pline1_slices: Vec<BooleanPlineSlice<f64>>,
+        pline2_slices: Vec<BooleanPlineSlice<f64>>,
+    },
 }
 
 impl Default for PlineBooleanScene {
@@ -90,6 +121,7 @@ impl Default for PlineBooleanScene {
             mode: Mode::default(),
             fill: true,
             show_vertexes: true,
+            show_pruned_slices: false,
             interaction_state: InteractionState {
                 grabbed_vertex: None,
                 dragging: false,
@@ -111,6 +143,7 @@ impl Scene for PlineBooleanScene {
             mode,
             fill,
             show_vertexes,
+            show_pruned_slices,
             interaction_state,
             polyline_editor,
         } = self;
@@ -120,6 +153,7 @@ impl Scene for PlineBooleanScene {
             mode,
             fill,
             show_vertexes,
+            show_pruned_slices,
             interaction_state,
             polyline_editor,
         );
@@ -132,6 +166,7 @@ impl Scene for PlineBooleanScene {
             mode,
             fill,
             show_vertexes,
+            show_pruned_slices,
             interaction_state,
             polyline_editor,
         );
@@ -143,6 +178,7 @@ fn controls_panel(
     mode: &mut Mode,
     fill: &mut bool,
     show_vertexes: &mut bool,
+    show_pruned_slices: &mut bool,
     interaction_state: &mut InteractionState,
     polyline_editor: &mut PolylineEditor,
 ) {
@@ -158,6 +194,7 @@ fn controls_panel(
                         .show_ui(ui, |ui| {
                             ui.selectable_value(mode, Mode::None, Mode::None.label())
                                 .on_hover_text("No boolean operation performed");
+                            ui.separator();
                             ui.selectable_value(mode, Mode::Or, Mode::Or.label())
                                 .on_hover_text("Union (OR) the closed polylines, keeping both areas");
                             ui.selectable_value(mode, Mode::And, Mode::And.label()).on_hover_text(
@@ -167,11 +204,21 @@ fn controls_panel(
                                 .on_hover_text("Difference (NOT) the closed polylines, keeping only the area of the first polyline not overlapped by the second polyline");
                             ui.selectable_value(mode, Mode::Xor, Mode::Xor.label())
                                 .on_hover_text("Symmetric Difference (XOR) the closed polylines, keeping only the areas not overlapped by both polylines");
+                            ui.separator();
+                            ui.selectable_value(mode, Mode::Intersects, Mode::Intersects.label())
+                                .on_hover_text("Show intersection points and overlapping segments");
+                            ui.selectable_value(mode, Mode::Slices, Mode::Slices.label())
+                                .on_hover_text("Show polylines sliced at intersection points");
                         });
                 });
 
                 ui.checkbox(fill, "Fill").on_hover_text("Fill resulting polyline areas");
                 ui.checkbox(show_vertexes, "Show Vertexes").on_hover_text("Show polyline vertexes");
+
+                if mode.supports_pruned_slices() {
+                    ui.checkbox(show_pruned_slices, "Show Pruned Slices")
+                        .on_hover_text("Show slices after pruning based on the selected boolean operation");
+                }
 
                 interaction_state.zoom_to_fit = ui
                     .button("Zoom to Fit")
@@ -194,6 +241,7 @@ fn plot_area(
     mode: &Mode,
     fill: &bool,
     show_vertexes: &bool,
+    show_pruned_slices: &bool,
     interaction_state: &mut InteractionState,
     polyline_editor: &mut PolylineEditor,
 ) {
@@ -208,17 +256,17 @@ fn plot_area(
         panic!("Expected two polylines, but found less");
     };
 
-    // TODO: cache scene state to only update when necessary due to modified polylines
-    let scene_state = build_boolean_result(pline1, pline2, mode);
-
     CentralPanel::default().show_inside(ui, |ui| {
         let plot = settings
             .apply_to_plot(Plot::new("pline_boolean_scene"))
             .data_aspect(1.0)
             .allow_drag(false);
 
-        // stack variable for shape used for plot item (required for lifetime)
+        // stack variables for plot items (required for lifetime)
         let mut shape = Shape::empty();
+        let mut plines: Vec<Polyline> = Vec::new();
+        let mut intrs = Vec::new();
+
         plot.show(ui, |plot_ui| {
             plot_ui.set_auto_bounds(false);
             if plot_ui.ctx().input(|i| i.pointer.any_released()) {
@@ -280,6 +328,9 @@ fn plot_area(
                 }
             }
 
+            // Build scene state after vertex dragging to ensure it uses updated polylines
+            let scene_state = build_scene_state(pline1, pline2, mode, show_pruned_slices);
+
             // TODO: color pickers
             let color1 = colors.primary_stroke;
             let color2 = colors.secondary_stroke;
@@ -324,6 +375,122 @@ fn plot_area(
 
                     plot_ui.add(plot_item);
                 }
+                SceneState::Intersects {
+                    intersects,
+                    overlapping_slices,
+                } => {
+                    intrs = intersects;
+                    for (view_data, _) in overlapping_slices.iter() {
+                        plines.push(Polyline::create_from(&view_data.view(pline1)));
+                    }
+
+                    // Draw original polylines
+                    plot_ui.add(plot_item1.stroke_color(color1));
+                    plot_ui.add(plot_item2.stroke_color(color2));
+
+                    // Draw intersection points
+                    if !intrs.is_empty() {
+                        let points = egui_plot::Points::new(PlotPoints::from(intrs.as_slice()))
+                            .radius(PLOT_VERTEX_RADIUS * 1.5)
+                            .color(colors.error_color);
+                        plot_ui.points(points);
+                    }
+
+                    // Draw overlapping segments
+                    for (i, (_, opposing)) in overlapping_slices.iter().enumerate() {
+                        let color = if *opposing {
+                            colors.warning_color
+                        } else {
+                            colors.success_color
+                        };
+                        plot_ui.add(
+                            PlinesPlotItem::new(PlinePlotData::new(&plines[i])).stroke_color(color),
+                        );
+                    }
+                }
+                SceneState::Slices {
+                    pline1_slices,
+                    pline2_slices,
+                } => {
+                    for slice in pline1_slices.iter() {
+                        let slice_view = slice.view(pline1);
+                        plines.push(Polyline::create_from(&slice_view));
+                    }
+                    for slice in pline2_slices.iter() {
+                        let slice_view = slice.view(pline2);
+                        plines.push(Polyline::create_from(&slice_view));
+                    }
+
+                    // Draw original polyline vertexes
+                    if *show_vertexes {
+                        plot_ui.add(plot_item1);
+                        plot_ui.add(plot_item2);
+                    }
+
+                    // Draw all slices with different colors
+                    for (i, pline) in plines.iter().enumerate() {
+                        plot_ui.add(
+                            PlinesPlotItem::new(PlinePlotData::new(pline))
+                                .stroke_color(colors.get_multi_color(i)),
+                        );
+                    }
+                }
+                SceneState::BooleanResultWithPrunedSlices {
+                    result,
+                    pruned_slices,
+                    start_of_pline2_slices,
+                    start_of_pline1_overlapping_slices,
+                    start_of_pline2_overlapping_slices,
+                } => {
+                    for slice in pruned_slices.iter() {
+                        let slice_view = if slice.source_is_pline1 {
+                            slice.view(pline1)
+                        } else {
+                            slice.view(pline2)
+                        };
+                        plines.push(Polyline::create_from(&slice_view));
+                    }
+
+                    // Draw original polylines faintly
+                    plot_ui.add(plot_item1.stroke_color(color1.gamma_multiply(0.3)));
+                    plot_ui.add(plot_item2.stroke_color(color2.gamma_multiply(0.3)));
+
+                    // Draw the boolean result
+                    let all_plines = result
+                        .pos_plines
+                        .iter()
+                        .chain(result.neg_plines.iter())
+                        .map(|pl| &pl.pline);
+
+                    shape = Shape::from_plines(all_plines.cloned());
+
+                    let mut plot_item = PlinesPlotItem::new(&shape).stroke_color(color1);
+                    if *fill {
+                        plot_item = plot_item.fill_color(fill_color1);
+                    }
+                    plot_ui.add(plot_item);
+
+                    // Draw pruned slices with categorized colors (overlaid on top)
+                    for (i, pline) in plines.iter().enumerate() {
+                        let color = if i < start_of_pline2_slices {
+                            // Pline1 non-overlapping slices
+                            colors.primary_stroke
+                        } else if i < start_of_pline1_overlapping_slices {
+                            // Pline2 non-overlapping slices
+                            colors.secondary_stroke
+                        } else if i < start_of_pline2_overlapping_slices {
+                            // Pline1 overlapping slices
+                            colors.warning_color
+                        } else {
+                            // Pline2 overlapping slices
+                            colors.success_color
+                        };
+
+                        plot_ui.add(
+                            PlinesPlotItem::new(PlinePlotData::new(pline)).stroke_color(color),
+                        );
+                    }
+                }
             }
 
             if *zoom_to_fit {
@@ -336,7 +503,12 @@ fn plot_area(
     polyline_editor.ui_show(ui.ctx(), plines, &settings.colors(ui.ctx()));
 }
 
-fn build_boolean_result(pline1: &Polyline, pline2: &Polyline, mode: &Mode) -> SceneState {
+fn build_scene_state(
+    pline1: &Polyline,
+    pline2: &Polyline,
+    mode: &Mode,
+    show_pruned_slices: &bool,
+) -> SceneState {
     if pline1.vertex_count() < 2
         || pline2.vertex_count() < 2
         || !pline1.is_closed()
@@ -345,13 +517,93 @@ fn build_boolean_result(pline1: &Polyline, pline2: &Polyline, mode: &Mode) -> Sc
         return SceneState::NoOp;
     }
 
-    let op = match mode {
-        Mode::None => return SceneState::NoOp,
-        Mode::Or => BooleanOp::Or,
-        Mode::And => BooleanOp::And,
-        Mode::Not => BooleanOp::Not,
-        Mode::Xor => BooleanOp::Xor,
-    };
+    let pos_equal_eps = 1e-5;
 
-    SceneState::BooleanResult(pline1.boolean(pline2, op))
+    match mode {
+        Mode::None => SceneState::NoOp,
+        Mode::Or | Mode::And | Mode::Not | Mode::Xor => {
+            let op = match mode {
+                Mode::Or => BooleanOp::Or,
+                Mode::And => BooleanOp::And,
+                Mode::Not => BooleanOp::Not,
+                Mode::Xor => BooleanOp::Xor,
+                _ => unreachable!(),
+            };
+
+            if *show_pruned_slices {
+                let result = pline1.boolean(pline2, op);
+                let pline1_aabb_index = pline1.create_approx_aabb_index();
+                let boolean_info =
+                    process_for_boolean(pline1, pline2, &pline1_aabb_index, pos_equal_eps);
+
+                let pruned_slices = prune_slices(pline1, pline2, &boolean_info, op, pos_equal_eps);
+
+                SceneState::BooleanResultWithPrunedSlices {
+                    result,
+                    pruned_slices: pruned_slices.slices_remaining,
+                    start_of_pline2_slices: pruned_slices.start_of_pline2_slices,
+                    start_of_pline1_overlapping_slices: pruned_slices
+                        .start_of_pline1_overlapping_slices,
+                    start_of_pline2_overlapping_slices: pruned_slices
+                        .start_of_pline2_overlapping_slices,
+                }
+            } else {
+                SceneState::BooleanResult(pline1.boolean(pline2, op))
+            }
+        }
+        Mode::Intersects => {
+            let pline1_aabb_index = pline1.create_approx_aabb_index();
+            let boolean_info =
+                process_for_boolean(pline1, pline2, &pline1_aabb_index, pos_equal_eps);
+
+            let intersects = boolean_info
+                .intersects
+                .iter()
+                .map(|i| PlotPoint::new(i.point.x, i.point.y))
+                .collect();
+
+            let overlapping_slices = boolean_info
+                .overlapping_slices
+                .iter()
+                .map(|s| (s.view_data, s.opposing_directions))
+                .collect();
+
+            SceneState::Intersects {
+                intersects,
+                overlapping_slices,
+            }
+        }
+        Mode::Slices => {
+            let pline1_aabb_index = pline1.create_approx_aabb_index();
+            let boolean_info =
+                process_for_boolean(pline1, pline2, &pline1_aabb_index, pos_equal_eps);
+
+            let mut pline1_slices = Vec::new();
+            let mut pline2_slices = Vec::new();
+
+            // Always accept all slices to show them all
+            slice_at_intersects(
+                pline1,
+                &boolean_info,
+                false,
+                &mut |_| true,
+                &mut pline1_slices,
+                pos_equal_eps,
+            );
+
+            slice_at_intersects(
+                pline2,
+                &boolean_info,
+                true,
+                &mut |_| true,
+                &mut pline2_slices,
+                pos_equal_eps,
+            );
+
+            SceneState::Slices {
+                pline1_slices,
+                pline2_slices,
+            }
+        }
+    }
 }
