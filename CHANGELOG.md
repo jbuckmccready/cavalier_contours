@@ -2,20 +2,35 @@
 
 All notable changes to the cavalier_contours crate will be documented in this file.
 
-## Unreleased
+## 0.5.0 2025-07-08
 
 ### Added ⭐
 
+- Added `egui` interactive demo UI crate and auto deployment to GitHub pages for the demo
+  [page is here](https://jbuckmccready.github.io/cavalier_contours/).
+- Added `visit_intersects`, `contains`, and `scan_for_self_intersect` to pline traits ([#68](https://github.com/jbuckmccready/cavalier_contours/pull/68)).
+- Added `user_data` to traits for tracking data through operations ([#63](https://github.com/jbuckmccready/cavalier_contours/pull/63)).
+- Added multi polyline offset algorithm to c ffi ([#63](https://github.com/jbuckmccready/cavalier_contours/pull/63)).
+- Added more doc comments/tests for `PlineSource` and `PlineSourceMut`.
 - Added `README.md` file to `cavalier_contours_ffi` crate.
-- Added `egui` interactive demo UI crate and auto deployment to GitHub pages for the demo [page is here](https://jbuckmccready.github.io/cavalier_contours/).
 
 ### Changed 🔧
+
+- ⚠️ BREAKING: Updated MSRV to 1.88 and Rust edition 2024.
+  Only breaking if unable to compile with Rust 1.88 or later.
+- Refactored multipolyline offset algorithm to be step-by-step.
+- Simplified `prune_slices` function in pline_boolean.
+- Refactored two-polyline intersection visitation to use visitor pattern and
+  eliminated allocation inside loop ([#68](https://github.com/jbuckmccready/cavalier_contours/pull/68)).
+
+### Fixed 🐛
 
 - ⚠️ BREAKING: Fix memory leak in cavc_plinelist by implementing Drop trait ([#64](https://github.com/jbuckmccready/cavalier_contours/pull/64)).
   This is not likely breaking for most users but if you are calling `cavc_pline_f` on each pline
   in a `cavc_plinelist` without removing them from the list then you will get a double free on
   the plines not removed when the `cavc_plinelist` is freed/dropped.
-- Updated MSRV to 1.85 and Rust edition to 2024.
+- Improved offset slice validation by checking multiple segment midpoints ([#69](https://github.com/jbuckmccready/cavalier_contours/pull/69)). Fixes bug
+  reported in issue [#66](https://github.com/jbuckmccready/cavalier_contours/issues/66).
 
 ## 0.4.0 - 2024-02-21
 
