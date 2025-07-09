@@ -1,6 +1,8 @@
 [package]
 name = "cavalier_contours_ui"
 description = "UI app for debugging and demonstrating the cavalier_contours crate"
+# Just used for development, not published to crates.io.
+publish = false
 authors.workspace = true
 categories.workspace = true
 edition.workspace = true
