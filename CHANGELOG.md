@@ -50,7 +50,7 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   calls `cavc_pline_create_aabbindex` and `cavc_pline_create_approx_aabbindex` also no longer
   return an error code of 2 when polyline has less than 2 vertexes (empty aabb index is returned).
   ([#29](https://github.com/jbuckmccready/cavalier_contours/pull/29))
-- Updated `StaticAABB2DIndex` dependency to version 1.0.
+- Updated `StaticAABB2DIndex` dependency to version 2.0.
 - Bumped rust edition to 2021.
 - Use `with_capacity` instead of `reserve` in some places to avoid over allocation behavior of Vec
   (minor performance improvement).
