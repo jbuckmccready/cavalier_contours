@@ -2,7 +2,7 @@
 
 All notable changes to the cavalier_contours crate will be documented in this file.
 
-## 0.5.0 2025-07-08
+## 0.6.0 2025-07-08
 
 ### Added ⭐
 
@@ -31,6 +31,10 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   the plines not removed when the `cavc_plinelist` is freed/dropped.
 - Improved offset slice validation by checking multiple segment midpoints ([#69](https://github.com/jbuckmccready/cavalier_contours/pull/69)). Fixes bug
   reported in issue [#66](https://github.com/jbuckmccready/cavalier_contours/issues/66).
+
+## 0.5.0 - 2025-07-08
+
+- `cargo release` got so excited it jumped a version! Nothing to see here...
 
 ## 0.4.0 - 2024-02-21
 
