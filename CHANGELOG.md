@@ -2,6 +2,20 @@
 
 All notable changes to the cavalier_contours crate will be documented in this file.
 
+## Unreleased
+
+### Added ⭐
+
+- ⚠️ BREAKING: Added collapsed area parameter to pline boolean options to allow for pruning
+  collapsed polylines from results. This is only breaking due to struct initialization, if you use
+  default initialization this defaults to no change in behavior ([#71](https://github.com/jbuckmccready/cavalier_contours/pull/71)).
+
+### Fixed 🐛
+
+- Fixed bug in pline segment intersection when two arcs only touch at endpoints at one point, have
+  the same arc radius and center, and are in opposite directions. This also fixes some cases for
+  algorithms that depend on finding interescts (boolean, offset, etc.) ([#71](https://github.com/jbuckmccready/cavalier_contours/pull/71)).
+
 ## 0.6.0 2025-07-08
 
 ### Added ⭐
