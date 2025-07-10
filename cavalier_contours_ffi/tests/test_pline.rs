@@ -647,6 +647,7 @@ fn pline_eval_boolean() {
         let mut options = cavc_pline_boolean_o {
             pline1_aabb_index: std::ptr::null(),
             pos_equal_eps: f64::NAN,
+            collapsed_area_eps: f64::NAN,
         };
 
         unsafe {

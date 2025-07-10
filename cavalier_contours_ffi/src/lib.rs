@@ -189,6 +189,8 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset_o_init(
 pub struct cavc_pline_boolean_o {
     pub pline1_aabb_index: *const cavc_aabbindex,
     pub pos_equal_eps: f64,
+    /// NOTE: optional parameter, set to NaN for None.
+    pub collapsed_area_eps: f64,
 }
 
 impl cavc_pline_boolean_o {
@@ -202,6 +204,11 @@ impl cavc_pline_boolean_o {
         PlineBooleanOptions {
             pline1_aabb_index,
             pos_equal_eps: self.pos_equal_eps,
+            collapsed_area_eps: if self.collapsed_area_eps.is_nan() {
+                None
+            } else {
+                Some(self.collapsed_area_eps)
+            },
         }
     }
 }
@@ -212,6 +219,7 @@ impl Default for cavc_pline_boolean_o {
         Self {
             pline1_aabb_index: std::ptr::null(),
             pos_equal_eps: d.pos_equal_eps,
+            collapsed_area_eps: f64::NAN,
         }
     }
 }
