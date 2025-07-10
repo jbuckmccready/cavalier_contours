@@ -271,6 +271,11 @@ where
     pub pline1_aabb_index: Option<&'a StaticAABB2DIndex<T>>,
     /// Fuzzy comparison epsilon used for determining if two positions are equal.
     pub pos_equal_eps: T,
+    /// If Some then this epsilon value is used to determine if a result polyline is collapsed, that
+    /// is has no area according to abs(area) < eps. Polylines that are collapsed will not be
+    /// included in the result. This is useful to avoid inconsistent results due to floating point
+    /// thresholding, or if you just don't want ever want collapsed polylines in the result.
+    pub collapsed_area_eps: Option<T>,
 }
 
 impl<T> PlineBooleanOptions<'_, T>
@@ -282,6 +287,7 @@ where
         Self {
             pline1_aabb_index: None,
             pos_equal_eps: T::from(1e-5).unwrap(),
+            collapsed_area_eps: None,
         }
     }
 }

@@ -2,7 +2,7 @@ mod test_utils;
 
 use cavalier_contours::polyline::{
     BooleanOp, BooleanPlineSlice, BooleanResult, BooleanResultInfo, BooleanResultPline,
-    PlineCreation, PlineSource, PlineSourceMut, Polyline,
+    PlineBooleanOptions, PlineCreation, PlineSource, PlineSourceMut, Polyline,
 };
 use test_utils::{
     ModifiedPlineSet, ModifiedPlineSetVisitor, ModifiedPlineState, PlineProperties,
@@ -377,11 +377,18 @@ fn run_pline_boolean_tests(
     let test_set1 = ModifiedPlineSet::new(pline1, true, true);
     let test_set2 = ModifiedPlineSet::new(pline2, true, true);
 
+    let boolean_options = PlineBooleanOptions {
+        // NOTE: we prune collapsed areas for testing as there can be inconsistencies due to float
+        // thresholding when inverting direction or cycling vertex index positions
+        collapsed_area_eps: Some(1e-5),
+        ..Default::default()
+    };
+
     // test every combination of direction and index position cycle between the two polylines
     test_set1.accept_closure(&mut |modified_pline1, state1| {
         test_set2.accept_closure(&mut |modified_pline2, state2| {
             for &(op, pos_set_expected, neg_set_expected) in cases {
-                let result = modified_pline1.boolean(&modified_pline2, op);
+                let result = modified_pline1.boolean_opt(&modified_pline2, op, &boolean_options);
                 let pos_set_result = create_boolean_property_set(&result.pos_plines);
                 let neg_set_result = create_boolean_property_set(&result.neg_plines);
                 let passed = property_sets_match_abs_a(&pos_set_result, pos_set_expected)
@@ -640,8 +647,8 @@ mod test_specific {
             [
                 (BooleanOp::Or, &[PlineProperties::new(7, 11.386322805194794, 19.92614241253084, 3.825009999999997, 3.31650999999997, 10.49313000000003, 10.125790000000004, vec![4, 117])], &[]),
                 (BooleanOp::And, &[PlineProperties::new(3, 1.2667365182740837, 3.9897719937466536, 4.77688999999997, 6.873515801569765, 6.046870199969008, 8.143500000000031, vec![4, 117])], &[]),
-                (BooleanOp::Not, &[PlineProperties::new(2, 0.00000000000000024796, 0.0008935372254745097, 5.0148600112639, 7.0126481972021, 5.0152087808049, 7.0129274139501, vec![4, 117]), PlineProperties::new(5, -7.231366678543611, 15.377700338744262, 5.0152087808049, 3.31650999999997, 10.49313000000003, 8.0043518027979, vec![4, 117])], &[]),
-                (BooleanOp::Xor, &[PlineProperties::new(2, 0.00000000000000024796, 0.0008935372254745097, 5.0148600112639, 7.0126481972021, 5.0152087808049, 7.0129274139501, vec![4, 117]), PlineProperties::new(5, -7.231366678543611, 15.377700338744262, 5.0152087808049, 3.31650999999997, 10.49313000000003, 8.0043518027979, vec![4, 117]), PlineProperties::new(4, 2.88821960837715, 8.537320530307678, 3.825009999999997, 7.0129274139501, 5.8085712191951, 10.125790000000004, vec![4, 117])], &[])
+                (BooleanOp::Not, &[PlineProperties::new(5, -7.231366678543611, 15.377700338744262, 5.0152087808049, 3.31650999999997, 10.49313000000003, 8.0043518027979, vec![4, 117])], &[]),
+                (BooleanOp::Xor, &[PlineProperties::new(5, -7.231366678543611, 15.377700338744262, 5.0152087808049, 3.31650999999997, 10.49313000000003, 8.0043518027979, vec![4, 117]), PlineProperties::new(4, 2.88821960837715, 8.537320530307678, 3.825009999999997, 7.0129274139501, 5.8085712191951, 10.125790000000004, vec![4, 117])], &[])
             ]
         }
         overlapping_pill_shaped_ends_reported6 {
@@ -803,7 +810,22 @@ mod test_specific {
                 (BooleanOp::Or, &[PlineProperties::new(9, 19.513229882549645, 32.72452861196257, 61.935, 39.825, 75.14349, 46.49313000000001, vec![4, 117])], &[]),
                 (BooleanOp::And, &[PlineProperties::new(3, 1.2667686977434385, 3.9898226700588975, 68.33421, 39.82501, 69.60421000000001, 41.09500999999999, vec![4, 117])], &[]),
                 (BooleanOp::Not, &[PlineProperties::new(6, -10.119464484796188, 19.925886964359684, 68.96920900769001, 39.82501000984475, 75.14349, 46.49313000000001, vec![4, 117])], &[]),
-                (BooleanOp::Xor, &[PlineProperties::new(6, -10.119464484796188, 19.925886964359684, 68.96920900769001, 39.82501000984475, 75.14349, 46.49313000000001, vec![4, 117]), PlineProperties::new(4, 8.12699670000984, 16.788242670074666, 61.935, 39.825, 68.96921099231, 41.09500999999922, vec![4, 117]), PlineProperties::new(2, 0.00000000000017862574, 0.00022164758712114164, 68.96921099231, 39.82501000000077, 68.96932181610305, 39.82501000984475, vec![4, 117])], &[])
+                (BooleanOp::Xor, &[PlineProperties::new(6, -10.119464484796188, 19.925886964359684, 68.96920900769001, 39.82501000984475, 75.14349, 46.49313000000001, vec![4, 117]), PlineProperties::new(4, 8.12699670000984, 16.788242670074666, 61.935, 39.825, 68.96921099231, 41.09500999999922, vec![4, 117])], &[])
+            ]
+        }
+        opposite_direction_arc_arc_endpoints_intersect_bug_reported {
+            // Test case for issue: https://github.com/jbuckmccready/cavalier_contours/issues/42
+            // Caused by arc-arc seg intersect bug
+            (
+                pline_closed_userdata![[4], (-188.500000000023, -166.831646988729, 0.0), (-188.5, -195.881478300073, 0.0), (-189.0, -196.91384910249, 0.553407781718062), (-170.999999999999, -225.631646989572, -0.553407781718061), (-153.0, -196.91384910249, -0.553407781718095), (-153.5, -195.881478300072, 0.0), (-153.5, -166.831646988778, 0.0), (-153.5, -166.820646988779, 0.0), (-188.500000000023, -166.820646988729, 0.0)],
+                pline_closed_userdata![[117], (412.0, -246.331646989572, 0.0), (412.0, -156.831646989572, 0.0), (319.0, -156.831646989571, 0.0), (319.0, -193.831646989571, 0.0), (317.0, -193.831646989571, 0.0), (317.0, -156.831646989572, 0.0), (-153.5, -156.831646989572, 0.0), (-153.5, -195.881478300072, 0.0), (-153.0, -196.91384910249, -0.553407781718061), (-171.0, -225.631646989571, -0.553407781718061), (-189.0, -196.91384910249, 0.0), (-188.5, -195.881478300073, 0.0), (-188.5, -156.831646989571, 0.0), (-498.0, -156.831646989571, 0.0), (-498.0, -193.831646989572, 0.0), (-448.0, -193.831646989572, 0.0), (-448.0, -228.831646989571, 0.0), (-538.0, -228.831646989571, 0.0), (-538.0, -193.831646989572, 0.0), (-500.0, -193.831646989572, 0.0), (-500.0, -156.831646989572, 0.0), (-618.0, -156.831646989572, 0.0), (-618.0, -246.331646989572, 0.0)]
+            )
+            =>
+            [
+                (BooleanOp::Or, &[PlineProperties::new(20, 88537.38500002908, 2652.977999998363, -618.0, -246.331646989572, 412.0, -156.831646989571, vec![4, 117])], &[PlineProperties::new(2, 448.72925543646033, 80.87292554364588, -173.0, -225.631646989571, -151.0, -196.91384910249, vec![4, 117]), PlineProperties::new(2, 0.25699795696345973, 2.515629079078068, -153.60334994589547, -196.91384910249, -153.0, -195.881478300072, vec![4, 117])]),
+                (BooleanOp::And, &[], &[]),
+                (BooleanOp::Not, &[PlineProperties::new(7, 1570.4416233924637, 176.51021724536002, -191.0, -225.631646989571, -153.0, -166.820646988729, vec![4, 117])], &[]),
+                (BooleanOp::Xor, &[PlineProperties::new(7, 1570.4416233924637, 176.51021724536002, -191.0, -225.631646989571, -153.0, -166.820646988729, vec![4, 117]), PlineProperties::new(23, 86517.95712324319, 2759.2667455033516, -618.0, -246.331646989572, 412.0, -156.831646989571, vec![])], &[])
             ]
         }
     }

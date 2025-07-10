@@ -676,6 +676,7 @@ pub fn stitch_slices_into_closed_polylines<P, R, T, S, O>(
     source_pline2: &R,
     stitch_selector: &S,
     pos_equal_eps: T,
+    collapsed_area_eps: Option<T>,
 ) -> Vec<BooleanResultPline<O>>
 where
     P: PlineSource<Num = T> + ?Sized,
@@ -722,6 +723,12 @@ where
         }
         pline.remove_last();
         pline.set_is_closed(true);
+        if let Some(collapsed_area) = collapsed_area_eps
+            && pline.area().abs() < collapsed_area
+        {
+            // skip slice with area less than collapsed_area_eps
+            return;
+        }
         result.push(BooleanResultPline::new(pline, subslices));
     };
 
@@ -867,6 +874,7 @@ where
     let is_pline2_in_pline1 = || pline1.winding_number(pline2.at(0).pos()) != 0;
 
     let pos_equal_eps = options.pos_equal_eps;
+    let collapsed_area_eps = options.collapsed_area_eps;
 
     match operation {
         BooleanOp::Or => {
@@ -913,6 +921,7 @@ where
                     pline2,
                     &stitch_selector,
                     pos_equal_eps,
+                    collapsed_area_eps,
                 );
 
                 let mut pos_plines = Vec::new();
@@ -972,6 +981,7 @@ where
                     pline2,
                     &stitch_selector,
                     pos_equal_eps,
+                    collapsed_area_eps,
                 );
 
                 BooleanResult::new(pos_plines, Vec::new(), BooleanResultInfo::Intersected)
@@ -1014,6 +1024,7 @@ where
                     pline2,
                     &stitch_selector,
                     pos_equal_eps,
+                    collapsed_area_eps,
                 );
 
                 BooleanResult::new(pos_plines, Vec::new(), BooleanResultInfo::Intersected)
@@ -1055,6 +1066,7 @@ where
                     pline2,
                     &stitch_selector1,
                     pos_equal_eps,
+                    collapsed_area_eps,
                 );
 
                 // collect pline2 NOT pline1 results
@@ -1074,6 +1086,7 @@ where
                     pline2,
                     &stitch_selector2,
                     pos_equal_eps,
+                    collapsed_area_eps,
                 );
 
                 remaining1.extend(remaining2);
