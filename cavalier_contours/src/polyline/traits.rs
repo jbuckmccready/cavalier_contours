@@ -42,10 +42,18 @@ use num_traits::cast::NumCast;
 /// operations that can be performed on a readonly polyline.
 ///
 /// A polyline is a sequence of vertexes and a bool indicating whether the polyline is closed (last
-/// vertex forms segment with first vertex) or open (no segment between last and first vertex). For
-/// related traits see [PlineSourceMut] and [PlineCreation].
+/// vertex forms segment with first vertex) or open (no segment between last and first vertex).
+/// Polylines can represent complex 2D shapes including straight line segments and circular arc
+/// segments defined by bulge values. For related traits see [PlineSourceMut] and [PlineCreation].
 ///
-/// Each vertex has a 2d xy position and bulge value. See [PlineVertex] for more information.
+/// Each vertex has a 2d xy position and bulge value. The bulge value determines the curvature of
+/// the segment from this vertex to the next:
+/// - A bulge of 0.0 creates a straight line segment
+/// - A positive bulge creates a counter-clockwise arc
+/// - A negative bulge creates a clockwise arc
+/// - The magnitude of the bulge determines the arc's curvature
+///
+/// See [PlineVertex] for more information about vertex structure and bulge calculations.
 pub trait PlineSource {
     /// Numeric type used for the polyline.
     type Num: Real;
@@ -53,8 +61,16 @@ pub trait PlineSource {
     /// Type used for output when invoking methods that return a new polyline.
     type OutputPolyline: PlineCreation<Num = Self::Num>;
 
+    /// Returns the number of user data values stored with this polyline.
+    ///
+    /// User data values are 64-bit unsigned integers that can be associated with polylines
+    /// for storing custom application-specific data.
     fn get_userdata_count(&self) -> usize;
 
+    /// Returns an iterator over all user data values stored with this polyline.
+    ///
+    /// User data values are 64-bit unsigned integers that can be associated with polylines
+    /// for storing custom application-specific data.
     fn get_userdata_values(&self) -> impl Iterator<Item = u64> + '_;
 
     /// Total number of vertexes.
@@ -147,7 +163,11 @@ pub trait PlineSource {
 
     /// Returns the next wrapping vertex index for the polyline.
     ///
-    /// If `i + 1 >= self.len()` then 0 is returned, otherwise `i + 1` is returned.
+    /// This method treats the polyline as circular, so after the last vertex index,
+    /// it wraps around to index 0. This is useful for traversing polylines in a
+    /// circular manner regardless of whether they are closed or open.
+    ///
+    /// If `i + 1 >= self.vertex_count()` then 0 is returned, otherwise `i + 1` is returned.
     #[inline]
     fn next_wrapping_index(&self, i: usize) -> usize {
         let next = i + 1;
@@ -156,7 +176,11 @@ pub trait PlineSource {
 
     /// Returns the previous wrapping vertex index for the polyline.
     ///
-    /// If `i == 0` then `self.len() - 1` is returned, otherwise `i - 1` is returned.
+    /// This method treats the polyline as circular, so before the first vertex index (0),
+    /// it wraps around to the last vertex index. This is useful for traversing polylines
+    /// in a circular manner regardless of whether they are closed or open.
+    ///
+    /// If `i == 0` then `self.vertex_count() - 1` is returned, otherwise `i - 1` is returned.
     #[inline]
     fn prev_wrapping_index(&self, i: usize) -> usize {
         if i == 0 {
@@ -1820,10 +1844,24 @@ pub trait PlineSource {
 ///
 /// See other core polyline traits: [PlineSource] and [PlineCreation] for more information.
 pub trait PlineSourceMut: PlineSource {
-    /// Clears the pline's userdata storage and then copies from 'values' into userdata storage.
+    /// Clears all existing user data values and replaces them with the provided values.
+    ///
+    /// User data values are 64-bit unsigned integers that can be associated with polylines
+    /// for storing custom application-specific data.
+    ///
+    /// # Parameters
+    ///
+    /// * `values` - An iterator of `u64` values to set as the new user data
     fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>);
 
-    /// Copies from 'values' into userdata storage.
+    /// Appends additional user data values to the existing user data storage.
+    ///
+    /// User data values are 64-bit unsigned integers that can be associated with polylines
+    /// for storing custom application-specific data.
+    ///
+    /// # Parameters
+    ///
+    /// * `values` - An iterator of `u64` values to append to the existing user data
     fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>);
 
     /// Set the vertex data at the given `index` position of the polyline.
