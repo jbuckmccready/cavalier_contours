@@ -1558,7 +1558,7 @@ pub trait PlineSource {
     /// is to the right.
     ///
     /// `options` is a struct that holds optional parameters. See
-    /// [PlineOffsetOptions](crate::polyline::PlineOffsetOptions) for specific parameters.
+    /// [PlineOffsetOptions] for specific parameters.
     ///
     /// # Panics
     ///

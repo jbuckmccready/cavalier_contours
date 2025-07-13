@@ -44,9 +44,21 @@ where
     }
 }
 
+/// A polyline with an associated spatial index for efficient geometric queries.
+///
+/// This structure combines a polyline with a spatial index (AABB tree) that enables
+/// fast intersection testing, nearest neighbor queries, and other spatial operations.
+/// The spatial index is automatically built from the polyline's segment bounding boxes.
+///
+/// # Public Visibility
+///
+/// This struct is made public for visualization and testing purposes, allowing
+/// access to both the polyline geometry and its spatial acceleration structure.
 #[derive(Debug, Clone)]
 pub struct IndexedPolyline<T: Real> {
+    /// The polyline geometry
     pub polyline: Polyline<T>,
+    /// Spatial index built from the polyline's segment bounding boxes
     pub spatial_index: StaticAABB2DIndex<T>,
 }
 

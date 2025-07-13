@@ -1,9 +1,30 @@
 use crate::core::traits::Real;
 use std::{fmt::Display, ops};
 
+/// A 2D vector with x and y components.
+///
+/// This is the fundamental 2D vector type used throughout the library for representing
+/// points, directions, and performing vector operations. The type parameter `T` defaults
+/// to `f64` but can be any type that implements the [`Real`] trait.
+///
+/// # Examples
+///
+/// ```
+/// # use cavalier_contours::core::math::{Vector2, vec2};
+/// let v1 = Vector2::new(3.0, 4.0);
+/// let v2 = vec2(1.0, 2.0); // shorthand constructor
+///
+/// // Vector operations
+/// let sum = v1 + v2;
+/// let dot_product = v1.dot(v2);
+/// let length = v1.length();
+/// let normalized = v1.normalize();
+/// ```
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct Vector2<T = f64> {
+    /// The x-coordinate component.
     pub x: T,
+    /// The y-coordinate component.
     pub y: T,
 }
 
@@ -150,6 +171,18 @@ mod serde_impl {
 #[allow(unused_imports)]
 pub use serde_impl::*;
 
+/// Shorthand constructor for creating a [`Vector2`].
+///
+/// This is a convenience function equivalent to `Vector2::new(x, y)`.
+///
+/// # Examples
+///
+/// ```
+/// # use cavalier_contours::core::math::vec2;
+/// let v = vec2(3.0, 4.0);
+/// assert_eq!(v.x, 3.0);
+/// assert_eq!(v.y, 4.0);
+/// ```
 #[inline(always)]
 pub fn vec2<T>(x: T, y: T) -> Vector2<T>
 where
