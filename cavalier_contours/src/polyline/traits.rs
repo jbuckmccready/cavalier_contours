@@ -1540,10 +1540,14 @@ pub trait PlineSource {
     /// ```
     /// # use cavalier_contours::polyline::*;
     /// # use cavalier_contours::pline_closed;
+    /// // `pline` is a closed polyline representing a circle with radius 0.5 centered at (0.5, 0.0).
     /// let pline = pline_closed![(0.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
+    /// // Parallel offset inward 0.2 (positive value for counter-clockwise polyline).
     /// let offset_plines = pline.parallel_offset(0.2);
+    /// // Just one resulting polyline.
     /// assert_eq!(offset_plines.len(), 1);
     /// let offset_pline = &offset_plines[0];
+    /// // Vertexes offset inward, bulge/curvature unchanged.
     /// assert!(offset_pline[0].fuzzy_eq(PlineVertex::new(0.2, 0.0, 1.0)));
     /// assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
     /// ```

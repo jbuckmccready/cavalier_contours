@@ -1,10 +1,12 @@
+# Cavalier Contours
+
 [![Build Status](https://github.com/jbuckmccready/cavalier_contours/actions/workflows/ci.yml/badge.svg)](https://github.com/jbuckmccready/cavalier_contours/actions)
 [![Crates.io](https://img.shields.io/crates/v/cavalier_contours.svg)](https://crates.io/crates/cavalier_contours)
 [![Docs.rs](https://docs.rs/cavalier_contours/badge.svg)](https://docs.rs/cavalier_contours)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 [![Apache](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE-APACHE)
 
-## Summary
+---
 
 This project is a continuation of the C++
 [CavalierContours](https://github.com/jbuckmccready/CavalierContours) library rewritten in Rust with
@@ -15,6 +17,21 @@ contributing checkout the project GitHub issues. For more information about the 
 algorithm and background information see the old C++ repository `README.md`
 [here](https://github.com/jbuckmccready/CavalierContours).
 
+```rust
+use cavalier_contours::polyline::*;
+use cavalier_contours::pline_closed;
+// `pline` is a closed polyline representing a circle with radius 0.5 centered at (0.5, 0.0).
+let pline = pline_closed![(0.0, 0.0, 1.0), (1.0, 0.0, 1.0)];
+// Parallel offset inward 0.2 (positive value for counter-clockwise polyline).
+let offset_plines = pline.parallel_offset(0.2);
+// Just one resulting polyline.
+assert_eq!(offset_plines.len(), 1);
+let offset_pline = &offset_plines[0];
+// Vertexes offset inward, bulge/curvature unchanged.
+assert!(offset_pline[0].fuzzy_eq(PlineVertex::new(0.2, 0.0, 1.0)));
+assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
+```
+
 
 ## Main Features
 
@@ -22,6 +39,8 @@ algorithm and background information see the old C++ repository `README.md`
 - Polyline parallel offsetting (works on open, closed, and self-intersecting polylines)
 - Boolean operations between two closed polylines (union, intersection, difference)
 - Polyline containment and intersection tests
+- Winding number (point in closed polyline) test
+- Area, length, redundant vertex removal, and other geometric functions
 - 2D spatial indexing to speed up alogorithms on high vertex count polylines
 - Multi-polyline parallel offsetting ("shapes" defined with islands)
 - No unsafe code in core crate
