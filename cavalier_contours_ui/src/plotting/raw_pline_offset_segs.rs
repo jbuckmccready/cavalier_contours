@@ -19,7 +19,7 @@ pub struct RawPlineOffsetSegsPlotItem<'a> {
     pub segs: &'a [RawPlineOffsetSeg<f64>],
     pub color: epaint::Color32,
     pub collapsed_color: epaint::Color32,
-    id: Option<egui::Id>,
+    base: egui_plot::PlotItemBase,
 }
 
 impl<'a> RawPlineOffsetSegsPlotItem<'a> {
@@ -28,7 +28,7 @@ impl<'a> RawPlineOffsetSegsPlotItem<'a> {
             segs,
             color: epaint::Color32::GRAY,
             collapsed_color: epaint::Color32::DARK_GRAY,
-            id: None,
+            base: egui_plot::PlotItemBase::new("Raw Offset Segments".to_string()),
         }
     }
 
@@ -39,11 +39,6 @@ impl<'a> RawPlineOffsetSegsPlotItem<'a> {
 
     pub fn collapsed_color(mut self, color: epaint::Color32) -> Self {
         self.collapsed_color = color;
-        self
-    }
-
-    pub fn id(mut self, id: egui::Id) -> Self {
-        self.id = Some(id);
         self
     }
 }
@@ -169,7 +164,11 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
             })
     }
 
-    fn id(&self) -> Option<egui::Id> {
-        self.id
+    fn base(&self) -> &egui_plot::PlotItemBase {
+        &self.base
+    }
+
+    fn base_mut(&mut self) -> &mut egui_plot::PlotItemBase {
+        &mut self.base
     }
 }

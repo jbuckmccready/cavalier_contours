@@ -126,7 +126,7 @@ pub struct PlinesPlotItem<T> {
     vertex_color: epaint::Color32,
     stroke_color: epaint::Color32,
     fill_color: epaint::Color32,
-    id: Option<egui::Id>,
+    base: egui_plot::PlotItemBase,
 }
 
 impl<T> PlinesPlotItem<T> {
@@ -136,7 +136,7 @@ impl<T> PlinesPlotItem<T> {
             vertex_color: epaint::Color32::TRANSPARENT,
             stroke_color: epaint::Color32::TRANSPARENT,
             fill_color: epaint::Color32::TRANSPARENT,
-            id: None,
+            base: egui_plot::PlotItemBase::new("Polylines".to_string()),
         }
     }
 
@@ -152,11 +152,6 @@ impl<T> PlinesPlotItem<T> {
 
     pub fn fill_color(mut self, color: epaint::Color32) -> Self {
         self.fill_color = color;
-        self
-    }
-
-    pub fn id(mut self, id: egui::Id) -> Self {
-        self.id = Some(id);
         self
     }
 }
@@ -323,7 +318,11 @@ where
         aabb_to_plotbounds(&self.data.bounds())
     }
 
-    fn id(&self) -> Option<egui::Id> {
-        self.id
+    fn base(&self) -> &egui_plot::PlotItemBase {
+        &self.base
+    }
+
+    fn base_mut(&mut self) -> &mut egui_plot::PlotItemBase {
+        &mut self.base
     }
 }

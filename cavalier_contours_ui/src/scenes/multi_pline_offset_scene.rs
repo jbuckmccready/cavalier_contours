@@ -354,9 +354,12 @@ fn plot_area(
                     );
                 }
                 // plot intersects
-                let points = egui_plot::Points::new(PlotPoints::from(intersects.as_slice()))
-                    .radius(PLOT_VERTEX_RADIUS)
-                    .color(colors.error_color);
+                let points = egui_plot::Points::new(
+                    "Intersections",
+                    PlotPoints::from(intersects.as_slice()),
+                )
+                .radius(PLOT_VERTEX_RADIUS)
+                .color(colors.error_color);
                 plot_ui.points(points);
             }
             SceneState::Slices { slice_plines } => {

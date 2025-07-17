@@ -390,9 +390,12 @@ fn plot_area(
 
                     // Draw intersection points
                     if !intrs.is_empty() {
-                        let points = egui_plot::Points::new(PlotPoints::from(intrs.as_slice()))
-                            .radius(PLOT_VERTEX_RADIUS * 1.5)
-                            .color(colors.error_color);
+                        let points = egui_plot::Points::new(
+                            "Intersections",
+                            PlotPoints::from(intrs.as_slice()),
+                        )
+                        .radius(PLOT_VERTEX_RADIUS * 1.5)
+                        .color(colors.error_color);
                         plot_ui.points(points);
                     }
 
