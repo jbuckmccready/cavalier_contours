@@ -92,7 +92,7 @@ impl cavc_pline_parallel_offset_o {
     /// # Safety
     ///
     /// `aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
-    pub unsafe fn to_internal(&self) -> PlineOffsetOptions<f64> {
+    pub unsafe fn to_internal(&self) -> PlineOffsetOptions<'_, f64> {
         let aabb_index = unsafe { self.aabb_index.as_ref().map(|w| &w.0) };
         PlineOffsetOptions {
             aabb_index,
@@ -199,7 +199,7 @@ impl cavc_pline_boolean_o {
     /// # Safety
     ///
     /// `pline1_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
-    pub unsafe fn to_internal(&self) -> PlineBooleanOptions<f64> {
+    pub unsafe fn to_internal(&self) -> PlineBooleanOptions<'_, f64> {
         let pline1_aabb_index = unsafe { self.pline1_aabb_index.as_ref().map(|w| &w.0) };
         PlineBooleanOptions {
             pline1_aabb_index,
@@ -320,7 +320,7 @@ impl cavc_pline_self_intersect_o {
     /// # Safety
     ///
     /// `pline_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
-    pub unsafe fn to_internal(&self) -> Option<PlineSelfIntersectOptions<f64>> {
+    pub unsafe fn to_internal(&self) -> Option<PlineSelfIntersectOptions<'_, f64>> {
         let pline_aabb_index = unsafe { self.pline_aabb_index.as_ref().map(|w| &w.0) };
         let include_value = match self.include {
             0 => SelfIntersectsInclude::All,
@@ -428,7 +428,7 @@ impl cavc_pline_contains_o {
     /// # Safety
     ///
     /// `pline1_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
-    pub unsafe fn to_internal(&self) -> PlineContainsOptions<f64> {
+    pub unsafe fn to_internal(&self) -> PlineContainsOptions<'_, f64> {
         let pline1_aabb_index = unsafe { self.pline1_aabb_index.as_ref().map(|w| &w.0) };
         PlineContainsOptions {
             pline1_aabb_index,
