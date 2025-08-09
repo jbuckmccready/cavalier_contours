@@ -32,6 +32,9 @@ assert!(offset_pline[0].fuzzy_eq(PlineVertex::new(0.2, 0.0, 1.0)));
 assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
 ```
 
+See more examples [here](examples/README.md).
+
+[👉 Click to run the WASM web demo 👈](https://jbuckmccready.github.io/cavalier_contours/)
 
 ## Main Features
 
@@ -46,8 +49,6 @@ assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
 - No unsafe code in core crate
 - C FFI for integration with other languages
 - WebAssembly support and interactive web demo
-
-[👉 Click to run the WASM web demo 👈](https://jbuckmccready.github.io/cavalier_contours/)
 
 <img src="https://github.com/jbuckmccready/CavalierContoursDoc/blob/master/gifs/PolylineOffsets.gif" width="400"/> <img src="https://github.com/jbuckmccready/CavalierContoursDoc/blob/master/gifs/PolylineCombines.gif" width="400"/>
 
