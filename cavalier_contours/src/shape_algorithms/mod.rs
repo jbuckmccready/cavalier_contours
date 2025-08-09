@@ -583,8 +583,8 @@ where
                     return false;
                 }
 
-                if let Some(midpoint2) = midpoint2 {
-                    if !point_valid_for_offset(
+                if let Some(midpoint2) = midpoint2
+                    && !point_valid_for_offset(
                         &parent_loop.polyline,
                         offset,
                         &parent_loop.spatial_index,
@@ -592,9 +592,9 @@ where
                         query_stack,
                         pos_equal_eps,
                         offset_dist_eps,
-                    ) {
-                        return false;
-                    }
+                    )
+                {
+                    return false;
                 }
             }
             true

@@ -1,0 +1,40 @@
+[package]
+name = "cavalier_contours_examples"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+cavalier_contours = { path = "../cavalier_contours" }
+
+[[example]]
+name = "basic_polyline"
+path = "basic_polyline.rs"
+
+[[example]]
+name = "geometric_properties"
+path = "geometric_properties.rs"
+
+[[example]]
+name = "basic_geometric"
+path = "basic_geometric.rs"
+
+[[example]]
+name = "parallel_offsets"
+path = "parallel_offsets.rs"
+
+[[example]]
+name = "intersections"
+path = "intersections.rs"
+
+[[example]]
+name = "boolean_ops"
+path = "boolean_ops.rs"
+
+[[example]]
+name = "iteration"
+path = "iteration.rs"
+
+[[example]]
+name = "segments"
+path = "segments.rs"

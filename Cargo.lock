@@ -574,6 +574,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "cavalier_contours_examples"
+version = "0.0.0"
+dependencies = [
+ "cavalier_contours",
+]
+
+[[package]]
 name = "cavalier_contours_ffi"
 version = "0.6.0"
 dependencies = [
