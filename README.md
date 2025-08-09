@@ -32,6 +32,9 @@ assert!(offset_pline[0].fuzzy_eq(PlineVertex::new(0.2, 0.0, 1.0)));
 assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
 ```
 
+See more examples [here](examples/README.md).
+
+[👉 Click to run the WASM web demo 👈](https://jbuckmccready.github.io/cavalier_contours/)
 
 ## Main Features
 
@@ -47,18 +50,28 @@ assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
 - C FFI for integration with other languages
 - WebAssembly support and interactive web demo
 
-[👉 Click to run the WASM web demo 👈](https://jbuckmccready.github.io/cavalier_contours/)
-
 <img src="https://github.com/jbuckmccready/CavalierContoursDoc/blob/master/gifs/PolylineOffsets.gif" width="400"/> <img src="https://github.com/jbuckmccready/CavalierContoursDoc/blob/master/gifs/PolylineCombines.gif" width="400"/>
 
 <img src="https://raw.githubusercontent.com/jbuckmccready/CavalierContoursDoc/master/images/pretty_examples/example1.png" width="400"/> <img src="https://raw.githubusercontent.com/jbuckmccready/CavalierContoursDoc/master/images/pretty_examples/islands_example1.png" width="400"/>
 
+
+## Known Limitations
+
+- Bulge values for arcs only support values between -1.0 and 1.0 (up to half-circle) for arcs, workaround: use multiple arc segments to form larger arcs
+- Only [rounded joins](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Attribute/stroke-linejoin#round) are supported for parallel offsets (other join types are not implemented)
+- Parallel offsets and boolean operations behave differently for resulting overlapping segments:
+  - Parallel offset result always retains overlapping segments (longest valid connection when joining slices)
+  - Boolean operation result always combines/merges/removes overlapping segments (based on boolean operation)
+- Boolean operation algorithm operates on only two closed non-self-intersecting polylines
+- Multi-polyline parallel offsetting was designed to support sets of polylines that are closed and not intersecting (areas with holes)
+  - May still work as desired for some intersecting or open polyline cases but algorithm does not implement configuration for such
 
 ## Workspace Structure
 
 - **cavalier_contours**: Core Rust library and API for polyline algorithms.
 - **cavalier_contours_ffi**: C FFI bindings for use from C/C++ and other languages. [`cavalier_contours_ffi` README](cavalier_contours_ffi/README.md)
 - **cavalier_contours_ui**: Web-based UI demo (WASM, using [egui](https://github.com/emilk/egui)). [`cavalier_contours_ui` README](cavalier_contours_ui/README.md)
+- **examples**: examples demonstrating some of cavalier_contours functionality. [`examples` README](examples/README.md)
 
 
 ## Requirements

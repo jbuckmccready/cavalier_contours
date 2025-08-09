@@ -9,6 +9,7 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - ⚠️ BREAKING: Added collapsed area parameter to pline boolean options to allow for pruning
   collapsed polylines from results. This is only breaking due to struct initialization, if you use
   default initialization this defaults to no change in behavior ([#71](https://github.com/jbuckmccready/cavalier_contours/pull/71)).
+- Added `examples` crate to workspace to demonstrate cavalier_contours functionality ([#74](https://github.com/jbuckmccready/cavalier_contours/pull/74)).
 
 ### Fixed 🐛
 
