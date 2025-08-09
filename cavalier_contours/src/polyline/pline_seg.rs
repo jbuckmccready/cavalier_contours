@@ -147,10 +147,11 @@ where
     }
 }
 
-/// Find the tangent direction vector on a polyline segment defined by `v1` to `v2` at `point_on_seg`.
+/// Find the tangent direction vector (*NOT* normalized) on a polyline segment defined by `v1` to
+/// `v2` at `point_on_seg`.
 ///
-/// Note: The vector returned is just the direction vector, add the `point_on_seg` position to
-/// get the actual tangent vector.
+/// Note: The vector returned is just the direction vector, add the `point_on_seg` position if
+/// you need to offset from that position.
 ///
 /// # Examples
 ///

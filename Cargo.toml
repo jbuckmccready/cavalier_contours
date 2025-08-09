@@ -15,6 +15,7 @@ members = [
   "cavalier_contours",
   "cavalier_contours_ffi",
   "cavalier_contours_ui",
+  "examples",
 ]
 resolver = "2"
 
