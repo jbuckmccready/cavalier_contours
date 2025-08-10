@@ -41,7 +41,7 @@ jobs:
         # will obviously return error 404 not found.
         run: ./trunk build --release --public-url $public_url --cargo-profile="web-release"
         env:
-          public_url: "https://cavaliercontours.dev"
+          public_url: "https://www.cavaliercontours.dev"
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
