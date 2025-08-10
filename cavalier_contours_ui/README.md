@@ -4,7 +4,7 @@ This is the ui app for visualizing, testing, and demonstrating the cavalier_cont
 
 Github CI publishes latest on master branch to github pages.
 
-[👉 Click to run the web demo 👈](https://jbuckmccready.github.io/cavalier_contours/).
+[👉 Click to run the web demo 👈](https://www.cavaliercontours.dev/).
 
 The app is built with:
 - [egui](https://github.com/emilk/egui) (immediate mode GUI library)

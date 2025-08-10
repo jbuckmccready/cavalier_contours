@@ -34,7 +34,7 @@ assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
 
 See more examples [here](examples/README.md).
 
-[👉 Click to run the WASM web demo 👈](https://jbuckmccready.github.io/cavalier_contours/)
+[👉 Click to run the WASM web demo 👈](https://www.cavaliercontours.dev/)
 
 ## Main Features
 
@@ -54,7 +54,6 @@ See more examples [here](examples/README.md).
 
 <img src="https://raw.githubusercontent.com/jbuckmccready/CavalierContoursDoc/master/images/pretty_examples/example1.png" width="400"/> <img src="https://raw.githubusercontent.com/jbuckmccready/CavalierContoursDoc/master/images/pretty_examples/islands_example1.png" width="400"/>
 
-
 ## Known Limitations
 
 - Bulge values for arcs only support values between -1.0 and 1.0 (up to half-circle) for arcs, workaround: use multiple arc segments to form larger arcs
@@ -70,26 +69,13 @@ See more examples [here](examples/README.md).
 
 - **cavalier_contours**: Core Rust library and API for polyline algorithms.
 - **cavalier_contours_ffi**: C FFI bindings for use from C/C++ and other languages. [`cavalier_contours_ffi` README](cavalier_contours_ffi/README.md)
-- **cavalier_contours_ui**: Web-based UI demo (WASM, using [egui](https://github.com/emilk/egui)). [`cavalier_contours_ui` README](cavalier_contours_ui/README.md)
+- **cavalier_contours_ui**: Web-based UI demo (WASM, using [egui](https://github.com/emilk/egui)). [`cavalier_contours_ui` README](cavalier_contours_ui/README.md) ([live page](https://www.cavaliercontours.dev/))
 - **examples**: examples demonstrating some of cavalier_contours functionality. [`examples` README](examples/README.md)
-
 
 ## Requirements
 
 - Rust 1.88+ (MSRV)
 - Tested with CI on Linux, macOS, and Windows
-
-
-## Interactive Web Page for Visualizing and Testing
-
-> [!NOTE]
-> This is the old web demo ui page. The new page built with egui is [here](https://jbuckmccready.github.io/cavalier_contours/).
-
-This project is compiled to WASM to create an interactive web demo page for visualizing and testing.
-
-- Interactive web demo page: https://cavaliercontours.dev/
-- Interactive web demo page repo: https://github.com/jbuckmccready/cavalier_contours_web_demo
-
 
 ## Why go to Rust?
 
@@ -106,7 +92,6 @@ This project is compiled to WASM to create an interactive web demo page for visu
 - Discriminated unions and pattern matching as first class language features
 - Great tooling for targeting wasm
 
-
 ## License
 
 Licensed under either of
@@ -117,7 +102,6 @@ Licensed under either of
   ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 at your option.
-
 
 ## Contribution
 

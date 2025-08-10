@@ -22,7 +22,7 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 ### Added ⭐
 
 - Added `egui` interactive demo UI crate and auto deployment to GitHub pages for the demo
-  [page is here](https://jbuckmccready.github.io/cavalier_contours/).
+  [page is here](https://www.cavaliercontours.dev/).
 - Added `visit_intersects`, `contains`, and `scan_for_self_intersect` to pline traits ([#68](https://github.com/jbuckmccready/cavalier_contours/pull/68)).
 - Added `user_data` to traits for tracking data through operations ([#63](https://github.com/jbuckmccready/cavalier_contours/pull/63)).
 - Added multi polyline offset algorithm to c ffi ([#63](https://github.com/jbuckmccready/cavalier_contours/pull/63)).
