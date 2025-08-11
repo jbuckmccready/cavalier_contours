@@ -18,6 +18,7 @@ impl Default for DemoScenes {
             Box::new(super::pline_offset_scene::PlineOffsetScene::default()),
             Box::new(super::pline_boolean_scene::PlineBooleanScene::default()),
             Box::new(super::multi_pline_offset_scene::MultiPlineOffsetScene::default()),
+            Box::new(super::multi_pline_boolean_scene::MultiPlineBooleanScene::default()),
         ])
     }
 }
