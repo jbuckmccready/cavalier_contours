@@ -2,6 +2,7 @@
 //! polyline segments.
 pub mod internal;
 mod pline;
+mod pline_inversion_view;
 mod pline_seg;
 mod pline_seg_intersect;
 mod pline_types;
@@ -10,6 +11,7 @@ mod pline_view;
 mod traits;
 
 pub use pline::*;
+pub use pline_inversion_view::*;
 pub use pline_seg::*;
 pub use pline_seg_intersect::*;
 pub use pline_types::*;
