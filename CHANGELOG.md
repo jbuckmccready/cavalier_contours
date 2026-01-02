@@ -16,6 +16,9 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - Fixed bug in pline segment intersection when two arcs only touch at endpoints at one point, have
   the same arc radius and center, and are in opposite directions. This also fixes some cases for
   algorithms that depend on finding interescts (boolean, offset, etc.) ([#71](https://github.com/jbuckmccready/cavalier_contours/pull/71)).
+- Fixed offset slice stitching to use consistent epsilon (`join_eps`) when removing repeat vertices,
+  preventing tiny segments at slice boundaries when offsetting polylines with close vertices
+  ([#77](https://github.com/jbuckmccready/cavalier_contours/issues/77)).
 
 ## 0.6.0 2025-07-08
 

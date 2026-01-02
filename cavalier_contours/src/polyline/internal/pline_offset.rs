@@ -1346,8 +1346,9 @@ where
     let pos_equal_eps = options.pos_equal_eps;
 
     if slices.len() == 1 {
-        let mut pline =
-            O::create_from_remove_repeat(&slices[0].view(raw_offset_pline), pos_equal_eps);
+        // Use join_eps for removing repeat vertices to be consistent with how slice connections
+        // are detected (prevents tiny segments at slice boundaries)
+        let mut pline = O::create_from_remove_repeat(&slices[0].view(raw_offset_pline), join_eps);
 
         if is_closed
             && pline
@@ -1402,10 +1403,11 @@ where
             loop_count += 1;
 
             // append current slice to current pline
+            // Use join_eps for removing repeat vertices to be consistent with how slice connections
+            // are detected (prevents tiny segments at slice boundaries)
             let current_slice = &slices[current_index];
 
-            current_pline
-                .extend_remove_repeat(&current_slice.view(raw_offset_pline), pos_equal_eps);
+            current_pline.extend_remove_repeat(&current_slice.view(raw_offset_pline), join_eps);
 
             let current_loop_start_index = current_slice.start_index;
             let current_end_point = current_slice.end_point;
@@ -1453,7 +1455,8 @@ where
                 if current_pline.vertex_count() > 1 {
                     let current_pline_sp = current_pline.at(0).pos();
                     let current_pline_ep = current_pline.last().unwrap().pos();
-                    if is_closed && current_pline_sp.fuzzy_eq_eps(current_pline_ep, pos_equal_eps) {
+                    // Use join_eps for consistency with slice connection detection
+                    if is_closed && current_pline_sp.fuzzy_eq_eps(current_pline_ep, join_eps) {
                         current_pline.remove_last();
                         current_pline.set_is_closed(true);
                     }
