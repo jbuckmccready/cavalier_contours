@@ -567,7 +567,7 @@ dependencies = [
 
 [[package]]
 name = "cavalier_contours"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "num-traits",
  "serde",
@@ -583,14 +583,14 @@ dependencies = [
 
 [[package]]
 name = "cavalier_contours_ffi"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "cavalier_contours",
 ]
 
 [[package]]
 name = "cavalier_contours_ui"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "cavalier_contours",
  "eframe",

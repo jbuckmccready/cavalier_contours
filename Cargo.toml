@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 rust-version = "1.88"
 repository = "https://github.com/jbuckmccready/cavalier_contours"
-version = "0.6.0"
+version = "0.7.0"
 
 [workspace]
 members = [
