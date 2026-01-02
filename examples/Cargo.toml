@@ -3,6 +3,8 @@ name = "cavalier_contours_examples"
 version = "0.0.0"
 edition = "2021"
 publish = false
+
+[package.metadata.release]
 release = false
 
 [dependencies]
