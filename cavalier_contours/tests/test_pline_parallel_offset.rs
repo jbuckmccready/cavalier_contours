@@ -46,6 +46,8 @@ impl ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'_> {
             "property sets do not match, modified state: {pline_state:?}"
         );
 
+        // For closed polylines, also test with handle_self_intersects=true since it uses a
+        // different code path (open polylines always use the same path regardless of this flag)
         if modified_pline.is_closed() {
             let offset_results = offset_into_properties_set(
                 &modified_pline,
@@ -460,7 +462,7 @@ mod test_specific {
 /// Test cases that have failed or had issues in the past but are otherwise seemingly unremarkable.
 mod test_past_failures {
     use super::*;
-    use cavalier_contours::{pline_closed_userdata, pline_open_userdata};
+    use cavalier_contours::{pline_closed, pline_closed_userdata, pline_open_userdata};
 
     declare_offset_tests!(
         open_pline1 {
@@ -628,6 +630,20 @@ mod test_past_failures {
                             (24.400_000_000_000_02, -8.318_380_800_647_987e-8, 0.887_752_370_928_299_7),
                             (30.512933651613217, -0.729_541_510_402_689_9, -0.439_446_060_182_688_7)], 0.1) =>
             [PlineProperties::new(9,195.40133874861155, 61.346378550776606,10.023725045710194, -3.0000000085491503,  30.399051687627463,  14.069231422671779, vec![4])]
+        }
+        issue77_repeated_offset {
+            // Regression test for issue #77: offset should work correctly when the input has vertices
+            // that are close together (this input is the result of a previous offset operation).
+            // Before the fix, this failed with handle_self_intersects=true.
+            // https://github.com/jbuckmccready/cavalier_contours/issues/77
+            (pline_closed![(2.0, 11.0, -0.6681786379192991),
+                           (2.7071067811865475, 9.292893218813452, 0.0),
+                           (-0.2928932188134524, 6.292893218813452, -0.6681786379192989),
+                           (-2.0, 7.0, 0.0),
+                           (-2.0, 15.0, -0.6681786379192989),
+                           (-0.2928932188134524, 15.707106781186548, 0.0),
+                           (2.7071067811865475, 12.707106781186548, -0.6681786379192991)], 1.0) =>
+            [PlineProperties::new(7, -64.3633792727984, 31.14604709099094, -3.0, 5.0, 4.0, 17.0, vec![])]
         }
     );
 }
