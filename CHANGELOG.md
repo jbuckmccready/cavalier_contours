@@ -4,6 +4,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ## Unreleased
 
+## 0.7.0 - 2026-01-02
+
 ### Added ⭐
 
 - ⚠️ BREAKING: Added collapsed area parameter to pline boolean options to allow for pruning
@@ -20,7 +22,7 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   preventing tiny segments at slice boundaries when offsetting polylines with close vertices
   ([#77](https://github.com/jbuckmccready/cavalier_contours/issues/77)).
 
-## 0.6.0 2025-07-08
+## 0.6.0 - 2025-07-08
 
 ### Added ⭐
 
