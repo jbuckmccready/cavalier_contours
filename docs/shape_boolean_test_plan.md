@@ -304,28 +304,35 @@ make the patch faster, easier to debug, and easier to submit upstream.
    - treat equal closed loops as equal when their start vertex is cyclically
      shifted;
    - keep exact signed-loop bin semantics so holes are not mistaken for islands.
-3. Reduce repeated boolean composition and allocation:
+3. Implemented: reduce repeated boolean composition and allocation:
    - audit `Xor`'s `(A - B) union (B - A)` composition;
    - audit `And`'s repeated shape-level `Or` accumulation;
-   - extract a private normalized-loop assembly helper if it avoids rebuilding
-     shapes and indexes without changing public behavior.
-4. Started: centralize shape-boolean tolerances:
+   - extract private normalized-loop assembly helpers so final loop orientation,
+     area filtering, and index construction are shared by all shape boolean
+     paths;
+   - short-circuit `Xor` composition when either difference side is empty;
+   - batch `And` pair outputs through one merge/assembly path instead of
+     repeatedly rebuilding intermediate shapes.
+4. Implemented: centralize shape-boolean tolerances:
    - remove one-off literal epsilons from fast paths and tests;
    - align tolerances with lower-level polyline boolean options where possible;
-   - document why each remaining tolerance differs, if any must differ.
-5. Started: upgrade debug dumps and traces:
+   - route shape boolean area filtering through one private helper so remaining
+     tolerance differences are explicit.
+5. Implemented: upgrade debug dumps and traces:
    - emit SVG path commands for arc segments instead of polygon-only previews;
    - include lower-level `BooleanResultInfo` for each loop pair;
-   - include the pairwise bbox-overlap/candidate matrix and used-loop flags.
-6. Add real fuzz harnesses:
+   - include the pairwise bbox-overlap/candidate matrix and used-loop flags;
+   - emit a sample-mismatch SVG and a text trace alongside the JSON and Rust
+     reproduction snippets.
+6. Implemented: add real fuzz harnesses:
    - create `cargo-fuzz` targets for rectangles, donuts, arcs, transforms, and
      `PlineInversionView` booleans;
    - define corpus replay and minimization instructions;
    - make minimized cases easy to paste back into deterministic regression tests.
-7. Add differential testing:
+7. Implemented: add differential testing:
    - compare straight-line polygon-only shapes against an independent oracle in
      ignored/manual tests;
    - keep arc cases on sampled membership until an arc-capable oracle is
      available;
-   - document any semantic mismatch between regularized shape booleans and the
-     chosen oracle.
+   - use a rectangle-set point-membership oracle that is independent from
+     `Shape` winding numbers for manual differential checks.

@@ -2,12 +2,13 @@ mod test_utils;
 
 use cavalier_contours::core::{math::Vector2, traits::FuzzyEq};
 use cavalier_contours::polyline::{
-    BooleanOp, PlineOrientation, PlineSource, PlineSourceMut, Polyline, seg_arc_radius_and_center,
+    BooleanOp, BooleanResultInfo, PlineInversionView, PlineOrientation, PlineSource,
+    PlineSourceMut, Polyline, seg_arc_radius_and_center,
 };
 use cavalier_contours::shape_algorithms::{Shape, ShapeOffsetOptions};
 use cavalier_contours::{assert_fuzzy_eq, pline_closed, pline_open};
 use std::f64::consts::PI;
-use std::{env, fs, path::Path};
+use std::{env, fmt::Write as _, fs, path::Path};
 use test_utils::to_debug_json_str;
 
 const SHAPE_TEST_EPS: f64 = 1e-7;
@@ -425,12 +426,33 @@ fn pline_svg_path(pline: &Polyline<f64>) -> Option<String> {
 }
 
 fn write_shape_svg(path: &Path, shapes: &[(&Shape<f64>, &'static str)]) -> std::io::Result<()> {
-    let extents = combined_extents(
+    write_shape_svg_with_sample(path, shapes, None)
+}
+
+fn write_shape_svg_with_sample(
+    path: &Path,
+    shapes: &[(&Shape<f64>, &'static str)],
+    sample: Option<(f64, f64)>,
+) -> std::io::Result<()> {
+    let mut extents = combined_extents(
         &shapes
             .iter()
             .map(|(shape, _color)| *shape)
             .collect::<Vec<_>>(),
     );
+
+    if let Some((x, y)) = sample {
+        extents = Some(match extents {
+            None => static_aabb2d_index::AABB::new(x, y, x, y),
+            Some(curr) => static_aabb2d_index::AABB::new(
+                curr.min_x.min(x),
+                curr.min_y.min(y),
+                curr.max_x.max(x),
+                curr.max_y.max(y),
+            ),
+        });
+    }
+
     let (min_x, min_y, width, height) = if let Some(e) = extents {
         let width = (e.max_x - e.min_x).max(1.0);
         let height = (e.max_y - e.min_y).max(1.0);
@@ -467,6 +489,14 @@ fn write_shape_svg(path: &Path, shapes: &[(&Shape<f64>, &'static str)]) -> std::
         }
     }
 
+    if let Some((x, y)) = sample {
+        let radius = width.min(height).max(1.0) * 0.01;
+        svg.push_str(&format!(
+            r#"<circle cx="{x}" cy="{y}" r="{radius}" stroke="black" fill="yellow" fill-opacity="0.85" />
+"#
+        ));
+    }
+
     svg.push_str("</g>\n</svg>\n");
     fs::write(path, svg)
 }
@@ -491,6 +521,173 @@ fn shape_debug_json(shape: &Shape<f64>) -> String {
     result
 }
 
+fn aabb_overlap(a: static_aabb2d_index::AABB<f64>, b: static_aabb2d_index::AABB<f64>) -> bool {
+    a.min_x <= b.max_x && a.max_x >= b.min_x && a.min_y <= b.max_y && a.max_y >= b.min_y
+}
+
+fn write_pair_trace(
+    trace: &mut String,
+    label: &str,
+    pair: (usize, usize),
+    candidate: bool,
+    result: Option<(BooleanResultInfo, usize, usize)>,
+) {
+    let (i, j) = pair;
+    if let Some((result_info, pos_count, neg_count)) = result {
+        let _ = writeln!(
+            trace,
+            "{label}[{i},{j}] candidate={candidate} result_info={result_info:?} pos={pos_count} neg={neg_count}"
+        );
+    } else {
+        let _ = writeln!(trace, "{label}[{i},{j}] candidate={candidate}");
+    }
+}
+
+fn shape_pairwise_trace(a: &Shape<f64>, b: &Shape<f64>, op: BooleanOp) -> String {
+    let mut trace = String::new();
+    let _ = writeln!(trace, "pairwise lower-level trace for {op:?}");
+
+    let mut a_ccw_used = vec![false; a.ccw_plines.len()];
+    let mut a_cw_used = vec![false; a.cw_plines.len()];
+    let mut b_ccw_used = vec![false; b.ccw_plines.len()];
+    let mut b_cw_used = vec![false; b.cw_plines.len()];
+
+    for (i, ip) in a.ccw_plines.iter().enumerate() {
+        for (j, jp) in b.ccw_plines.iter().enumerate() {
+            let candidate = ip
+                .spatial_index
+                .bounds()
+                .zip(jp.spatial_index.bounds())
+                .is_some_and(|(ib, jb)| aabb_overlap(ib, jb));
+            if !candidate {
+                write_pair_trace(&mut trace, "ccw-ccw", (i, j), false, None);
+                continue;
+            }
+
+            let result = ip.polyline.boolean(&jp.polyline, op);
+            let active = !matches!(result.result_info, BooleanResultInfo::Disjoint);
+            a_ccw_used[i] |= active;
+            b_ccw_used[j] |= active;
+            write_pair_trace(
+                &mut trace,
+                "ccw-ccw",
+                (i, j),
+                true,
+                Some((
+                    result.result_info,
+                    result.pos_plines.len(),
+                    result.neg_plines.len(),
+                )),
+            );
+        }
+    }
+
+    for (i, ip) in a.ccw_plines.iter().enumerate() {
+        for (j, jp) in b.cw_plines.iter().enumerate() {
+            let candidate = ip
+                .spatial_index
+                .bounds()
+                .zip(jp.spatial_index.bounds())
+                .is_some_and(|(ib, jb)| aabb_overlap(ib, jb));
+            if !candidate {
+                write_pair_trace(&mut trace, "ccw-cw", (i, j), false, None);
+                continue;
+            }
+
+            let jp_inverted = PlineInversionView::new(&jp.polyline);
+            let pair_op = if matches!(op, BooleanOp::Not) {
+                BooleanOp::And
+            } else {
+                op
+            };
+            let result = ip.polyline.boolean(&jp_inverted, pair_op);
+            let active = !matches!(result.result_info, BooleanResultInfo::Disjoint);
+            a_ccw_used[i] |= active;
+            b_cw_used[j] |= active;
+            write_pair_trace(
+                &mut trace,
+                "ccw-cw",
+                (i, j),
+                true,
+                Some((
+                    result.result_info,
+                    result.pos_plines.len(),
+                    result.neg_plines.len(),
+                )),
+            );
+        }
+    }
+
+    for (i, ip) in a.cw_plines.iter().enumerate() {
+        let ip_inverted = PlineInversionView::new(&ip.polyline);
+        for (j, jp) in b.ccw_plines.iter().enumerate() {
+            let candidate = ip
+                .spatial_index
+                .bounds()
+                .zip(jp.spatial_index.bounds())
+                .is_some_and(|(ib, jb)| aabb_overlap(ib, jb));
+            if !candidate {
+                write_pair_trace(&mut trace, "cw-ccw", (i, j), false, None);
+                continue;
+            }
+
+            let result = ip_inverted.boolean(&jp.polyline, op);
+            let active = !matches!(result.result_info, BooleanResultInfo::Disjoint);
+            a_cw_used[i] |= active;
+            b_ccw_used[j] |= active;
+            write_pair_trace(
+                &mut trace,
+                "cw-ccw",
+                (i, j),
+                true,
+                Some((
+                    result.result_info,
+                    result.pos_plines.len(),
+                    result.neg_plines.len(),
+                )),
+            );
+        }
+    }
+
+    for (i, ip) in a.cw_plines.iter().enumerate() {
+        let ip_inverted = PlineInversionView::new(&ip.polyline);
+        for (j, jp) in b.cw_plines.iter().enumerate() {
+            let candidate = ip
+                .spatial_index
+                .bounds()
+                .zip(jp.spatial_index.bounds())
+                .is_some_and(|(ib, jb)| aabb_overlap(ib, jb));
+            if !candidate {
+                write_pair_trace(&mut trace, "cw-cw", (i, j), false, None);
+                continue;
+            }
+
+            let jp_inverted = PlineInversionView::new(&jp.polyline);
+            let result = ip_inverted.boolean(&jp_inverted, op);
+            let active = !matches!(result.result_info, BooleanResultInfo::Disjoint);
+            a_cw_used[i] |= active;
+            b_cw_used[j] |= active;
+            write_pair_trace(
+                &mut trace,
+                "cw-cw",
+                (i, j),
+                true,
+                Some((
+                    result.result_info,
+                    result.pos_plines.len(),
+                    result.neg_plines.len(),
+                )),
+            );
+        }
+    }
+
+    let _ = writeln!(
+        trace,
+        "non-disjoint participation: a_ccw={a_ccw_used:?} a_cw={a_cw_used:?} b_ccw={b_ccw_used:?} b_cw={b_cw_used:?}"
+    );
+    trace
+}
+
 fn dump_shape_boolean_failure(
     a: &Shape<f64>,
     b: &Shape<f64>,
@@ -513,6 +710,11 @@ fn dump_shape_boolean_failure(
         &dir.join("overlay.svg"),
         &[(a, "blue"), (b, "red"), (result, "green")],
     );
+    let _ = write_shape_svg_with_sample(
+        &dir.join("sample.svg"),
+        &[(a, "blue"), (b, "red"), (result, "green")],
+        Some(sample),
+    );
     let _ = fs::write(
         dir.join("case.rs"),
         format!(
@@ -526,6 +728,7 @@ fn dump_shape_boolean_failure(
     let _ = fs::write(dir.join("input_a.json"), shape_debug_json(a));
     let _ = fs::write(dir.join("input_b.json"), shape_debug_json(b));
     let _ = fs::write(dir.join("result.json"), shape_debug_json(result));
+    let _ = fs::write(dir.join("trace.txt"), shape_pairwise_trace(a, b, op));
 }
 
 fn trace_shape_boolean_case(a: &Shape<f64>, b: &Shape<f64>, result: &Shape<f64>, op: BooleanOp) {
@@ -536,8 +739,9 @@ fn trace_shape_boolean_case(a: &Shape<f64>, b: &Shape<f64>, result: &Shape<f64>,
     let a_signature = shape_signature(a);
     let b_signature = shape_signature(b);
     let result_signature = shape_signature(result);
+    let pairwise_trace = shape_pairwise_trace(a, b, op);
     eprintln!(
-        "shape boolean trace op={op:?}\na={a_signature:#?}\nb={b_signature:#?}\nresult={result_signature:#?}"
+        "shape boolean trace op={op:?}\na={a_signature:#?}\nb={b_signature:#?}\nresult={result_signature:#?}\n{pairwise_trace}"
     );
 }
 
@@ -1487,6 +1691,107 @@ mod shape_boolean_proptests {
                         .fuzzy_eq_eps(shape_signed_area(&scaled), 1e-4),
                     "uniform scaling changed area incorrectly for {op:?}"
                 );
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod shape_boolean_differential_tests {
+    use super::*;
+
+    #[derive(Clone, Copy)]
+    struct OracleRect {
+        xmin: f64,
+        ymin: f64,
+        xmax: f64,
+        ymax: f64,
+    }
+
+    impl OracleRect {
+        fn contains(self, x: f64, y: f64) -> bool {
+            x > self.xmin && x < self.xmax && y > self.ymin && y < self.ymax
+        }
+
+        fn tuple(self) -> (f64, f64, f64, f64) {
+            (self.xmin, self.ymin, self.xmax, self.ymax)
+        }
+    }
+
+    fn oracle_contains(rects: &[OracleRect], x: f64, y: f64) -> bool {
+        rects.iter().any(|rect| rect.contains(x, y))
+    }
+
+    fn oracle_boolean(in_a: bool, in_b: bool, op: BooleanOp) -> bool {
+        match op {
+            BooleanOp::Or => in_a || in_b,
+            BooleanOp::And => in_a && in_b,
+            BooleanOp::Not => in_a && !in_b,
+            BooleanOp::Xor => in_a != in_b,
+        }
+    }
+
+    #[test]
+    #[ignore = "manual differential oracle for straight-line rectangle unions"]
+    fn manual_rectangle_set_oracle_matches_shape_boolean_samples() {
+        // This deliberately avoids Shape winding numbers for the expected value. It compares
+        // result membership against an independent axis-aligned rectangle-set oracle, while arc
+        // cases remain covered by sampled membership until an arc-capable oracle is added.
+        let a_rects = [
+            OracleRect {
+                xmin: 0.0,
+                ymin: 0.0,
+                xmax: 10.0,
+                ymax: 10.0,
+            },
+            OracleRect {
+                xmin: 14.0,
+                ymin: 2.0,
+                xmax: 22.0,
+                ymax: 12.0,
+            },
+        ];
+        let b_rects = [
+            OracleRect {
+                xmin: 5.0,
+                ymin: -2.0,
+                xmax: 18.0,
+                ymax: 8.0,
+            },
+            OracleRect {
+                xmin: 25.0,
+                ymin: 0.0,
+                xmax: 30.0,
+                ymax: 5.0,
+            },
+        ];
+        let a = create_shape_rects(&a_rects.map(OracleRect::tuple));
+        let b = create_shape_rects(&b_rects.map(OracleRect::tuple));
+
+        for op in [
+            BooleanOp::Or,
+            BooleanOp::And,
+            BooleanOp::Not,
+            BooleanOp::Xor,
+        ] {
+            let result = a.boolean(&b, op);
+            assert_shape_valid(&result);
+
+            for ix in -4..36 {
+                for iy in -6..18 {
+                    let x = f64::from(ix) + 0.37;
+                    let y = f64::from(iy) + 0.61;
+                    let expected = oracle_boolean(
+                        oracle_contains(&a_rects, x, y),
+                        oracle_contains(&b_rects, x, y),
+                        op,
+                    );
+                    assert_eq!(
+                        shape_contains(&result, x, y),
+                        expected,
+                        "rectangle oracle mismatch for {op:?} at ({x}, {y})"
+                    );
+                }
             }
         }
     }

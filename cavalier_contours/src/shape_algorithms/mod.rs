@@ -228,6 +228,147 @@ where
             && Self::same_loop_set(&self.cw_plines, &other.cw_plines)
     }
 
+    #[inline]
+    fn shape_boolean_area_epsilon() -> T {
+        T::from(SHAPE_BOOLEAN_AREA_EPS).unwrap()
+    }
+
+    fn normalize_ccw(pline: Polyline<T>) -> Polyline<T> {
+        if pline.orientation() == PlineOrientation::Clockwise {
+            Polyline::create_from(&PlineInversionView::new(&pline))
+        } else {
+            pline
+        }
+    }
+
+    fn normalize_cw(pline: Polyline<T>) -> Polyline<T> {
+        if pline.orientation() == PlineOrientation::CounterClockwise {
+            Polyline::create_from(&PlineInversionView::new(&pline))
+        } else {
+            pline
+        }
+    }
+
+    fn build_from_signed_plines(ccw_plines: Vec<Polyline<T>>, cw_plines: Vec<Polyline<T>>) -> Self {
+        let area_eps = Self::shape_boolean_area_epsilon();
+        let final_ccw_result = ccw_plines
+            .into_iter()
+            .map(Self::normalize_ccw)
+            .filter(|pline| pline.area().abs() > area_eps)
+            .map(IndexedPolyline::new)
+            .collect::<Vec<_>>();
+        let final_cw_result = cw_plines
+            .into_iter()
+            .map(Self::normalize_cw)
+            .filter(|pline| pline.area().abs() > area_eps)
+            .map(IndexedPolyline::new)
+            .collect::<Vec<_>>();
+
+        let mut builder =
+            StaticAABB2DIndexBuilder::new(final_ccw_result.len() + final_cw_result.len());
+        for ip in &final_ccw_result {
+            if let Some(bds) = ip.spatial_index.bounds() {
+                builder.add(bds.min_x, bds.min_y, bds.max_x, bds.max_y);
+            }
+        }
+        for ip in &final_cw_result {
+            if let Some(bds) = ip.spatial_index.bounds() {
+                builder.add(bds.min_x, bds.min_y, bds.max_x, bds.max_y);
+            }
+        }
+        let plines_index = builder.build().unwrap();
+
+        Self {
+            ccw_plines: final_ccw_result,
+            cw_plines: final_cw_result,
+            plines_index,
+        }
+    }
+
+    fn merge_ccw_plines(plines: Vec<Polyline<T>>) -> Vec<Polyline<T>> {
+        let area_eps = Self::shape_boolean_area_epsilon();
+        let mut merged: Vec<Polyline<T>> = Vec::new();
+
+        'next_pline: for pline in plines {
+            let mut pending = Self::normalize_ccw(pline);
+
+            let mut i = 0;
+            while i < merged.len() {
+                let result = merged[i].boolean(&pending, BooleanOp::Or);
+                if matches!(result.result_info, BooleanResultInfo::Disjoint) {
+                    i += 1;
+                    continue;
+                }
+
+                if !matches!(
+                    result.result_info,
+                    BooleanResultInfo::Intersected | BooleanResultInfo::Overlapping
+                ) {
+                    i += 1;
+                    continue;
+                }
+
+                let mut pos_plines = result
+                    .pos_plines
+                    .into_iter()
+                    .map(|rp| Self::normalize_ccw(rp.pline))
+                    .collect::<Vec<_>>();
+
+                if pos_plines.len() == 1 {
+                    merged.remove(i);
+                    pending = pos_plines.remove(0);
+                    continue;
+                }
+
+                if pos_plines.is_empty() {
+                    merged.remove(i);
+                    continue 'next_pline;
+                }
+
+                // The lower polyline boolean can intentionally leave edge-touching regularized
+                // regions as separate loops. Keep that behavior at shape level instead of
+                // inventing a stronger merge rule here.
+                i += 1;
+            }
+
+            if pending.area().abs() > area_eps {
+                merged.push(pending);
+            }
+        }
+
+        merged
+    }
+
+    #[inline]
+    fn visit_loop_candidates(
+        shape: &Shape<T>,
+        bounds: &static_aabb2d_index::AABB<T>,
+        want_ccw: bool,
+        query_stack: &mut Vec<usize>,
+        visitor: &mut impl FnMut(usize),
+    ) {
+        let ccw_len = shape.ccw_plines.len();
+        // Shape indexes are built with CCW loops first, followed by CW loops, so query hits
+        // can be filtered by global index and mapped back into the requested signed bin.
+        let mut index_visitor = |idx| {
+            if want_ccw {
+                if idx < ccw_len {
+                    visitor(idx);
+                }
+            } else if idx >= ccw_len {
+                visitor(idx - ccw_len);
+            }
+        };
+        shape.plines_index.visit_query_with_stack(
+            bounds.min_x,
+            bounds.min_y,
+            bounds.max_x,
+            bounds.max_y,
+            &mut index_visitor,
+            query_stack,
+        );
+    }
+
     /// Construct a `Shape` from polylines, sorting CCW loops into filled material and CW loops
     /// into holes.
     ///
@@ -1004,38 +1145,51 @@ where
         if matches!(op, BooleanOp::Xor) {
             // Set identity: A xor B == (A \ B) union (B \ A). Keeping XOR as a
             // composition means the hole-aware difference and union paths define the topology.
-            return self
-                .boolean(other, BooleanOp::Not)
-                .boolean(&other.boolean(self, BooleanOp::Not), BooleanOp::Or);
+            let left_difference = self.boolean(other, BooleanOp::Not);
+            let right_difference = other.boolean(self, BooleanOp::Not);
+            return if left_difference.is_empty_shape() {
+                right_difference
+            } else if right_difference.is_empty_shape() {
+                left_difference
+            } else {
+                left_difference.boolean(&right_difference, BooleanOp::Or)
+            };
         }
 
         if matches!(op, BooleanOp::And) {
-            let normalize_ccw = |pline: Polyline<T>| {
-                if pline.orientation() == PlineOrientation::Clockwise {
-                    Polyline::create_from(&PlineInversionView::new(&pline))
-                } else {
-                    pline
-                }
-            };
-
-            let mut result = Self::empty();
-            let area_eps = T::from(SHAPE_BOOLEAN_AREA_EPS).unwrap();
+            let mut positive_pieces = Vec::new();
+            let area_eps = Self::shape_boolean_area_epsilon();
+            let mut query_stack = Vec::new();
 
             // Intersect only the filled regions first. Holes from either operand are subtracted
             // afterward, which avoids treating a hole boundary as if it were positive material.
             for ip in self.ccw_plines.iter() {
-                for jp in other.ccw_plines.iter() {
+                let b1 = match ip.spatial_index.bounds() {
+                    Some(bb) => bb,
+                    None => continue,
+                };
+                let mut candidate_visitor = |j: usize| {
+                    let jp = &other.ccw_plines[j];
                     let pline_result = ip.polyline.boolean(&jp.polyline, BooleanOp::And);
                     for rp in pline_result.pos_plines {
                         if rp.pline.area().abs() <= area_eps {
                             continue;
                         }
 
-                        let positive_piece = Self::from_plines([normalize_ccw(rp.pline)]);
-                        result = result.boolean(&positive_piece, BooleanOp::Or);
+                        positive_pieces.push(Self::normalize_ccw(rp.pline));
                     }
-                }
+                };
+                Self::visit_loop_candidates(
+                    other,
+                    &b1,
+                    true,
+                    &mut query_stack,
+                    &mut candidate_visitor,
+                );
             }
+
+            let mut result =
+                Self::build_from_signed_plines(Self::merge_ccw_plines(positive_pieces), Vec::new());
 
             for hole in self.cw_plines.iter().chain(other.cw_plines.iter()) {
                 let positive_hole = Polyline::create_from(&PlineInversionView::new(&hole.polyline));
@@ -1048,36 +1202,6 @@ where
         // Collect pairwise lower-level boolean results. CW loops are passed through
         // PlineInversionView because the lower polyline boolean operates on positive-area loops.
         let mut all_results = Vec::new();
-
-        #[inline]
-        fn visit_loop_candidates<T: Real>(
-            shape: &Shape<T>,
-            bounds: &static_aabb2d_index::AABB<T>,
-            want_ccw: bool,
-            query_stack: &mut Vec<usize>,
-            visitor: &mut impl FnMut(usize),
-        ) {
-            let ccw_len = shape.ccw_plines.len();
-            // Shape indexes are built with CCW loops first, followed by CW loops, so query hits
-            // can be filtered by global index and mapped back into the requested signed bin.
-            let mut index_visitor = |idx| {
-                if want_ccw {
-                    if idx < ccw_len {
-                        visitor(idx);
-                    }
-                } else if idx >= ccw_len {
-                    visitor(idx - ccw_len);
-                }
-            };
-            shape.plines_index.visit_query_with_stack(
-                bounds.min_x,
-                bounds.min_y,
-                bounds.max_x,
-                bounds.max_y,
-                &mut index_visitor,
-                query_stack,
-            );
-        }
 
         let loop_center = |pline: &Polyline<T>| {
             let extents = pline.extents().expect("expected non-empty polyline");
@@ -1199,7 +1323,7 @@ where
                     all_results.push(result);
                 }
             };
-            visit_loop_candidates(other, &b1, true, &mut query_stack, &mut candidate_visitor);
+            Self::visit_loop_candidates(other, &b1, true, &mut query_stack, &mut candidate_visitor);
         }
 
         // 2) ccw_plines vs cw_plines
@@ -1245,7 +1369,13 @@ where
                     all_results.push(result);
                 }
             };
-            visit_loop_candidates(other, &b1, false, &mut query_stack, &mut candidate_visitor);
+            Self::visit_loop_candidates(
+                other,
+                &b1,
+                false,
+                &mut query_stack,
+                &mut candidate_visitor,
+            );
         }
 
         // 3) cw_plines vs ccw_plines
@@ -1277,7 +1407,7 @@ where
                     all_results.push(result);
                 }
             };
-            visit_loop_candidates(other, &b1, true, &mut query_stack, &mut candidate_visitor);
+            Self::visit_loop_candidates(other, &b1, true, &mut query_stack, &mut candidate_visitor);
         }
 
         // 4) cw_plines vs cw_plines
@@ -1302,7 +1432,13 @@ where
                     all_results.push(result);
                 }
             };
-            visit_loop_candidates(other, &b1, false, &mut query_stack, &mut candidate_visitor);
+            Self::visit_loop_candidates(
+                other,
+                &b1,
+                false,
+                &mut query_stack,
+                &mut candidate_visitor,
+            );
         }
 
         // At this point, pairwise BooleanResult values are normalized back into shape bins.
@@ -1311,19 +1447,11 @@ where
         let mut final_cw = Vec::new();
 
         let add_ccw = |pline: Polyline<T>, final_ccw: &mut Vec<Polyline<T>>| {
-            if pline.orientation() == PlineOrientation::Clockwise {
-                final_ccw.push(Polyline::create_from(&PlineInversionView::new(&pline)));
-            } else {
-                final_ccw.push(pline);
-            }
+            final_ccw.push(Self::normalize_ccw(pline));
         };
 
         let add_cw = |pline: Polyline<T>, final_cw: &mut Vec<Polyline<T>>| {
-            if pline.orientation() == PlineOrientation::CounterClockwise {
-                final_cw.push(Polyline::create_from(&PlineInversionView::new(&pline)));
-            } else {
-                final_cw.push(pline);
-            }
+            final_cw.push(Self::normalize_cw(pline));
         };
 
         for boolean_result in all_results {
@@ -1336,70 +1464,8 @@ where
             }
         }
 
-        let merge_ccw_plines = |plines: Vec<Polyline<T>>| {
-            let area_eps = T::from(SHAPE_BOOLEAN_AREA_EPS).unwrap();
-            let normalize_ccw = |pline: Polyline<T>| {
-                if pline.orientation() == PlineOrientation::Clockwise {
-                    Polyline::create_from(&PlineInversionView::new(&pline))
-                } else {
-                    pline
-                }
-            };
-
-            let mut merged: Vec<Polyline<T>> = Vec::new();
-
-            'next_pline: for pline in plines {
-                let mut pending = normalize_ccw(pline);
-
-                let mut i = 0;
-                while i < merged.len() {
-                    let result = merged[i].boolean(&pending, BooleanOp::Or);
-                    if matches!(result.result_info, BooleanResultInfo::Disjoint) {
-                        i += 1;
-                        continue;
-                    }
-
-                    if !matches!(
-                        result.result_info,
-                        BooleanResultInfo::Intersected | BooleanResultInfo::Overlapping
-                    ) {
-                        i += 1;
-                        continue;
-                    }
-
-                    let mut pos_plines = result
-                        .pos_plines
-                        .into_iter()
-                        .map(|rp| normalize_ccw(rp.pline))
-                        .collect::<Vec<_>>();
-
-                    if pos_plines.len() == 1 {
-                        merged.remove(i);
-                        pending = pos_plines.remove(0);
-                        continue;
-                    }
-
-                    if pos_plines.is_empty() {
-                        merged.remove(i);
-                        continue 'next_pline;
-                    }
-
-                    // The lower polyline boolean can intentionally leave edge-touching
-                    // regularized regions as separate loops. Keep that behavior at shape
-                    // level instead of inventing a stronger merge rule here.
-                    i += 1;
-                }
-
-                if pending.area().abs() > area_eps {
-                    merged.push(pending);
-                }
-            }
-
-            merged
-        };
-
         if matches!(op, BooleanOp::Or) {
-            final_ccw = merge_ccw_plines(final_ccw);
+            final_ccw = Self::merge_ccw_plines(final_ccw);
         }
 
         // Add input loops that never participated in a non-disjoint pairwise operation.
@@ -1445,10 +1511,10 @@ where
         }
 
         if matches!(op, BooleanOp::Or) {
-            final_ccw = merge_ccw_plines(final_ccw);
+            final_ccw = Self::merge_ccw_plines(final_ccw);
         }
 
-        let area_eps = T::from(1e-9).unwrap();
+        let area_eps = Self::shape_boolean_area_epsilon();
         final_ccw.retain(|pline| pline.area().abs() > area_eps);
         final_cw.retain(|pline| pline.area().abs() > area_eps);
 
@@ -1457,57 +1523,16 @@ where
             // treating holes as positive filled regions, then invert the merged results back.
             let positive_holes = final_cw
                 .into_iter()
-                .map(|pline| {
-                    if pline.orientation() == PlineOrientation::Clockwise {
-                        Polyline::create_from(&PlineInversionView::new(&pline))
-                    } else {
-                        pline
-                    }
-                })
+                .map(Self::normalize_ccw)
                 .collect::<Vec<_>>();
 
-            final_cw = merge_ccw_plines(positive_holes)
+            final_cw = Self::merge_ccw_plines(positive_holes)
                 .into_iter()
-                .map(|pline| {
-                    if pline.orientation() == PlineOrientation::CounterClockwise {
-                        Polyline::create_from(&PlineInversionView::new(&pline))
-                    } else {
-                        pline
-                    }
-                })
+                .map(Self::normalize_cw)
                 .collect();
         }
 
-        let mut final_ccw_result = Vec::new();
-        let mut final_cw_result = Vec::new();
-
-        for pl in final_ccw {
-            final_ccw_result.push(IndexedPolyline::new(pl));
-        }
-        for pl in final_cw {
-            final_cw_result.push(IndexedPolyline::new(pl));
-        }
-
-        let mut builder =
-            StaticAABB2DIndexBuilder::new(final_ccw_result.len() + final_cw_result.len());
-        for ip in &final_ccw_result {
-            if let Some(bds) = ip.spatial_index.bounds() {
-                builder.add(bds.min_x, bds.min_y, bds.max_x, bds.max_y);
-            }
-        }
-        for ip in &final_cw_result {
-            if let Some(bds) = ip.spatial_index.bounds() {
-                builder.add(bds.min_x, bds.min_y, bds.max_x, bds.max_y);
-            }
-        }
-        let plines_index = builder.build().unwrap();
-
-        // 5) Build new shape from these final CCW / CW polylines:
-        Shape {
-            ccw_plines: final_ccw_result,
-            cw_plines: final_cw_result,
-            plines_index,
-        }
+        Self::build_from_signed_plines(final_ccw, final_cw)
     }
 
     /// Union
