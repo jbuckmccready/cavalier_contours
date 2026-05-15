@@ -601,6 +601,12 @@ where
 
     /// Epsilon value to be used by [PlineViewData::validate_for_source].
     const VALIDATION_EPS: f64 = 1e-5;
+    /// Epsilon for deciding whether a view endpoint is exactly on the final source vertex.
+    ///
+    /// Boolean callers may intentionally use a positional epsilon smaller than `1e-5` to preserve
+    /// sub-micron sliver intersections. Treating every point within the broader validation epsilon
+    /// as coincident with a vertex makes those valid slices fail debug validation.
+    const VALIDATION_VERTEX_EPS: f64 = 1e-9;
 
     /// Epsilon value to be used by [PlineViewData::validate_for_source] when testing if positions
     /// are fuzzy equal.
@@ -652,9 +658,10 @@ where
         }
 
         // end point should never lie directly on top of end index segment start
+        let vertex_eps = T::from(Self::VALIDATION_VERTEX_EPS).unwrap();
         if self
             .end_point
-            .fuzzy_eq_eps(source.at(end_index).pos(), validation_eps)
+            .fuzzy_eq_eps(source.at(end_index).pos(), vertex_eps)
         {
             return ViewDataValidation::EndPointOnFinalOffsetVertex {
                 end_point: self.end_point,

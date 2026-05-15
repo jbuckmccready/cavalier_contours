@@ -369,7 +369,7 @@ pub trait PlineSource {
     /// ```
     fn area(&self) -> Self::Num {
         use num_traits::real::Real;
-        if !self.is_closed() {
+        if !self.is_closed() || self.vertex_count() < 2 {
             return Self::Num::zero();
         }
 
@@ -382,10 +382,18 @@ pub trait PlineSource {
         // are computed by finding the area of the arc sector minus the area of the triangle
         // defined by the chord and center of circle.
         // See https://en.wikipedia.org/wiki/Circular_segment
+        // Accumulate the shoelace terms relative to a local origin. The formula is translation
+        // invariant, but evaluating it around the global origin causes catastrophic cancellation for
+        // small contours located at very large coordinates.
+        let origin = self.at(0).pos();
         let mut double_total_area = Self::Num::zero();
 
         for (v1, v2) in self.iter_segments() {
-            double_total_area = double_total_area + v1.x * v2.y - v1.y * v2.x;
+            let v1x = v1.x - origin.x;
+            let v1y = v1.y - origin.y;
+            let v2x = v2.x - origin.x;
+            let v2y = v2.y - origin.y;
+            double_total_area = double_total_area + v1x * v2y - v1y * v2x;
             if !v1.bulge_is_zero() {
                 // add arc segment area
                 let b = v1.bulge.abs();
