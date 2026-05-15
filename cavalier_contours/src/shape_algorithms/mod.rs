@@ -92,7 +92,7 @@ where
     T: Real,
 {
     pub fn new(polyline: Polyline<T>) -> Self {
-        let spatial_index = polyline.create_approx_aabb_index();
+        let spatial_index = polyline.create_aabb_index();
         Self {
             polyline,
             spatial_index,
@@ -226,17 +226,20 @@ where
     }
 
     fn contains_point_or_boundary(&self, point: Vector2<T>, eps: T) -> bool {
-        self.ccw_plines
+        let material_depth = self
+            .ccw_plines
             .iter()
-            .map(|ip| ip.polyline.winding_number(point))
-            .chain(
-                self.cw_plines
-                    .iter()
-                    .filter(|ip| ip.polyline.is_closed())
-                    .map(|ip| ip.polyline.winding_number(point)),
-            )
-            .sum::<i32>()
-            != 0
+            .filter(|ip| ip.polyline.is_closed())
+            .filter(|ip| ip.polyline.winding_number(point) != 0)
+            .count() as isize
+            - self
+                .cw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .filter(|ip| ip.polyline.winding_number(point) != 0)
+                .count() as isize;
+
+        material_depth > 0
             || self.point_on_closed_boundary(point, eps)
     }
 
@@ -520,6 +523,115 @@ where
         }
     }
 
+    fn pline_interior_probes(pline: &Polyline<T>) -> Vec<Vector2<T>> {
+        let mut probes = Vec::new();
+        let Some(extents) = pline.extents() else {
+            return probes;
+        };
+        let center = Vector2::new(
+            (extents.min_x + extents.max_x) / T::two(),
+            (extents.min_y + extents.max_y) / T::two(),
+        );
+
+        let width = extents.max_x - extents.min_x;
+        let height = extents.max_y - extents.min_y;
+        let scale = num_traits::real::Real::max(
+            num_traits::real::Real::max(width.abs(), height.abs()),
+            T::one(),
+        );
+        let eps = scale * T::from(SHAPE_BOOLEAN_POS_EQUAL_EPS * 16.0).unwrap();
+
+        for (v1, v2) in pline.iter_segments() {
+            let mid = seg_midpoint(v1, v2);
+            let dx = v2.x - v1.x;
+            let dy = v2.y - v1.y;
+            let len = (dx * dx + dy * dy).sqrt();
+            if len <= T::zero() {
+                continue;
+            }
+
+            // For a CCW-normalized loop, the local interior is on the left side of a line
+            // segment. Arc midpoints are still useful probes; if curvature makes the first nudge
+            // land outside, the opposite nudge and later segments give additional candidates.
+            for side in [T::one(), -T::one()] {
+                let probe =
+                    Vector2::new(mid.x - dy / len * eps * side, mid.y + dx / len * eps * side);
+                if pline.winding_number(probe) != 0 {
+                    probes.push(probe);
+                }
+            }
+        }
+
+        if pline.winding_number(center) != 0 {
+            probes.push(center);
+        }
+
+        probes
+    }
+
+    fn nested_signed_plines(
+        ccw_plines: Vec<Polyline<T>>,
+        cw_plines: Vec<Polyline<T>>,
+    ) -> (Vec<Polyline<T>>, Vec<Polyline<T>>) {
+        let area_eps = Self::shape_boolean_area_epsilon();
+        let mut loops = ccw_plines
+            .into_iter()
+            .chain(cw_plines)
+            .map(Self::normalize_ccw)
+            .filter(|pline| pline.area().abs() > area_eps)
+            .collect::<Vec<_>>();
+
+        let mut deduped = Vec::new();
+        'next_loop: for pline in loops {
+            if deduped
+                .iter()
+                .any(|existing| Self::same_loop_geometry(existing, &pline))
+            {
+                continue 'next_loop;
+            }
+            deduped.push(pline);
+        }
+        loops = deduped;
+
+        if loops.len() < 2 {
+            return (loops, Vec::new());
+        }
+
+        let probes = loops
+            .iter()
+            .map(Self::pline_interior_probes)
+            .collect::<Vec<_>>();
+        let mut result_ccw = Vec::new();
+        let mut result_cw = Vec::new();
+
+        for (i, pline) in loops.iter().enumerate() {
+            if probes[i].is_empty() {
+                result_ccw.push(pline.clone());
+                continue;
+            }
+
+            let depth = probes[i]
+                .iter()
+                .map(|probe| {
+                    loops
+                        .iter()
+                        .enumerate()
+                        .filter(|(j, container)| *j != i && container.winding_number(*probe) != 0)
+                        .count()
+                })
+                .min()
+                .unwrap_or(0);
+
+            if depth % 2 == 0 {
+                result_ccw.push(pline.clone());
+            } else {
+                result_cw.push(Self::normalize_cw(pline.clone()));
+            }
+        }
+
+        (result_ccw, result_cw)
+    }
+
     /// Build a shape from already classified signed loops.
     ///
     /// All shape boolean exits go through this helper so orientation normalization, tiny-area
@@ -561,6 +673,18 @@ where
         }
     }
 
+    /// Build a final boolean result by classifying all closed boundaries by containment depth.
+    ///
+    /// Intermediate boolean helpers sometimes need to preserve their caller-provided signed bins
+    /// exactly, so depth classification is intentionally applied only at final result boundaries.
+    fn build_from_nested_signed_plines(
+        ccw_plines: Vec<Polyline<T>>,
+        cw_plines: Vec<Polyline<T>>,
+    ) -> Self {
+        let (ccw_plines, cw_plines) = Self::nested_signed_plines(ccw_plines, cw_plines);
+        Self::build_from_signed_plines(ccw_plines, cw_plines)
+    }
+
     /// Merge positive material loops using the existing polyline union implementation.
     ///
     /// Shape booleans may accumulate many pairwise pieces for one final island. This helper keeps
@@ -575,7 +699,23 @@ where
 
             let mut i = 0;
             while i < merged.len() {
-                let result = merged[i].boolean(&pending, BooleanOp::Or);
+                if merged[i].scan_for_self_intersect() || pending.scan_for_self_intersect() {
+                    i += 1;
+                    continue;
+                }
+
+                let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    merged[i].boolean(&pending, BooleanOp::Or)
+                })) {
+                    Ok(result) => result,
+                    Err(_) => {
+                        // Merging is an opportunistic simplification. During interactive drags,
+                        // transient contours can hit stricter lower-level boolean invariants; keep
+                        // the loops separate so the shape remains usable for the next frame.
+                        i += 1;
+                        continue;
+                    }
+                };
                 if matches!(result.result_info, BooleanResultInfo::Disjoint) {
                     i += 1;
                     continue;
@@ -620,6 +760,52 @@ where
         merged
     }
 
+    /// Drop redundant positive loops whose area is already covered by the other positive loops.
+    fn remove_ccw_plines_covered_by_others(plines: Vec<Polyline<T>>) -> Vec<Polyline<T>> {
+        let area_eps = Self::shape_boolean_area_epsilon();
+        let mut retained = Vec::new();
+
+        'next_candidate: for (candidate_index, candidate) in plines.iter().enumerate() {
+            let mut uncovered_pieces = vec![candidate.clone()];
+
+            for (other_index, other) in plines.iter().enumerate() {
+                if candidate_index == other_index {
+                    continue;
+                }
+
+                let mut next_uncovered = Vec::new();
+                for piece in uncovered_pieces {
+                    let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        piece.boolean(other, BooleanOp::Not)
+                    })) {
+                        Ok(result) => result,
+                        Err(_) => {
+                            retained.push(candidate.clone());
+                            continue 'next_candidate;
+                        }
+                    };
+
+                    next_uncovered.extend(
+                        result
+                            .pos_plines
+                            .into_iter()
+                            .map(|rp| Self::normalize_ccw(rp.pline))
+                            .filter(|pline| pline.area().abs() > area_eps),
+                    );
+                }
+
+                uncovered_pieces = next_uncovered;
+                if uncovered_pieces.is_empty() {
+                    continue 'next_candidate;
+                }
+            }
+
+            retained.push(candidate.clone());
+        }
+
+        retained
+    }
+
     fn subtract_positive_plines(
         mut pieces: Vec<Polyline<T>>,
         cutters: &[IndexedPolyline<T>],
@@ -657,17 +843,34 @@ where
             let shell_union = self.ccw_plines[0]
                 .polyline
                 .boolean(&other.ccw_plines[0].polyline, BooleanOp::Or);
-            hole_regions.extend(
-                shell_union
-                    .neg_plines
-                    .into_iter()
-                    .map(|rp| Self::normalize_ccw(rp.pline)),
-            );
-            shell_union
+            let shell_union_holes = shell_union
+                .neg_plines
+                .into_iter()
+                .map(|rp| Self::normalize_ccw(rp.pline))
+                .collect::<Vec<_>>();
+            let pos_plines = shell_union
                 .pos_plines
                 .into_iter()
                 .map(|rp| Self::normalize_ccw(rp.pline))
-                .collect()
+                .collect::<Vec<_>>();
+            let pos_area = pos_plines
+                .iter()
+                .map(|pline| pline.area().abs())
+                .fold(T::zero(), |acc, area| acc + area);
+            let self_shell_area = self.ccw_plines[0].polyline.area().abs();
+            let other_shell_area = other.ccw_plines[0].polyline.area().abs();
+            let min_union_area = if self_shell_area >= other_shell_area {
+                self_shell_area
+            } else {
+                other_shell_area
+            };
+            if pos_plines.is_empty() || pos_area + Self::shape_boolean_area_epsilon() < min_union_area
+            {
+                return self.boolean_or_degenerate_shell_fallback(other);
+            } else {
+                hole_regions.extend(shell_union_holes);
+                pos_plines
+            }
         } else {
             Self::merge_ccw_plines(
                 self.ccw_plines
@@ -779,7 +982,63 @@ where
             .map(Self::normalize_cw)
             .collect();
 
+        Self::build_from_nested_signed_plines(final_ccw, final_cw)
+    }
+
+    fn boolean_or_degenerate_shell_fallback(&self, other: &Self) -> Self {
+        // Interactive vertex dragging can temporarily create highly concave or self-crossing
+        // shells. In that state the lower-level union may stitch only tiny fragments or inverted
+        // boundaries. Preserve both operand shells and keep only source-contained holes that are
+        // not covered by the opposite shape's signed-bin material.
+        let final_ccw = vec![
+            Self::normalize_ccw(self.ccw_plines[0].polyline.clone()),
+            Self::normalize_ccw(other.ccw_plines[0].polyline.clone()),
+        ];
+        let eps = T::from(SHAPE_BOOLEAN_POS_EQUAL_EPS).unwrap();
+        let fallback_holes = self
+            .cw_plines
+            .iter()
+            .flat_map(|hole| {
+                let hole_positive = Self::normalize_ccw(hole.polyline.clone());
+                Self::clip_hole_to_shell(&hole_positive, &self.ccw_plines[0].polyline)
+                    .into_iter()
+                    .filter(|hole_piece| {
+                        Self::pline_has_area_where(hole_piece, |point| {
+                            !other.contains_point_or_boundary(point, eps)
+                        })
+                    })
+            })
+            .chain(other.cw_plines.iter().flat_map(|hole| {
+                let hole_positive = Self::normalize_ccw(hole.polyline.clone());
+                Self::clip_hole_to_shell(&hole_positive, &other.ccw_plines[0].polyline)
+                    .into_iter()
+                    .filter(|hole_piece| {
+                        Self::pline_has_area_where(hole_piece, |point| {
+                            !self.contains_point_or_boundary(point, eps)
+                        })
+                    })
+            }))
+            .collect::<Vec<_>>();
+        let final_cw = fallback_holes.into_iter().map(Self::normalize_cw).collect();
+
         Self::build_from_signed_plines(final_ccw, final_cw)
+    }
+
+    fn clip_hole_to_shell(hole_positive: &Polyline<T>, shell: &Polyline<T>) -> Vec<Polyline<T>> {
+        let area_eps = Self::shape_boolean_area_epsilon();
+        let clipped = hole_positive.boolean(shell, BooleanOp::And);
+        let pieces = clipped
+            .pos_plines
+            .into_iter()
+            .map(|rp| Self::normalize_ccw(rp.pline))
+            .filter(|pline| pline.area().abs() > area_eps)
+            .collect::<Vec<_>>();
+
+        if pieces.is_empty() && Self::pline_fully_contains_pline_area(shell, hole_positive) {
+            vec![hole_positive.clone()]
+        } else {
+            pieces
+        }
     }
 
     fn filter_holes_to_material(
@@ -923,7 +1182,7 @@ where
         let ccw_plines = Self::merge_ccw_plines(ccw_plines);
         let cw_plines = Self::filter_holes_to_material(&ccw_plines, cw_plines);
 
-        Self::build_from_signed_plines(ccw_plines, cw_plines)
+        Self::build_from_nested_signed_plines(ccw_plines, cw_plines)
     }
 
     fn boolean_xor_single_shells(&self, other: &Self) -> Self {
@@ -1000,7 +1259,116 @@ where
         ccw_plines = outside_ccw;
         cw_plines = Self::filter_holes_to_material(&ccw_plines, outside_cw);
 
-        Self::build_from_signed_plines(ccw_plines, cw_plines)
+        Self::build_from_nested_signed_plines(ccw_plines, cw_plines)
+    }
+
+    fn boolean_not_material_cell(
+        &self,
+        cutter_shell: &IndexedPolyline<T>,
+        cutter_holes: &[IndexedPolyline<T>],
+    ) -> Self {
+        let area_eps = Self::shape_boolean_area_epsilon();
+        let mut final_ccw = Vec::new();
+        let mut final_cw = self
+            .cw_plines
+            .iter()
+            .map(|ip| ip.polyline.clone())
+            .collect::<Vec<_>>();
+
+        for (shell_index, shell) in self.ccw_plines.iter().enumerate() {
+            let source_holes = self.immediate_holes_for_shell(shell_index);
+            if source_holes.iter().any(|hole| {
+                Self::pline_fully_contains_pline_area(
+                    &Self::normalize_ccw(hole.polyline.clone()),
+                    &cutter_shell.polyline,
+                )
+            }) {
+                final_ccw.push(shell.polyline.clone());
+                continue;
+            }
+
+            let source_ccw = vec![shell.polyline.clone()];
+
+            for source_piece in source_ccw {
+                let difference = source_piece.boolean(&cutter_shell.polyline, BooleanOp::Not);
+                final_ccw.extend(
+                    difference
+                        .pos_plines
+                        .into_iter()
+                        .map(|rp| Self::normalize_ccw(rp.pline))
+                        .filter(|pline| pline.area().abs() > area_eps),
+                );
+                final_cw.extend(
+                    difference
+                        .neg_plines
+                        .into_iter()
+                        .map(|rp| Self::normalize_cw(rp.pline))
+                        .filter(|pline| pline.area().abs() > area_eps),
+                );
+
+                for cutter_hole in cutter_holes {
+                    // A material cell is `shell - immediate_holes`; difference against another
+                    // material cell is therefore `(A - cutter_shell) union (A intersect
+                    // cutter_holes)`. Deeper islands in those holes are positive shells and are
+                    // subtracted by later passes through `boolean_not`.
+                    let hole_positive = Self::normalize_ccw(cutter_hole.polyline.clone());
+                    let restored = source_piece.boolean(&hole_positive, BooleanOp::And);
+                    let restored_ccw = restored
+                        .pos_plines
+                        .into_iter()
+                        .map(|rp| Self::normalize_ccw(rp.pline))
+                        .filter(|pline| pline.area().abs() > area_eps)
+                        .collect::<Vec<_>>();
+                    let restored_cw = restored
+                        .neg_plines
+                        .into_iter()
+                        .map(|rp| Self::normalize_cw(rp.pline))
+                        .filter(|pline| pline.area().abs() > area_eps)
+                        .collect::<Vec<_>>();
+                    let (restored_ccw, restored_cw) = Self::subtract_holes_from_signed_plines(
+                        restored_ccw,
+                        restored_cw,
+                        &source_holes,
+                    );
+
+                    final_ccw.extend(restored_ccw);
+                    final_cw.extend(restored_cw);
+                }
+            }
+        }
+
+        let final_ccw = Self::merge_ccw_plines(final_ccw);
+        let final_cw = Self::filter_holes_to_material(&final_ccw, final_cw);
+
+        Self::build_from_nested_signed_plines(final_ccw, final_cw)
+    }
+
+    fn boolean_not(&self, other: &Self) -> Self {
+        let mut current = self.clone();
+        let mut cutter_indices = (0..other.ccw_plines.len()).collect::<Vec<_>>();
+
+        // Subtract parent shells before child islands. Restoring an immediate hole is correct only
+        // until a deeper positive shell is processed in its own material-cell pass.
+        cutter_indices.sort_by(|&a, &b| {
+            other.ccw_plines[b]
+                .polyline
+                .area()
+                .abs()
+                .partial_cmp(&other.ccw_plines[a].polyline.area().abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        for cutter_index in cutter_indices {
+            if current.is_empty_shape() {
+                break;
+            }
+
+            let cutter_holes = other.immediate_holes_for_shell(cutter_index);
+            current =
+                current.boolean_not_material_cell(&other.ccw_plines[cutter_index], &cutter_holes);
+        }
+
+        current
     }
 
     fn pline_contains_probe(container: &Polyline<T>, candidate: &Polyline<T>) -> bool {
@@ -1069,6 +1437,29 @@ where
         }
 
         false
+    }
+
+    fn immediate_holes_for_shell(&self, shell_index: usize) -> Vec<IndexedPolyline<T>> {
+        let shell = &self.ccw_plines[shell_index].polyline;
+        self.cw_plines
+            .iter()
+            .filter(|hole| Self::pline_fully_contains_pline_area(shell, &hole.polyline))
+            .filter(|hole| {
+                !self
+                    .ccw_plines
+                    .iter()
+                    .enumerate()
+                    .any(|(other_index, other_shell)| {
+                        other_index != shell_index
+                            && Self::pline_fully_contains_pline_area(shell, &other_shell.polyline)
+                            && Self::pline_fully_contains_pline_area(
+                                &other_shell.polyline,
+                                &hole.polyline,
+                            )
+                    })
+            })
+            .cloned()
+            .collect()
     }
 
     fn canonicalize_standalone_cw_loops(&self) -> Option<Self> {
@@ -1885,6 +2276,11 @@ where
     /// requested set operation and then clipped again against the final filled area so linework
     /// does not remain visible inside material that already covers it.
     ///
+    /// Closed boolean results are rebuilt through a containment tree before being flattened back
+    /// into the public `ccw_plines` and `cw_plines` bins. That depth-aware classification supports
+    /// arbitrary island/lake nesting: depth 0, 2, 4, ... boundaries are material and depth 1, 3,
+    /// 5, ... boundaries are holes.
+    ///
     /// The implementation uses the same regularized polygon-set model described by Martinez,
     /// Rueda, and Feito (2009), Vatti (1992), and Greiner and Hormann (1998). Degenerate
     /// boundary cases such as shared edges, tangencies, and hole-boundary intersections are handled
@@ -1908,6 +2304,14 @@ where
     pub fn boolean(&self, other: &Self, op: BooleanOp) -> Self {
         if self.has_open_plines() || other.has_open_plines() {
             return self.boolean_with_open_plines(other, op);
+        }
+
+        if matches!(op, BooleanOp::Or)
+            && (!self.cw_plines.is_empty() || !other.cw_plines.is_empty())
+            && self.ccw_plines.len() == 1
+            && other.ccw_plines.len() == 1
+        {
+            return self.boolean_or(other);
         }
 
         if let Some(canonical_self) = self.canonicalize_standalone_cw_loops() {
@@ -1941,14 +2345,6 @@ where
             };
         }
 
-        if matches!(op, BooleanOp::Or)
-            && (!self.cw_plines.is_empty() || !other.cw_plines.is_empty())
-            && self.ccw_plines.len() == 1
-            && other.ccw_plines.len() == 1
-        {
-            return self.boolean_or(other);
-        }
-
         if self.ccw_plines.len() == 1
             && other.ccw_plines.len() == 1
             && (!self.cw_plines.is_empty() || !other.cw_plines.is_empty())
@@ -1964,6 +2360,10 @@ where
             if matches!(op, BooleanOp::Xor) {
                 return self.boolean_xor_single_shells(other);
             }
+        }
+
+        if matches!(op, BooleanOp::Not) {
+            return self.boolean_not(other);
         }
 
         if matches!(op, BooleanOp::Xor)
@@ -1999,7 +2399,7 @@ where
                     .map(|rp| Self::normalize_cw(rp.pline))
                     .collect::<Vec<_>>();
 
-                return Self::build_from_signed_plines(final_ccw, final_cw);
+                return Self::build_from_nested_signed_plines(final_ccw, final_cw);
             }
         }
 
@@ -2019,12 +2419,13 @@ where
 
         if matches!(op, BooleanOp::And) {
             let mut positive_pieces = Vec::new();
+            let mut negative_pieces = Vec::new();
             let area_eps = Self::shape_boolean_area_epsilon();
             let mut query_stack = Vec::new();
 
             // Intersect only the filled regions first. Holes from either operand are subtracted
             // afterward, which avoids treating a hole boundary as if it were positive material.
-            for ip in self.ccw_plines.iter() {
+            for (i, ip) in self.ccw_plines.iter().enumerate() {
                 let b1 = match ip.spatial_index.bounds() {
                     Some(bb) => bb,
                     None => continue,
@@ -2032,13 +2433,30 @@ where
                 let mut candidate_visitor = |j: usize| {
                     let jp = &other.ccw_plines[j];
                     let pline_result = ip.polyline.boolean(&jp.polyline, BooleanOp::And);
+                    let mut pair_ccw = Vec::new();
+                    let pair_cw = pline_result
+                        .neg_plines
+                        .into_iter()
+                        .map(|rp| Self::normalize_cw(rp.pline))
+                        .filter(|pline| pline.area().abs() > area_eps)
+                        .collect::<Vec<_>>();
                     for rp in pline_result.pos_plines {
                         if rp.pline.area().abs() <= area_eps {
                             continue;
                         }
 
-                        positive_pieces.push(Self::normalize_ccw(rp.pline));
+                        pair_ccw.push(Self::normalize_ccw(rp.pline));
                     }
+
+                    let self_holes = self.immediate_holes_for_shell(i);
+                    let other_holes = other.immediate_holes_for_shell(j);
+                    let (pair_ccw, pair_cw) =
+                        Self::subtract_holes_from_signed_plines(pair_ccw, pair_cw, &self_holes);
+                    let (pair_ccw, pair_cw) =
+                        Self::subtract_holes_from_signed_plines(pair_ccw, pair_cw, &other_holes);
+
+                    positive_pieces.extend(pair_ccw);
+                    negative_pieces.extend(pair_cw);
                 };
                 Self::visit_loop_candidates(
                     other,
@@ -2049,15 +2467,7 @@ where
                 );
             }
 
-            let mut result =
-                Self::build_from_signed_plines(Self::merge_ccw_plines(positive_pieces), Vec::new());
-
-            for hole in self.cw_plines.iter().chain(other.cw_plines.iter()) {
-                let positive_hole = Polyline::create_from(&PlineInversionView::new(&hole.polyline));
-                result = result.boolean(&Self::from_plines([positive_hole]), BooleanOp::Not);
-            }
-
-            return result;
+            return Self::build_from_nested_signed_plines(positive_pieces, negative_pieces);
         }
 
         // Collect pairwise lower-level boolean results. CW loops are passed through
@@ -2288,6 +2698,10 @@ where
                 let jp_inverted = PlineInversionView::new(&jp.polyline);
                 let result = ip_inverted.boolean(&jp_inverted, op);
 
+                if matches!(op, BooleanOp::Not) {
+                    return;
+                }
+
                 if !matches!(result.result_info, BooleanResultInfo::Disjoint) {
                     self_used_cw[i] = true;
                     othr_used_cw[j] = true;
@@ -2332,6 +2746,13 @@ where
 
         if matches!(op, BooleanOp::Or) {
             final_ccw = Self::merge_ccw_plines(final_ccw);
+            if self.cw_plines.is_empty() && other.cw_plines.is_empty() && final_cw.is_empty() {
+                // A source loop that intersects multiple opposing loops can be included in several
+                // pairwise union contours. After merging, those duplicate covered contours look
+                // topologically nested and would be reclassified as holes. With no source holes in
+                // play, any CCW loop fully covered by the rest of the positive material is redundant.
+                final_ccw = Self::remove_ccw_plines_covered_by_others(final_ccw);
+            }
         }
 
         // Add input loops that never participated in a non-disjoint pairwise operation.
@@ -2396,9 +2817,15 @@ where
                 .into_iter()
                 .map(Self::normalize_cw)
                 .collect();
+
+            // The pairwise collector can also produce negative loops that are valid relative to a
+            // lower-level contour pair but detached from the final positive material. Clip those
+            // candidates to the retained CCW loops before containment-depth classification so an
+            // off-material hole cannot dominate the signed area or create false filled samples.
+            final_cw = Self::filter_holes_to_material(&final_ccw, final_cw);
         }
 
-        Self::build_from_signed_plines(final_ccw, final_cw)
+        Self::build_from_nested_signed_plines(final_ccw, final_cw)
     }
 
     /// Union

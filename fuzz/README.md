@@ -11,7 +11,13 @@ cargo fuzz run shape_boolean_rects
 cargo fuzz run shape_boolean_polygons
 cargo fuzz run shape_boolean_donuts
 cargo fuzz run shape_boolean_arcs
+cargo fuzz run shape_boolean_deep_nesting
+cargo fuzz run shape_boolean_adversarial_corpus
+cargo fuzz run shape_boolean_singularity_corpus
 cargo fuzz run shape_transform_then_boolean
+cargo fuzz run shape_boolean_vertex_drag_ui
+cargo fuzz run shape_boolean_vertex_drag_ui_xor
+cargo fuzz run shape_boolean_vertex_drag_rebuilt
 cargo fuzz run pline_inversion_view_boolean
 ```
 

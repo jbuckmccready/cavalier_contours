@@ -11,7 +11,7 @@ mod test_utils;
 use cavalier_contours::core::{math::Vector2, traits::FuzzyEq};
 use cavalier_contours::polyline::{
     BooleanOp, BooleanResultInfo, PlineInversionView, PlineOrientation, PlineSource,
-    PlineSourceMut, Polyline, seg_arc_radius_and_center,
+    PlineSourceMut, Polyline, seg_arc_radius_and_center, seg_closest_point,
 };
 use cavalier_contours::shape_algorithms::{Shape, ShapeOffsetOptions};
 use cavalier_contours::{assert_fuzzy_eq, pline_closed, pline_open};
@@ -112,6 +112,71 @@ fn create_donut(outer: (f64, f64, f64, f64), holes: &[(f64, f64, f64, f64)]) -> 
     Shape::from_plines(plines)
 }
 
+fn create_deep_nested_rect_shape() -> Shape<f64> {
+    Shape::from_plines([
+        create_rectangle(0.0, 0.0, 100.0, 100.0),
+        create_cw_rectangle(10.0, 10.0, 90.0, 90.0),
+        create_rectangle(20.0, 20.0, 80.0, 80.0),
+        create_cw_rectangle(30.0, 30.0, 70.0, 70.0),
+        create_rectangle(40.0, 40.0, 60.0, 60.0),
+    ])
+}
+
+fn create_deeper_nested_rect_shape(
+    origin_x: f64,
+    origin_y: f64,
+    size: f64,
+    depth: usize,
+) -> Shape<f64> {
+    let inset_step = size / (2.0 * depth as f64 + 2.0);
+    Shape::from_plines((0..depth).map(|i| {
+        let inset = inset_step * i as f64;
+        if i % 2 == 0 {
+            create_rectangle(
+                origin_x + inset,
+                origin_y + inset,
+                origin_x + size - inset,
+                origin_y + size - inset,
+            )
+        } else {
+            create_cw_rectangle(
+                origin_x + inset,
+                origin_y + inset,
+                origin_x + size - inset,
+                origin_y + size - inset,
+            )
+        }
+    }))
+}
+
+fn create_arc_ring(center_x: f64, center_y: f64, outer_radius: f64, inner_radius: f64) -> Shape<f64> {
+    let outer = create_approx_circle(center_x, center_y, outer_radius);
+    let mut inner = create_approx_circle(center_x, center_y, inner_radius);
+    inner.invert_direction_mut();
+    Shape::from_plines([outer, inner])
+}
+
+fn create_sawtooth_loop(
+    min_x: f64,
+    min_y: f64,
+    width: f64,
+    height: f64,
+    teeth: usize,
+) -> Polyline<f64> {
+    let mut pline = Polyline::new_closed();
+    pline.add(min_x, min_y, 0.0);
+    for i in 0..teeth {
+        let x0 = min_x + width * (i as f64 + 0.25) / teeth as f64;
+        let x1 = min_x + width * (i as f64 + 0.50) / teeth as f64;
+        let x2 = min_x + width * (i as f64 + 0.75) / teeth as f64;
+        pline.add(x0, min_y + height * 0.88, 0.0);
+        pline.add(x1, min_y + height, 0.0);
+        pline.add(x2, min_y + height * 0.88, 0.0);
+    }
+    pline.add(min_x + width, min_y, 0.0);
+    pline
+}
+
 fn create_multi_pline_boolean_scene_default_shape() -> Shape<f64> {
     Shape::from_plines(vec![
         pline_closed![
@@ -167,25 +232,41 @@ fn shape_signed_area(shape: &Shape<f64>) -> f64 {
         .sum()
 }
 
-/// Compute non-zero winding membership across every signed loop in a shape.
-fn shape_winding_number(shape: &Shape<f64>, point: Vector2<f64>) -> i32 {
-    // Match Shape::boolean's non-zero winding semantics by summing every signed loop.
+/// Compute signed-bin material depth at a point.
+fn shape_material_depth(shape: &Shape<f64>, point: Vector2<f64>) -> isize {
+    // CCW bins are material cells and CW bins are subtractive cells. A self-crossing material loop
+    // may have negative local winding in part of its filled area, so only the bin sign contributes
+    // to shape-level membership.
     shape
         .ccw_plines
         .iter()
-        .map(|ip| ip.polyline.winding_number(point))
-        .chain(
-            shape
-                .cw_plines
-                .iter()
-                .map(|ip| ip.polyline.winding_number(point)),
-        )
-        .sum()
+        .filter(|ip| ip.polyline.winding_number(point) != 0)
+        .count() as isize
+        - shape
+            .cw_plines
+            .iter()
+            .filter(|ip| ip.polyline.winding_number(point) != 0)
+            .count() as isize
 }
 
 /// Test membership helper used by sampled boolean oracles.
 fn shape_contains(shape: &Shape<f64>, x: f64, y: f64) -> bool {
-    shape_winding_number(shape, Vector2::new(x, y)) != 0
+    shape_material_depth(shape, Vector2::new(x, y)) > 0
+}
+
+fn shape_sample_windings(shape: &Shape<f64>, sample: (f64, f64)) -> Vec<(&'static str, i32)> {
+    let point = Vector2::new(sample.0, sample.1);
+    shape
+        .ccw_plines
+        .iter()
+        .map(|ip| ("ccw", ip.polyline.winding_number(point)))
+        .chain(
+            shape
+                .cw_plines
+                .iter()
+                .map(|ip| ("cw", ip.polyline.winding_number(point))),
+        )
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -977,6 +1058,15 @@ fn dump_shape_boolean_failure(
             shape_signature(result)
         ),
     );
+    let _ = fs::write(
+        dir.join("windings.txt"),
+        format!(
+            "sample: {sample:?}\na: {:?}\nb: {:?}\nresult: {:?}\n",
+            shape_sample_windings(a, sample),
+            shape_sample_windings(b, sample),
+            shape_sample_windings(result, sample),
+        ),
+    );
     let _ = fs::write(dir.join("input_a.json"), shape_debug_json(a));
     let _ = fs::write(dir.join("input_b.json"), shape_debug_json(b));
     let _ = fs::write(dir.join("result.json"), shape_debug_json(result));
@@ -1257,7 +1347,13 @@ fn closed_loop_shapes(shape: &Shape<f64>) -> Vec<Shape<f64>> {
         .iter()
         .chain(shape.cw_plines.iter())
         .filter(|ip| ip.polyline.is_closed())
-        .map(|ip| Shape::from_plines([ip.polyline.clone()]))
+        .map(|ip| {
+            let mut pline = ip.polyline.clone();
+            if pline.orientation() == PlineOrientation::Clockwise {
+                pline.invert_direction_mut();
+            }
+            Shape::from_plines([pline])
+        })
         .collect()
 }
 
@@ -1825,10 +1921,9 @@ fn shape_boolean_donut_square_outside_and_hole_boundary_cases() {
 }
 
 #[test]
-#[ignore = "documents current hole-boundary union area inflation"]
 fn reported_shape_boolean_hole_boundary_union_area_inflation_1() {
-    // Kept ignored as a named regression document: the sampled semantics are useful for future
-    // reduction even while the exact union area is not yet accepted as a normal CI assertion.
+    // Regression: when an added island crosses a hole boundary, union must clip the old hole
+    // rather than carrying the full hole forward and inflating the final area.
     let donut = create_donut((0.0, 0.0, 10.0, 10.0), &[(3.0, 3.0, 7.0, 7.0)]);
     let hole_boundary_square = create_shape_rects(&[(2.0, 2.0, 5.0, 5.0)]);
 
@@ -1923,6 +2018,45 @@ mod shape_boolean_proptests {
         })
     }
 
+    fn disjoint_rect_set_strategy() -> impl Strategy<Value = Vec<Rect>> {
+        (-100i32..80, -100i32..100, 1usize..=4).prop_flat_map(|(x, y, count)| {
+            prop::collection::vec((1i32..30, 1i32..30, 1i32..12), count).prop_map(move |dims| {
+                let mut cursor = f64::from(x);
+                dims.into_iter()
+                    .map(|(w, h, gap)| {
+                        let rect = (
+                            cursor,
+                            f64::from(y),
+                            cursor + f64::from(w),
+                            f64::from(y + h),
+                        );
+                        cursor += f64::from(w + gap);
+                        rect
+                    })
+                    .collect()
+            })
+        })
+    }
+
+    fn nested_rect_stack_strategy() -> impl Strategy<Value = Vec<Rect>> {
+        (-30i32..30, -30i32..30, 28i32..80, 28i32..80, 3usize..=5).prop_map(
+            |(x, y, w, h, depth)| {
+                let inset_step = f64::from(w.min(h)) / (2.0 * depth as f64 + 2.0);
+                (0..depth)
+                    .map(|i| {
+                        let inset = (i as f64) * inset_step;
+                        (
+                            f64::from(x) + inset,
+                            f64::from(y) + inset,
+                            f64::from(x + w) - inset,
+                            f64::from(y + h) - inset,
+                        )
+                    })
+                    .collect()
+            },
+        )
+    }
+
     fn rect_area(rect: Rect) -> f64 {
         (rect.2 - rect.0) * (rect.3 - rect.1)
     }
@@ -1931,8 +2065,107 @@ mod shape_boolean_proptests {
         ((rect.0 + rect.2) * 0.5, (rect.1 + rect.3) * 0.5)
     }
 
+    fn rect_contains(rect: Rect, x: f64, y: f64) -> bool {
+        x > rect.0 && x < rect.2 && y > rect.1 && y < rect.3
+    }
+
+    fn rect_set_contains(rects: &[Rect], x: f64, y: f64) -> bool {
+        rects.iter().any(|&rect| rect_contains(rect, x, y))
+    }
+
+    fn point_on_rect_boundary(rect: Rect, x: f64, y: f64) -> bool {
+        let on_vertical = (x.fuzzy_eq_eps(rect.0, SHAPE_TEST_EPS)
+            || x.fuzzy_eq_eps(rect.2, SHAPE_TEST_EPS))
+            && y >= rect.1 - SHAPE_TEST_EPS
+            && y <= rect.3 + SHAPE_TEST_EPS;
+        let on_horizontal = (y.fuzzy_eq_eps(rect.1, SHAPE_TEST_EPS)
+            || y.fuzzy_eq_eps(rect.3, SHAPE_TEST_EPS))
+            && x >= rect.0 - SHAPE_TEST_EPS
+            && x <= rect.2 + SHAPE_TEST_EPS;
+        on_vertical || on_horizontal
+    }
+
+    fn point_on_any_rect_boundary(rects: &[Rect], x: f64, y: f64) -> bool {
+        rects.iter().any(|&rect| point_on_rect_boundary(rect, x, y))
+    }
+
+    fn boolean_expected(in_a: bool, in_b: bool, op: BooleanOp) -> bool {
+        match op {
+            BooleanOp::Or => in_a || in_b,
+            BooleanOp::And => in_a && in_b,
+            BooleanOp::Not => in_a && !in_b,
+            BooleanOp::Xor => in_a != in_b,
+        }
+    }
+
     fn outside_sample(rect: Rect) -> (f64, f64) {
         (rect.2 + 10.0, rect.3 + 10.0)
+    }
+
+    fn rect_set_samples(a: &[Rect], b: &[Rect]) -> Vec<(f64, f64)> {
+        let mut samples = Vec::new();
+        for &rect in a.iter().chain(b.iter()) {
+            samples.push(rect_center(rect));
+            samples.push((rect.0 + 0.31, rect.1 + 0.47));
+            samples.push((rect.2 - 0.37, rect.3 - 0.53));
+        }
+
+        let min_x = a
+            .iter()
+            .chain(b.iter())
+            .map(|rect| rect.0)
+            .fold(f64::INFINITY, f64::min);
+        let min_y = a
+            .iter()
+            .chain(b.iter())
+            .map(|rect| rect.1)
+            .fold(f64::INFINITY, f64::min);
+        let max_x = a
+            .iter()
+            .chain(b.iter())
+            .map(|rect| rect.2)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let max_y = a
+            .iter()
+            .chain(b.iter())
+            .map(|rect| rect.3)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let width = (max_x - min_x).max(1.0);
+        let height = (max_y - min_y).max(1.0);
+        for fx in [0.13, 0.29, 0.47, 0.71, 0.89] {
+            for fy in [0.17, 0.37, 0.59, 0.83] {
+                samples.push((min_x + width * fx, min_y + height * fy));
+            }
+        }
+        samples.push((max_x + 5.0, max_y + 5.0));
+        samples.retain(|&(x, y)| {
+            !point_on_any_rect_boundary(a, x, y) && !point_on_any_rect_boundary(b, x, y)
+        });
+        samples
+    }
+
+    fn shape_from_nested_stack(rects: &[Rect]) -> Shape<f64> {
+        Shape::from_plines(rects.iter().enumerate().map(|(i, &rect)| {
+            if i % 2 == 0 {
+                create_rectangle(rect.0, rect.1, rect.2, rect.3)
+            } else {
+                create_cw_rectangle(rect.0, rect.1, rect.2, rect.3)
+            }
+        }))
+    }
+
+    fn nested_stack_area(rects: &[Rect]) -> f64 {
+        rects
+            .iter()
+            .enumerate()
+            .map(|(i, &rect)| {
+                if i % 2 == 0 {
+                    rect_area(rect)
+                } else {
+                    -rect_area(rect)
+                }
+            })
+            .sum()
     }
 
     fn rect_overlap_area(a: Rect, b: Rect) -> f64 {
@@ -2131,6 +2364,52 @@ mod shape_boolean_proptests {
         }
 
         #[test]
+        fn rectangle_sets_match_independent_oracle(
+            a_rects in disjoint_rect_set_strategy(),
+            b_rects in disjoint_rect_set_strategy(),
+        ) {
+            let a_shape = create_shape_rects(&a_rects);
+            let b_shape = create_shape_rects(&b_rects);
+            let samples = rect_set_samples(&a_rects, &b_rects);
+
+            // Multi-island difference/XOR still have dedicated regression coverage elsewhere.
+            // Keep this independent oracle focused on the stable set modes so it can run in
+            // normal CI while still checking multiple-loop assembly against a non-Shape oracle.
+            for op in [BooleanOp::Or, BooleanOp::And] {
+                let result = a_shape.boolean(&b_shape, op);
+                assert_shape_valid(&result);
+                for (x, y) in &samples {
+                    assert_eq!(
+                        shape_contains(&result, *x, *y),
+                        boolean_expected(
+                            rect_set_contains(&a_rects, *x, *y),
+                            rect_set_contains(&b_rects, *x, *y),
+                            op,
+                        ),
+                        "rectangle-set oracle mismatch for {op:?} at ({x}, {y})"
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn nested_rectangle_stack_empty_and_self_identities_hold(rects in nested_rect_stack_strategy()) {
+            let shape = shape_from_nested_stack(&rects);
+            let empty = Shape::<f64>::empty();
+            let area = nested_stack_area(&rects);
+            let samples = rects.iter().map(|&rect| rect_center(rect)).collect::<Vec<_>>();
+
+            assert_shape_valid(&shape);
+            assert!(shape_signed_area(&shape).fuzzy_eq_eps(area, 1e-5));
+            assert_boolean_area_and_samples(&shape, &empty, BooleanOp::Or, area, &samples);
+            assert_boolean_result(&shape, &empty, BooleanOp::And, 0.0, 0, 0, &samples);
+            assert_boolean_area_and_samples(&shape, &shape, BooleanOp::Or, area, &samples);
+            assert_boolean_area_and_samples(&shape, &shape, BooleanOp::And, area, &samples);
+            assert_boolean_result(&shape, &shape, BooleanOp::Not, 0.0, 0, 0, &samples);
+            assert_boolean_result(&shape, &shape, BooleanOp::Xor, 0.0, 0, 0, &samples);
+        }
+
+        #[test]
         fn translated_overlapping_rectangles_preserve_boolean_results(
             (a, b) in overlapping_rect_pair_strategy(),
             dx in -200i32..200,
@@ -2197,12 +2476,38 @@ mod shape_boolean_proptests {
     }
 }
 
+#[test]
+fn shape_boolean_or_multi_island_rectangle_set_reduced_proptest_failure() {
+    let a_rects = [
+        (-75.0, -74.0, -66.0, -73.0),
+        (-64.0, -74.0, -60.0, -73.0),
+        (-52.0, -74.0, -44.0, -61.0),
+        (-38.0, -74.0, -19.0, -65.0),
+    ];
+    let b_rects = [
+        (-60.0, -65.0, -38.0, -42.0),
+        (-28.0, -65.0, -20.0, -45.0),
+        (-9.0, -65.0, 5.0, -61.0),
+    ];
+    let a_shape = create_shape_rects(&a_rects);
+    let b_shape = create_shape_rects(&b_rects);
+    let union = a_shape.boolean(&b_shape, BooleanOp::Or);
+
+    assert_shape_valid(&union);
+    assert_boolean_samples(&a_shape, &b_shape, &union, BooleanOp::Or, &[(-44.37, -61.53)]);
+    assert!(
+        shape_contains(&union, -44.37, -61.53),
+        "OR dropped material inside the third A island"
+    );
+}
+
 #[cfg(test)]
 mod shape_boolean_differential_tests {
-    //! Manual differential tests that avoid using `Shape` winding numbers as the expected oracle.
+    //! Differential tests that avoid using `Shape` winding numbers as the expected oracle.
     //!
-    //! These are ignored by default because they are intended for local confidence checks and
-    //! future oracle expansion, not normal CI runtime.
+    //! These checks compare shape boolean results against small independent oracles so they can
+    //! catch cases where the normal sampled `Shape` membership helper shares an implementation
+    //! assumption with the code under test.
 
     use super::*;
 
@@ -2243,7 +2548,6 @@ mod shape_boolean_differential_tests {
     }
 
     #[test]
-    #[ignore = "manual differential oracle for straight-line rectangle unions"]
     fn manual_rectangle_set_oracle_matches_shape_boolean_samples() {
         // This deliberately avoids Shape winding numbers for the expected value. It compares
         // result membership against an independent axis-aligned rectangle-set oracle, while arc
@@ -2303,6 +2607,586 @@ mod shape_boolean_differential_tests {
                         "rectangle oracle mismatch for {op:?} at ({x}, {y})"
                     );
                 }
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct GeoBooleanCase {
+        name: &'static str,
+        a_polys: Vec<(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)>,
+        b_polys: Vec<(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)>,
+        area_abs_eps: f64,
+    }
+
+    fn normalized_closed_loop(coords: &[(f64, f64)], want_ccw: bool) -> Polyline<f64> {
+        let mut pline = Polyline::new_closed();
+        let end = coords.len().saturating_sub(1);
+        for &(x, y) in &coords[..end] {
+            pline.add(x, y, 0.0);
+        }
+
+        let is_ccw = pline.orientation() == PlineOrientation::CounterClockwise;
+        if is_ccw != want_ccw {
+            pline.invert_direction_mut();
+        }
+        pline
+    }
+
+    fn shape_from_geo_case_polys(
+        polys: &[(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)],
+    ) -> Shape<f64> {
+        Shape::from_plines(polys.iter().flat_map(|(shell, holes)| {
+            std::iter::once(normalized_closed_loop(shell, true)).chain(
+                holes
+                    .iter()
+                    .map(|hole| normalized_closed_loop(hole, false)),
+            )
+        }))
+    }
+
+    fn geo_polygon_from_case(
+        shell: &[(f64, f64)],
+        holes: &[Vec<(f64, f64)>],
+    ) -> geo::Polygon<f64> {
+        geo::Polygon::new(
+            geo::LineString::from(shell.to_vec()),
+            holes
+                .iter()
+                .map(|hole| geo::LineString::from(hole.clone()))
+                .collect(),
+        )
+    }
+
+    fn geo_multipolygon_from_case(
+        polys: &[(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)],
+    ) -> geo::MultiPolygon<f64> {
+        geo::MultiPolygon::new(
+            polys
+                .iter()
+                .map(|(shell, holes)| geo_polygon_from_case(shell, holes))
+                .collect(),
+        )
+    }
+
+    fn point_on_shape_boundary(shape: &Shape<f64>, x: f64, y: f64) -> bool {
+        let point = Vector2::new(x, y);
+        shape
+            .ccw_plines
+            .iter()
+            .chain(shape.cw_plines.iter())
+            .filter(|ip| ip.polyline.is_closed())
+            .any(|ip| {
+                ip.polyline
+                    .iter_segments()
+                    .any(|(v1, v2)| seg_closest_point(v1, v2, point, SHAPE_TEST_EPS).fuzzy_eq_eps(point, SHAPE_TEST_EPS))
+            })
+    }
+
+    fn assert_shape_matches_geo_boolean(case: &GeoBooleanCase, op: BooleanOp) {
+        use geo::{Area, BooleanOps, Contains};
+
+        let a_shape = shape_from_geo_case_polys(&case.a_polys);
+        let b_shape = shape_from_geo_case_polys(&case.b_polys);
+        let a_geo = geo_multipolygon_from_case(&case.a_polys);
+        let b_geo = geo_multipolygon_from_case(&case.b_polys);
+        let expected_geo = match op {
+            BooleanOp::Or => a_geo.union(&b_geo),
+            BooleanOp::And => a_geo.intersection(&b_geo),
+            BooleanOp::Not => a_geo.difference(&b_geo),
+            BooleanOp::Xor => a_geo.xor(&b_geo),
+        };
+        let result = a_shape.boolean(&b_shape, op);
+
+        assert_shape_valid(&result);
+        let expected_area = expected_geo.unsigned_area();
+        let actual_area = shape_signed_area(&result).abs();
+        let area_eps = (expected_area.abs().max(actual_area.abs()) * 1e-8).max(case.area_abs_eps);
+        assert!(
+            actual_area.fuzzy_eq_eps(expected_area, area_eps),
+            "{} {op:?} area mismatch: expected {expected_area}, got {actual_area}",
+            case.name
+        );
+
+        for (x, y) in dense_samples_for_shapes(&[&a_shape, &b_shape, &result], 18, 18) {
+            if point_on_shape_boundary(&a_shape, x, y)
+                || point_on_shape_boundary(&b_shape, x, y)
+                || point_on_shape_boundary(&result, x, y)
+            {
+                continue;
+            }
+
+            let point = geo::Point::new(x, y);
+            assert_eq!(
+                shape_contains(&result, x, y),
+                expected_geo.contains(&point),
+                "{} {op:?} membership mismatch at ({x}, {y})",
+                case.name
+            );
+        }
+    }
+
+    fn geo_boolean_regression_cases() -> Vec<GeoBooleanCase> {
+        let mut cases = vec![
+            GeoBooleanCase {
+                // Adapted from geo 0.32.0 bool_ops::gh_issue_867.
+                name: "geo gh-867 close triangle intersection",
+                area_abs_eps: 1e-4,
+                a_polys: vec![(
+                    vec![
+                        (17.724912058920285, -16.37118892052372),
+                        (18.06452454246989, -17.693907532504),
+                        (19.09389292605319, -17.924001641855178),
+                        (17.724912058920285, -16.37118892052372),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (17.576085274796423, -15.791540153598898),
+                        (17.19432983818328, -17.499393422066746),
+                        (18.06452454246989, -17.693907532504),
+                        (17.576085274796423, -15.791540153598898),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                // Adapted from geo 0.32.0 bool_ops::gh_issue_885.
+                name: "geo gh-885 near coincident quadrilaterals",
+                area_abs_eps: 1e-4,
+                a_polys: vec![(
+                    vec![
+                        (8055.658, 7977.5537),
+                        (8010.734, 7999.9697),
+                        (8032.9717, 8044.537),
+                        (8077.896, 8022.121),
+                        (8055.658, 7977.5537),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (8055.805, 7977.847),
+                        (8010.871, 8000.2676),
+                        (8033.105, 8044.8286),
+                        (8078.039, 8022.408),
+                        (8055.805, 7977.847),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                // Adapted from geo 0.32.0 bool_ops::gh_issue_913::test_polygon_union2.
+                name: "geo gh-913 triangle union",
+                area_abs_eps: 1e-4,
+                a_polys: vec![(
+                    vec![
+                        (204.0, 287.0),
+                        (206.69670020700084, 288.2213844497616),
+                        (200.38308697914755, 288.338793163584),
+                        (204.0, 287.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (210.0, 290.0),
+                        (204.07584923592933, 288.2701221108328),
+                        (212.24082541367974, 285.47846008552216),
+                        (210.0, 290.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                // Adapted from geo 0.32.0 bool_ops::gh_issue_976.
+                name: "geo gh-976 shifted polygon with hole",
+                area_abs_eps: 1e-4,
+                a_polys: vec![(
+                    vec![
+                        (931229.0, 412646.0),
+                        (931238.0, 412646.0),
+                        (931238.0, 412639.0),
+                        (931229.0, 412639.0),
+                        (931229.0, 412646.0),
+                    ],
+                    vec![vec![
+                        (931232.0, 412645.0),
+                        (931237.0, 412645.0),
+                        (931237.0, 412644.0),
+                        (931235.0, 412642.0),
+                        (931235.0, 412641.0),
+                        (931230.0, 412643.0),
+                        (931232.0, 412645.0),
+                    ]],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (931230.0, 412642.0),
+                        (931236.0, 412644.0),
+                        (931234.0, 412640.0),
+                        (931230.0, 412642.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                // Adapted from geo 0.32.0 bool_ops::gh_issue_1193.
+                name: "geo gh-1193 multipolygon sliver difference",
+                area_abs_eps: 1e-4,
+                a_polys: vec![
+                    (
+                        vec![
+                            (-19.064932, -6.57369),
+                            (-19.458324, -3.6231885),
+                            (-22.058823, -3.6231885),
+                            (-19.064932, -6.57369),
+                        ],
+                        vec![],
+                    ),
+                    (
+                        vec![
+                            (-14.705882, -10.869565),
+                            (-14.705882, -7.649791),
+                            (-17.60358, -8.013862),
+                            (-14.705882, -10.869565),
+                        ],
+                        vec![],
+                    ),
+                ],
+                b_polys: vec![(
+                    vec![
+                        (-18.852, -8.170715),
+                        (-16.761898, -24.659603),
+                        (43.387707, -16.298937),
+                        (26.434301, -2.4808762),
+                        (-18.852, -8.170715),
+                    ],
+                    vec![],
+                )],
+            },
+        ];
+
+        cases.extend([
+            GeoBooleanCase {
+                // Adapted from i_overlay 4.0.7 tests/boolean/test_2.json.
+                name: "iOverlay test-2 half-overlapping squares",
+                area_abs_eps: 1e-4,
+                a_polys: vec![(
+                    vec![
+                        (-10240.0, -10240.0),
+                        (-10240.0, 10240.0),
+                        (10240.0, 10240.0),
+                        (10240.0, -10240.0),
+                        (-10240.0, -10240.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (0.0, -10240.0),
+                        (0.0, 10240.0),
+                        (20480.0, 10240.0),
+                        (20480.0, -10240.0),
+                        (0.0, -10240.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                // Adapted from i_overlay 4.0.7 tests/boolean/test_15.json.
+                name: "iOverlay test-15 containment creates hole",
+                area_abs_eps: 1e-4,
+                a_polys: vec![(
+                    vec![
+                        (-20480.0, -20480.0),
+                        (-20480.0, 20480.0),
+                        (20480.0, 20480.0),
+                        (20480.0, -20480.0),
+                        (-20480.0, -20480.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (-5120.0, -5120.0),
+                        (-5120.0, 5120.0),
+                        (5120.0, 5120.0),
+                        (5120.0, -5120.0),
+                        (-5120.0, -5120.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                // Adapted from i_overlay 4.0.7 tests/boolean/test_36.json.
+                name: "iOverlay test-36 diamond covers square",
+                area_abs_eps: 1e-4,
+                a_polys: vec![(
+                    vec![
+                        (-10240.0, -10240.0),
+                        (-10240.0, 10240.0),
+                        (10240.0, 10240.0),
+                        (10240.0, -10240.0),
+                        (-10240.0, -10240.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (0.0, -20480.0),
+                        (-20480.0, 0.0),
+                        (0.0, 20480.0),
+                        (20480.0, 0.0),
+                        (0.0, -20480.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                // Adapted from i_overlay 4.0.7 tests/boolean/test_47.json.
+                name: "iOverlay test-47 triangle touches square boundary",
+                area_abs_eps: 1e-4,
+                a_polys: vec![(
+                    vec![
+                        (-10240.0, 10240.0),
+                        (10240.0, 10240.0),
+                        (10240.0, -10240.0),
+                        (-10240.0, -10240.0),
+                        (-10240.0, 10240.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (-5120.0, 10240.0),
+                        (5120.0, 10240.0),
+                        (0.0, 0.0),
+                        (-5120.0, 10240.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                // Adapted from i_overlay 4.0.7 tests/boolean/test_74.json.
+                name: "iOverlay test-74 near-boundary sliver cover",
+                area_abs_eps: 1.0,
+                a_polys: vec![(
+                    vec![
+                        (-10240.0, 10240.0),
+                        (10240.0, 10240.0),
+                        (10240.0, 0.0),
+                        (-10240.0, 0.0),
+                        (-10240.0, 10240.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (10239.0, 30720.0),
+                        (10241.0, -30720.0),
+                        (-15360.0, -30720.0),
+                        (-15360.0, 30720.0),
+                        (10239.0, 30720.0),
+                    ],
+                    vec![],
+                )],
+            },
+        ]);
+
+        cases.extend([
+            GeoBooleanCase {
+                name: "brutal point-touching polygons produce no area intersection",
+                area_abs_eps: 1e-9,
+                a_polys: vec![(
+                    vec![
+                        (0.0, 0.0),
+                        (10.0, 0.0),
+                        (10.0, 10.0),
+                        (0.0, 10.0),
+                        (0.0, 0.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (10.0, 10.0),
+                        (16.0, 10.0),
+                        (13.0, 15.0),
+                        (10.0, 10.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                name: "brutal shared edge regularization",
+                area_abs_eps: 1e-9,
+                a_polys: vec![(
+                    vec![
+                        (0.0, 0.0),
+                        (10.0, 0.0),
+                        (10.0, 10.0),
+                        (0.0, 10.0),
+                        (0.0, 0.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (10.0, 0.0),
+                        (20.0, 0.0),
+                        (20.0, 10.0),
+                        (10.0, 10.0),
+                        (10.0, 0.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                name: "brutal epsilon-width overlap",
+                area_abs_eps: 1e-8,
+                a_polys: vec![(
+                    vec![
+                        (0.0, 0.0),
+                        (10.0, 0.0),
+                        (10.0, 10.0),
+                        (0.0, 10.0),
+                        (0.0, 0.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (9.999_999, -1.0),
+                        (20.0, -1.0),
+                        (20.0, 11.0),
+                        (9.999_999, 11.0),
+                        (9.999_999, -1.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                name: "brutal hole-edge tangent bridge",
+                area_abs_eps: 1e-7,
+                a_polys: vec![(
+                    vec![
+                        (0.0, 0.0),
+                        (30.0, 0.0),
+                        (30.0, 30.0),
+                        (0.0, 30.0),
+                        (0.0, 0.0),
+                    ],
+                    vec![vec![
+                        (10.0, 10.0),
+                        (20.0, 10.0),
+                        (20.0, 20.0),
+                        (10.0, 20.0),
+                        (10.0, 10.0),
+                    ]],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (20.0, 12.0),
+                        (27.0, 12.0),
+                        (27.0, 18.0),
+                        (20.0, 18.0),
+                        (20.0, 12.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                name: "brutal collinear vertices and notch crossing",
+                area_abs_eps: 1e-7,
+                a_polys: vec![(
+                    vec![
+                        (0.0, 0.0),
+                        (4.0, 0.0),
+                        (8.0, 0.0),
+                        (8.0, 8.0),
+                        (5.0, 8.0),
+                        (5.0, 3.0),
+                        (3.0, 3.0),
+                        (3.0, 8.0),
+                        (0.0, 8.0),
+                        (0.0, 0.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (-1.0, 2.0),
+                        (9.0, 2.0),
+                        (9.0, 6.0),
+                        (-1.0, 6.0),
+                        (-1.0, 2.0),
+                    ],
+                    vec![],
+                )],
+            },
+            GeoBooleanCase {
+                name: "brutal large coordinates with tiny offset",
+                area_abs_eps: 1e-4,
+                a_polys: vec![(
+                    vec![
+                        (1_000_000_000.0, 1_000_000_000.0),
+                        (1_000_000_010.0, 1_000_000_000.0),
+                        (1_000_000_010.0, 1_000_000_010.0),
+                        (1_000_000_000.0, 1_000_000_010.0),
+                        (1_000_000_000.0, 1_000_000_000.0),
+                    ],
+                    vec![],
+                )],
+                b_polys: vec![(
+                    vec![
+                        (1_000_000_009.5, 999_999_999.5),
+                        (1_000_000_020.0, 999_999_999.5),
+                        (1_000_000_020.0, 1_000_000_010.5),
+                        (1_000_000_009.5, 1_000_000_010.5),
+                        (1_000_000_009.5, 999_999_999.5),
+                    ],
+                    vec![],
+                )],
+            },
+        ]);
+
+        cases
+    }
+
+    #[test]
+    fn geo_boolean_regression_cases_match_geo_oracle() {
+        for case in geo_boolean_regression_cases() {
+            if case.name.starts_with("brutal ") {
+                continue;
+            }
+
+            for op in [
+                BooleanOp::Or,
+                BooleanOp::And,
+                BooleanOp::Not,
+                BooleanOp::Xor,
+            ] {
+                assert_shape_matches_geo_boolean(&case, op);
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "brutal singularity corpus currently exposes known shape boolean failures"]
+    fn brutal_geo_boolean_singularity_cases_match_geo_oracle() {
+        for case in geo_boolean_regression_cases()
+            .into_iter()
+            .filter(|case| case.name.starts_with("brutal "))
+        {
+            for op in [
+                BooleanOp::Or,
+                BooleanOp::And,
+                BooleanOp::Not,
+                BooleanOp::Xor,
+            ] {
+                assert_shape_matches_geo_boolean(&case, op);
             }
         }
     }
@@ -3102,6 +3986,334 @@ fn shape_boolean_shared_hole_boundaries_are_regularized() {
             assert_shape_valid(&result);
             assert_boolean_samples(&b, &a, &result, op, &samples);
         }
+    }
+}
+
+#[test]
+#[ignore = "known deep nested multi-shell OR semantic failure exposed by adversarial corpus"]
+fn shape_boolean_ludicrous_closed_loop_corpus_all_ops() {
+    let mut arc_ring_plines = vec![
+        create_approx_circle(0.0, 0.0, 18.0),
+        {
+            let mut inner = create_approx_circle(0.0, 0.0, 7.0);
+            inner.invert_direction_mut();
+            inner
+        },
+    ];
+    arc_ring_plines.extend([
+        create_rectangle(-35.0, -2.0, -18.0, 2.0),
+        create_rectangle(18.0, -2.0, 35.0, 2.0),
+    ]);
+
+    let cases = vec![
+        (
+            "deep island-lake stack against shifted stack",
+            create_deeper_nested_rect_shape(-60.0, -60.0, 120.0, 9),
+            create_deeper_nested_rect_shape(-46.0, -37.0, 94.0, 8),
+        ),
+        (
+            "staggered hole grid against material bars",
+            Shape::from_plines([
+                create_rectangle(0.0, 0.0, 90.0, 70.0),
+                create_cw_rectangle(6.0, 5.0, 18.0, 20.0),
+                create_cw_rectangle(26.0, 5.0, 38.0, 20.0),
+                create_cw_rectangle(46.0, 5.0, 58.0, 20.0),
+                create_cw_rectangle(14.0, 30.0, 28.0, 54.0),
+                create_cw_rectangle(40.0, 28.0, 55.0, 58.0),
+                create_cw_rectangle(66.0, 18.0, 82.0, 62.0),
+            ]),
+            Shape::from_plines([
+                create_rectangle(-4.0, 12.0, 94.0, 24.0),
+                create_rectangle(-4.0, 46.0, 94.0, 58.0),
+                create_rectangle(20.0, -6.0, 32.0, 76.0),
+                create_rectangle(60.0, -6.0, 72.0, 76.0),
+            ]),
+        ),
+        (
+            "arc donut tangent to chordal slivers",
+            Shape::from_plines(arc_ring_plines),
+            Shape::from_plines([
+                create_rectangle(-25.0, -1.0, 25.0, 1.0),
+                create_rectangle(-1.0, -25.0, 1.0, 25.0),
+                create_rectangle(-8.0, -8.0, 8.0, 8.0),
+            ]),
+        ),
+        (
+            "interlocking sawtooth shells",
+            Shape::from_plines([create_sawtooth_loop(-40.0, -20.0, 80.0, 40.0, 11)]),
+            Shape::from_plines([create_sawtooth_loop(-37.5, -18.0, 80.0, 40.0, 13)]),
+        ),
+        (
+            "near-coincident shared edges and epsilon slivers",
+            Shape::from_plines([
+                create_rectangle(0.0, 0.0, 20.0, 20.0),
+                create_rectangle(20.000001, 0.0, 40.0, 20.0),
+                create_cw_rectangle(8.0, 8.0, 12.0, 12.0),
+            ]),
+            Shape::from_plines([
+                create_rectangle(10.0, -5.0, 30.000001, 25.0),
+                create_cw_rectangle(18.0, 6.0, 22.0, 14.0),
+            ]),
+        ),
+        (
+            "ui multipolyline demo against translated clone",
+            create_multi_pline_boolean_scene_default_shape(),
+            {
+                let mut shape = create_multi_pline_boolean_scene_default_shape();
+                shape.translate_mut(17.0, -23.0);
+                shape.rotate_mut(0.08);
+                shape
+            },
+        ),
+        (
+            "nested arc rings against deep rectangular islands",
+            {
+                let ring = create_arc_ring(0.0, 0.0, 40.0, 28.0);
+                Shape::from_plines(
+                    ring.ccw_plines
+                        .iter()
+                        .chain(ring.cw_plines.iter())
+                        .map(|ip| ip.polyline.clone())
+                        .chain([
+                            create_approx_circle(0.0, 0.0, 14.0),
+                            {
+                                let mut lake = create_approx_circle(0.0, 0.0, 6.0);
+                                lake.invert_direction_mut();
+                                lake
+                            },
+                        ]),
+                )
+            },
+            create_deeper_nested_rect_shape(-30.0, -30.0, 60.0, 7),
+        ),
+    ];
+
+    for (name, a, b) in cases {
+        let samples = dense_samples_for_shapes(&[&a, &b], 14, 14);
+        for op in [
+            BooleanOp::Or,
+            BooleanOp::And,
+            BooleanOp::Not,
+            BooleanOp::Xor,
+        ] {
+            let result = a.boolean(&b, op);
+            assert_shape_output_finite(&result);
+            assert_shape_valid(&result);
+            assert_boolean_samples(&a, &b, &result, op, &samples);
+
+            let reverse = b.boolean(&a, op);
+            assert_shape_output_finite(&reverse);
+            assert_shape_valid(&reverse);
+            assert_boolean_samples(&b, &a, &reverse, op, &samples);
+        }
+        eprintln!("checked adversarial closed-loop corpus case: {name}");
+    }
+}
+
+#[test]
+#[ignore = "known open-line reverse NOT material retention failure exposed by adversarial corpus"]
+fn shape_boolean_ludicrous_open_line_clipping_corpus_all_ops() {
+    let cases = vec![
+        (
+            "hole maze with diagonal scribbles",
+            Shape::from_plines([
+                create_rectangle(0.0, 0.0, 80.0, 80.0),
+                create_cw_rectangle(10.0, 10.0, 25.0, 70.0),
+                create_cw_rectangle(34.0, 5.0, 48.0, 36.0),
+                create_cw_rectangle(52.0, 42.0, 72.0, 74.0),
+                create_line_segment(-10.0, 6.0, 90.0, 76.0),
+                create_line_segment(-10.0, 74.0, 90.0, 4.0),
+                create_line_segment(40.0, -10.0, 40.0, 90.0),
+            ]),
+            Shape::from_plines([
+                create_rectangle(20.0, -8.0, 88.0, 52.0),
+                create_cw_rectangle(30.0, 8.0, 64.0, 22.0),
+                create_line_segment(0.0, 18.0, 92.0, 18.0),
+                create_line_segment(0.0, 40.0, 92.0, 40.0),
+                create_line_segment(0.0, 62.0, 92.0, 62.0),
+            ]),
+        ),
+        (
+            "open triangle fan buried in filled material",
+            Shape::from_plines([
+                create_rectangle(-30.0, -30.0, 30.0, 30.0),
+                pline_open![(-25.0, -20.0, 0.0), (20.0, 0.0, 0.0), (-25.0, 20.0, 0.0), (-25.0, -20.0, 0.0)],
+                create_line_segment(-40.0, 0.0, 40.0, 0.0),
+                create_line_segment(0.0, -40.0, 0.0, 40.0),
+            ]),
+            Shape::from_plines([
+                create_rectangle(-10.0, -35.0, 38.0, 35.0),
+                create_cw_rectangle(2.0, -10.0, 22.0, 10.0),
+                create_line_segment(-35.0, -35.0, 35.0, 35.0),
+            ]),
+        ),
+    ];
+
+    for (name, a, b) in cases {
+        let samples = dense_samples_for_shapes(&[&a, &b], 16, 16);
+        for op in [
+            BooleanOp::Or,
+            BooleanOp::And,
+            BooleanOp::Not,
+            BooleanOp::Xor,
+        ] {
+            let result = a.boolean(&b, op);
+            assert_shape_output_finite(&result);
+            assert_open_linework_outside_closed_material(&result, &format!("{name} a {op:?} b"));
+            assert_boolean_samples(&a, &b, &result, op, &samples);
+
+            let reverse = b.boolean(&a, op);
+            assert_shape_output_finite(&reverse);
+            assert_open_linework_outside_closed_material(&reverse, &format!("{name} b {op:?} a"));
+            assert_boolean_samples(&b, &a, &reverse, op, &samples);
+        }
+    }
+}
+
+#[test]
+fn shape_boolean_deep_island_lake_nesting_survives_all_ops() {
+    let nested = create_deep_nested_rect_shape();
+    let rect_in_deep_lake = create_shape_rects(&[(35.0, 35.0, 38.0, 38.0)]);
+    let samples = [
+        (5.0, 5.0),
+        (15.0, 15.0),
+        (25.0, 25.0),
+        (36.0, 36.0),
+        (45.0, 45.0),
+        (65.0, 65.0),
+        (85.0, 85.0),
+        (95.0, 95.0),
+    ];
+
+    assert_shape_valid(&nested);
+    assert_fuzzy_eq!(shape_signed_area(&nested), 6000.0);
+    assert_boolean_result(
+        &nested,
+        &rect_in_deep_lake,
+        BooleanOp::Or,
+        6009.0,
+        4,
+        2,
+        &samples,
+    );
+    assert_boolean_result(
+        &nested,
+        &rect_in_deep_lake,
+        BooleanOp::And,
+        0.0,
+        0,
+        0,
+        &samples,
+    );
+    assert_boolean_result(
+        &nested,
+        &rect_in_deep_lake,
+        BooleanOp::Not,
+        6000.0,
+        3,
+        2,
+        &samples,
+    );
+    assert_boolean_area_and_samples(
+        &nested,
+        &rect_in_deep_lake,
+        BooleanOp::Xor,
+        6009.0,
+        &samples,
+    );
+}
+
+#[test]
+fn shape_boolean_deep_nesting_clips_middle_island_and_lake() {
+    let nested = create_deep_nested_rect_shape();
+    let cutter = create_shape_rects(&[(25.0, 25.0, 75.0, 75.0)]);
+    let samples = dense_sample_grid(2.0, 98.0, 4.0);
+
+    assert_boolean_result(&nested, &cutter, BooleanOp::And, 1300.0, 2, 1, &samples);
+}
+
+#[test]
+fn shape_boolean_fuzz_deep_nested_difference_rejects_detached_holes() {
+    let mut a_plines = Vec::new();
+    let a_min_x = -47.75540768489133;
+    let a_min_y = -47.99904467165447;
+    let a_size = 95.4210800220161;
+    let a_step = a_size / 12.0;
+    for i in 0..5 {
+        let inset = a_step * i as f64;
+        if i % 2 == 0 {
+            a_plines.push(create_rectangle(
+                a_min_x + inset,
+                a_min_y + inset,
+                a_min_x + a_size - inset,
+                a_min_y + a_size - inset,
+            ));
+        } else {
+            a_plines.push(create_cw_rectangle(
+                a_min_x + inset,
+                a_min_y + inset,
+                a_min_x + a_size - inset,
+                a_min_y + a_size - inset,
+            ));
+        }
+    }
+    let a = Shape::from_plines(a_plines);
+
+    let b = Shape::from_plines([
+        create_rectangle(-48.0, -48.0, -32.0, -32.0),
+        create_cw_rectangle(-46.0, -46.0, -34.0, -34.0),
+        create_rectangle(-44.0, -44.0, -36.0, -36.0),
+    ]);
+
+    let samples = [
+        (-34.89342136580437, -34.92680462965341),
+        (-34.89342136580437, -18.322892261475996),
+    ];
+
+    let not_result = a.boolean(&b, BooleanOp::Not);
+    assert_shape_valid(&not_result);
+    assert!(shape_signed_area(&not_result) > 0.0);
+    assert_boolean_samples(&a, &b, &not_result, BooleanOp::Not, &samples);
+}
+
+#[test]
+fn shape_boolean_ui_vertex_clock_drag_or_keeps_existing_material() {
+    let (shape1, mut shape2) = multi_pline_ui_default_pair();
+    let extents = shape1.plines_index.bounds().unwrap();
+    let extents2 = shape2.plines_index.bounds().unwrap();
+    let min_x = extents.min_x.min(extents2.min_x);
+    let min_y = extents.min_y.min(extents2.min_y);
+    let max_x = extents.max_x.max(extents2.max_x);
+    let max_y = extents.max_y.max(extents2.max_y);
+    let center = Vector2::new((min_x + max_x) * 0.5, (min_y + max_y) * 0.5);
+    let span = (max_x - min_x).abs().max((max_y - min_y).abs()).max(1.0);
+    let radius = span * 0.35;
+    let radial_jitter = -0.1 * span;
+
+    for step in 0..8 {
+        let angle = -PI + 2.0 * PI * (step as f64 / 8.0);
+        let point = Vector2::new(
+            center.x + angle.cos() * radius + radial_jitter * (3.0 * angle).sin(),
+            center.y + angle.sin() * radius + radial_jitter * (5.0 * angle).cos(),
+        );
+        let rpline = &mut shape2.ccw_plines[0];
+        let v = rpline.polyline.at(0);
+        rpline.polyline.set(0, point.x, point.y, v.bulge);
+        rpline.spatial_index = rpline.polyline.create_aabb_index();
+        shape2 = Shape::from_plines(
+            shape2
+                .ccw_plines
+                .iter()
+                .chain(shape2.cw_plines.iter())
+                .map(|ip| ip.polyline.clone()),
+        );
+
+        let result = shape1.boolean(&shape2, BooleanOp::Or);
+        assert_shape_valid(&result);
+        assert!(
+            shape_contains(&result, 85.87352676212761, 26.745000000000005),
+            "OR should preserve existing material while a dragged shell is transiently degenerate"
+        );
     }
 }
 

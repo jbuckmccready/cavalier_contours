@@ -40,8 +40,50 @@ doc = false
 bench = false
 
 [[bin]]
+name = "shape_boolean_deep_nesting"
+path = "fuzz_targets/shape_boolean_deep_nesting.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "shape_boolean_adversarial_corpus"
+path = "fuzz_targets/shape_boolean_adversarial_corpus.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "shape_boolean_singularity_corpus"
+path = "fuzz_targets/shape_boolean_singularity_corpus.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "shape_transform_then_boolean"
 path = "fuzz_targets/shape_transform_then_boolean.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "shape_boolean_vertex_drag_ui"
+path = "fuzz_targets/shape_boolean_vertex_drag_ui.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "shape_boolean_vertex_drag_ui_xor"
+path = "fuzz_targets/shape_boolean_vertex_drag_ui_xor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "shape_boolean_vertex_drag_rebuilt"
+path = "fuzz_targets/shape_boolean_vertex_drag_rebuilt.rs"
 test = false
 doc = false
 bench = false
