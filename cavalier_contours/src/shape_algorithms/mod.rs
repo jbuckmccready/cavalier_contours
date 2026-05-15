@@ -14,6 +14,9 @@ use crate::{
     },
 };
 
+const SHAPE_BOOLEAN_POS_EQUAL_EPS: f64 = 1e-8;
+const SHAPE_BOOLEAN_AREA_EPS: f64 = 1e-9;
+
 /// An offset polyline with spatial indexing and parent loop tracking.
 ///
 /// This structure represents a single offset result from a parent polyline, containing
@@ -171,7 +174,25 @@ where
             return false;
         }
 
-        let epsilon = T::from(1e-8).unwrap();
+        let epsilon = T::from(SHAPE_BOOLEAN_POS_EQUAL_EPS).unwrap();
+
+        // Closed polylines can represent the same loop with any vertex as the start. Keep the
+        // comparison geometric for identity fast paths while still requiring matching orientation
+        // through the signed loop bins that call this helper.
+        let vertexes_equal = |a_idx: usize, b_idx: usize| {
+            let av = a.at(a_idx);
+            let bv = b.at(b_idx);
+            av.x.fuzzy_eq_eps(bv.x, epsilon)
+                && av.y.fuzzy_eq_eps(bv.y, epsilon)
+                && av.bulge.fuzzy_eq_eps(bv.bulge, epsilon)
+        };
+
+        if a.is_closed() {
+            return (0..a.vertex_count()).any(|start_idx| {
+                (0..a.vertex_count()).all(|i| vertexes_equal(i, (start_idx + i) % a.vertex_count()))
+            });
+        }
+
         (0..a.vertex_count()).all(|i| {
             let av = a.at(i);
             let bv = b.at(i);
@@ -181,19 +202,30 @@ where
         })
     }
 
+    fn same_loop_set(a: &[IndexedPolyline<T>], b: &[IndexedPolyline<T>]) -> bool {
+        if a.len() != b.len() {
+            return false;
+        }
+
+        let mut b_matched = vec![false; b.len()];
+        'next_a: for a_loop in a {
+            for (b_idx, b_loop) in b.iter().enumerate() {
+                if !b_matched[b_idx] && Self::same_loop_geometry(&a_loop.polyline, &b_loop.polyline)
+                {
+                    b_matched[b_idx] = true;
+                    continue 'next_a;
+                }
+            }
+
+            return false;
+        }
+
+        true
+    }
+
     fn same_loop_bins(&self, other: &Self) -> bool {
-        self.ccw_plines.len() == other.ccw_plines.len()
-            && self.cw_plines.len() == other.cw_plines.len()
-            && self
-                .ccw_plines
-                .iter()
-                .zip(other.ccw_plines.iter())
-                .all(|(a, b)| Self::same_loop_geometry(&a.polyline, &b.polyline))
-            && self
-                .cw_plines
-                .iter()
-                .zip(other.cw_plines.iter())
-                .all(|(a, b)| Self::same_loop_geometry(&a.polyline, &b.polyline))
+        Self::same_loop_set(&self.ccw_plines, &other.ccw_plines)
+            && Self::same_loop_set(&self.cw_plines, &other.cw_plines)
     }
 
     /// Construct a `Shape` from polylines, sorting CCW loops into filled material and CW loops
@@ -987,7 +1019,7 @@ where
             };
 
             let mut result = Self::empty();
-            let area_eps = T::from(1e-9).unwrap();
+            let area_eps = T::from(SHAPE_BOOLEAN_AREA_EPS).unwrap();
 
             // Intersect only the filled regions first. Holes from either operand are subtracted
             // afterward, which avoids treating a hole boundary as if it were positive material.
@@ -1017,16 +1049,34 @@ where
         // PlineInversionView because the lower polyline boolean operates on positive-area loops.
         let mut all_results = Vec::new();
 
-        // Helper for checking bounding-box overlap
         #[inline]
-        fn boxes_overlap<T: Real>(
-            b1: &static_aabb2d_index::AABB<T>,
-            b2: &static_aabb2d_index::AABB<T>,
-        ) -> bool {
-            b1.min_x <= b2.max_x
-                && b1.max_x >= b2.min_x
-                && b1.min_y <= b2.max_y
-                && b1.max_y >= b2.min_y
+        fn visit_loop_candidates<T: Real>(
+            shape: &Shape<T>,
+            bounds: &static_aabb2d_index::AABB<T>,
+            want_ccw: bool,
+            query_stack: &mut Vec<usize>,
+            visitor: &mut impl FnMut(usize),
+        ) {
+            let ccw_len = shape.ccw_plines.len();
+            // Shape indexes are built with CCW loops first, followed by CW loops, so query hits
+            // can be filtered by global index and mapped back into the requested signed bin.
+            let mut index_visitor = |idx| {
+                if want_ccw {
+                    if idx < ccw_len {
+                        visitor(idx);
+                    }
+                } else if idx >= ccw_len {
+                    visitor(idx - ccw_len);
+                }
+            };
+            shape.plines_index.visit_query_with_stack(
+                bounds.min_x,
+                bounds.min_y,
+                bounds.max_x,
+                bounds.max_y,
+                &mut index_visitor,
+                query_stack,
+            );
         }
 
         let loop_center = |pline: &Polyline<T>| {
@@ -1089,6 +1139,7 @@ where
         let mut self_used_cw = vec![false; self.cw_plines.len()];
         let mut othr_used_ccw = vec![false; other.ccw_plines.len()];
         let mut othr_used_cw = vec![false; other.cw_plines.len()];
+        let mut query_stack = Vec::new();
 
         // For each loop in self vs each loop in other, run the lower-level boolean operation.
         // The four signed-loop pairings need separate handling because holes are subtractive at
@@ -1100,62 +1151,55 @@ where
                 Some(bb) => bb,
                 None => continue,
             };
-            for (j, jp) in other.ccw_plines.iter().enumerate() {
-                let b2 = match jp.spatial_index.bounds() {
-                    Some(bb) => bb,
-                    None => continue,
-                };
-                if boxes_overlap(&b1, &b2) {
-                    let result = ip.polyline.boolean(&jp.polyline, op);
-                    let skip_result = (matches!(op, BooleanOp::And)
-                        && ((matches!(result.result_info, BooleanResultInfo::Pline1InsidePline2)
-                            && !shape_overlaps_pline_area(other, &ip.polyline))
-                            || (matches!(
-                                result.result_info,
-                                BooleanResultInfo::Pline2InsidePline1
-                            ) && !shape_overlaps_pline_area(self, &jp.polyline))))
-                        || (matches!(op, BooleanOp::Not)
-                            && matches!(result.result_info, BooleanResultInfo::Pline2InsidePline1)
-                            && !shape_overlaps_pline_area(self, &jp.polyline))
-                        || (matches!(op, BooleanOp::Not)
-                            && matches!(result.result_info, BooleanResultInfo::Pline1InsidePline2)
-                            && !shape_overlaps_pline_area(other, &ip.polyline));
+            let mut candidate_visitor = |j: usize| {
+                let jp = &other.ccw_plines[j];
+                let result = ip.polyline.boolean(&jp.polyline, op);
+                let skip_result = (matches!(op, BooleanOp::And)
+                    && ((matches!(result.result_info, BooleanResultInfo::Pline1InsidePline2)
+                        && !shape_overlaps_pline_area(other, &ip.polyline))
+                        || (matches!(result.result_info, BooleanResultInfo::Pline2InsidePline1)
+                            && !shape_overlaps_pline_area(self, &jp.polyline))))
+                    || (matches!(op, BooleanOp::Not)
+                        && matches!(result.result_info, BooleanResultInfo::Pline2InsidePline1)
+                        && !shape_overlaps_pline_area(self, &jp.polyline))
+                    || (matches!(op, BooleanOp::Not)
+                        && matches!(result.result_info, BooleanResultInfo::Pline1InsidePline2)
+                        && !shape_overlaps_pline_area(other, &ip.polyline));
 
-                    // If the operation had any real relationship, mark both loops as used. This
-                    // matters for empty overlapping results such as A - A and A xor A.
-                    if !skip_result && !matches!(result.result_info, BooleanResultInfo::Disjoint) {
-                        let mut mark_self = true;
-                        let mut mark_other = true;
+                // If the operation had any real relationship, mark both loops as used. This
+                // matters for empty overlapping results such as A - A and A xor A.
+                if !skip_result && !matches!(result.result_info, BooleanResultInfo::Disjoint) {
+                    let mut mark_self = true;
+                    let mut mark_other = true;
 
-                        if matches!(op, BooleanOp::Or) {
-                            if matches!(result.result_info, BooleanResultInfo::Pline1InsidePline2)
-                                && !shape_overlaps_pline_area(other, &ip.polyline)
-                            {
-                                mark_self = false;
-                            }
-
-                            if matches!(result.result_info, BooleanResultInfo::Pline2InsidePline1)
-                                && !shape_overlaps_pline_area(self, &jp.polyline)
-                            {
-                                mark_other = false;
-                            }
+                    if matches!(op, BooleanOp::Or) {
+                        if matches!(result.result_info, BooleanResultInfo::Pline1InsidePline2)
+                            && !shape_overlaps_pline_area(other, &ip.polyline)
+                        {
+                            mark_self = false;
                         }
 
-                        if mark_self {
-                            self_used_ccw[i] = true;
-                        }
-                        if mark_other {
-                            othr_used_ccw[j] = true;
+                        if matches!(result.result_info, BooleanResultInfo::Pline2InsidePline1)
+                            && !shape_overlaps_pline_area(self, &jp.polyline)
+                        {
+                            mark_other = false;
                         }
                     }
 
-                    if !skip_result
-                        && (!result.pos_plines.is_empty() || !result.neg_plines.is_empty())
-                    {
-                        all_results.push(result);
+                    if mark_self {
+                        self_used_ccw[i] = true;
+                    }
+                    if mark_other {
+                        othr_used_ccw[j] = true;
                     }
                 }
-            }
+
+                if !skip_result && (!result.pos_plines.is_empty() || !result.neg_plines.is_empty())
+                {
+                    all_results.push(result);
+                }
+            };
+            visit_loop_candidates(other, &b1, true, &mut query_stack, &mut candidate_visitor);
         }
 
         // 2) ccw_plines vs cw_plines
@@ -1165,50 +1209,43 @@ where
                 None => continue,
             };
 
-            for (j, jp) in other.cw_plines.iter().enumerate() {
-                let b2 = match jp.spatial_index.bounds() {
-                    Some(bb) => bb,
-                    None => continue,
+            let mut candidate_visitor = |j: usize| {
+                let jp = &other.cw_plines[j];
+                let jp_inverted = PlineInversionView::new(&jp.polyline);
+                let result = if matches!(op, BooleanOp::Not) {
+                    ip.polyline.boolean(&jp_inverted, BooleanOp::And)
+                } else {
+                    ip.polyline.boolean(&jp_inverted, op)
+                };
+                // Unioning an island fully inside a hole should keep the positive island
+                // and the hole. The lower-level contour union sees two positive contours and
+                // can return the hole outline as positive material, so skip that pairwise
+                // result and let unused-loop retention keep the two loops separately.
+                let self_inside_other_hole = matches!(op, BooleanOp::Or)
+                    && pline_area_contains_pline_area(&jp_inverted, &ip.polyline);
+                let skip_result = if matches!(op, BooleanOp::Not) {
+                    !self_used_ccw[i] || matches!(result.result_info, BooleanResultInfo::Disjoint)
+                } else if self_inside_other_hole {
+                    true
+                } else {
+                    (matches!(op, BooleanOp::Or | BooleanOp::And))
+                        && matches!(result.result_info, BooleanResultInfo::Pline1InsidePline2)
                 };
 
-                if boxes_overlap(&b1, &b2) {
-                    let jp_inverted = PlineInversionView::new(&jp.polyline);
-                    let result = if matches!(op, BooleanOp::Not) {
-                        ip.polyline.boolean(&jp_inverted, BooleanOp::And)
-                    } else {
-                        ip.polyline.boolean(&jp_inverted, op)
-                    };
-                    // Unioning an island fully inside a hole should keep the positive island
-                    // and the hole. The lower-level contour union sees two positive contours and
-                    // can return the hole outline as positive material, so skip that pairwise
-                    // result and let unused-loop retention keep the two loops separately.
-                    let self_inside_other_hole = matches!(op, BooleanOp::Or)
-                        && pline_area_contains_pline_area(&jp_inverted, &ip.polyline);
-                    let skip_result = if matches!(op, BooleanOp::Not) {
-                        !self_used_ccw[i]
-                            || matches!(result.result_info, BooleanResultInfo::Disjoint)
-                    } else if self_inside_other_hole {
-                        true
-                    } else {
-                        (matches!(op, BooleanOp::Or | BooleanOp::And))
-                            && matches!(result.result_info, BooleanResultInfo::Pline1InsidePline2)
-                    };
-
-                    if !matches!(op, BooleanOp::Not)
-                        && !skip_result
-                        && !matches!(result.result_info, BooleanResultInfo::Disjoint)
-                    {
-                        self_used_ccw[i] = true;
-                        othr_used_cw[j] = true;
-                    }
-
-                    if !skip_result
-                        && (!result.pos_plines.is_empty() || !result.neg_plines.is_empty())
-                    {
-                        all_results.push(result);
-                    }
+                if !matches!(op, BooleanOp::Not)
+                    && !skip_result
+                    && !matches!(result.result_info, BooleanResultInfo::Disjoint)
+                {
+                    self_used_ccw[i] = true;
+                    othr_used_cw[j] = true;
                 }
-            }
+
+                if !skip_result && (!result.pos_plines.is_empty() || !result.neg_plines.is_empty())
+                {
+                    all_results.push(result);
+                }
+            };
+            visit_loop_candidates(other, &b1, false, &mut query_stack, &mut candidate_visitor);
         }
 
         // 3) cw_plines vs ccw_plines
@@ -1219,34 +1256,28 @@ where
             };
             let ip_inverted = PlineInversionView::new(&ip.polyline);
 
-            for (j, jp) in other.ccw_plines.iter().enumerate() {
-                let b2 = match jp.spatial_index.bounds() {
-                    Some(bb) => bb,
-                    None => continue,
-                };
+            let mut candidate_visitor = |j: usize| {
+                let jp = &other.ccw_plines[j];
+                let result = ip_inverted.boolean(&jp.polyline, op);
+                // Same island-in-hole rule as the ccw-vs-cw case, with operands swapped.
+                let other_inside_self_hole = matches!(op, BooleanOp::Or)
+                    && pline_area_contains_pline_area(&ip_inverted, &jp.polyline);
+                let skip_result = matches!(op, BooleanOp::Not)
+                    || other_inside_self_hole
+                    || (matches!(op, BooleanOp::Or | BooleanOp::And)
+                        && matches!(result.result_info, BooleanResultInfo::Pline2InsidePline1));
 
-                if boxes_overlap(&b1, &b2) {
-                    let result = ip_inverted.boolean(&jp.polyline, op);
-                    // Same island-in-hole rule as the ccw-vs-cw case, with operands swapped.
-                    let other_inside_self_hole = matches!(op, BooleanOp::Or)
-                        && pline_area_contains_pline_area(&ip_inverted, &jp.polyline);
-                    let skip_result = matches!(op, BooleanOp::Not)
-                        || other_inside_self_hole
-                        || (matches!(op, BooleanOp::Or | BooleanOp::And)
-                            && matches!(result.result_info, BooleanResultInfo::Pline2InsidePline1));
-
-                    if !skip_result && !matches!(result.result_info, BooleanResultInfo::Disjoint) {
-                        self_used_cw[i] = true;
-                        othr_used_ccw[j] = true;
-                    }
-
-                    if !skip_result
-                        && (!result.pos_plines.is_empty() || !result.neg_plines.is_empty())
-                    {
-                        all_results.push(result);
-                    }
+                if !skip_result && !matches!(result.result_info, BooleanResultInfo::Disjoint) {
+                    self_used_cw[i] = true;
+                    othr_used_ccw[j] = true;
                 }
-            }
+
+                if !skip_result && (!result.pos_plines.is_empty() || !result.neg_plines.is_empty())
+                {
+                    all_results.push(result);
+                }
+            };
+            visit_loop_candidates(other, &b1, true, &mut query_stack, &mut candidate_visitor);
         }
 
         // 4) cw_plines vs cw_plines
@@ -1257,26 +1288,21 @@ where
             };
             let ip_inverted = PlineInversionView::new(&ip.polyline);
 
-            for (j, jp) in other.cw_plines.iter().enumerate() {
-                let b2 = match jp.spatial_index.bounds() {
-                    Some(bb) => bb,
-                    None => continue,
-                };
+            let mut candidate_visitor = |j: usize| {
+                let jp = &other.cw_plines[j];
+                let jp_inverted = PlineInversionView::new(&jp.polyline);
+                let result = ip_inverted.boolean(&jp_inverted, op);
 
-                if boxes_overlap(&b1, &b2) {
-                    let jp_inverted = PlineInversionView::new(&jp.polyline);
-                    let result = ip_inverted.boolean(&jp_inverted, op);
-
-                    if !matches!(result.result_info, BooleanResultInfo::Disjoint) {
-                        self_used_cw[i] = true;
-                        othr_used_cw[j] = true;
-                    }
-
-                    if !result.pos_plines.is_empty() || !result.neg_plines.is_empty() {
-                        all_results.push(result);
-                    }
+                if !matches!(result.result_info, BooleanResultInfo::Disjoint) {
+                    self_used_cw[i] = true;
+                    othr_used_cw[j] = true;
                 }
-            }
+
+                if !result.pos_plines.is_empty() || !result.neg_plines.is_empty() {
+                    all_results.push(result);
+                }
+            };
+            visit_loop_candidates(other, &b1, false, &mut query_stack, &mut candidate_visitor);
         }
 
         // At this point, pairwise BooleanResult values are normalized back into shape bins.
@@ -1311,7 +1337,7 @@ where
         }
 
         let merge_ccw_plines = |plines: Vec<Polyline<T>>| {
-            let area_eps = T::from(1e-9).unwrap();
+            let area_eps = T::from(SHAPE_BOOLEAN_AREA_EPS).unwrap();
             let normalize_ccw = |pline: Polyline<T>| {
                 if pline.orientation() == PlineOrientation::Clockwise {
                     Polyline::create_from(&PlineInversionView::new(&pline))

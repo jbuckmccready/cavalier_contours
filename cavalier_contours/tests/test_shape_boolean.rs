@@ -2,7 +2,7 @@ mod test_utils;
 
 use cavalier_contours::core::{math::Vector2, traits::FuzzyEq};
 use cavalier_contours::polyline::{
-    BooleanOp, PlineOrientation, PlineSource, PlineSourceMut, Polyline,
+    BooleanOp, PlineOrientation, PlineSource, PlineSourceMut, Polyline, seg_arc_radius_and_center,
 };
 use cavalier_contours::shape_algorithms::{Shape, ShapeOffsetOptions};
 use cavalier_contours::{assert_fuzzy_eq, pline_closed, pline_open};
@@ -389,6 +389,45 @@ fn semantic_samples(
     samples
 }
 
+fn pline_svg_path(pline: &Polyline<f64>) -> Option<String> {
+    if pline.vertex_count() == 0 {
+        return None;
+    }
+
+    // Failure SVGs use path commands rather than polygons so arc-heavy regressions preserve the
+    // same bulge geometry that the boolean algorithm processed.
+    let first = pline.at(0);
+    let mut path = format!("M {} {}", first.x, first.y);
+    let segment_count = if pline.is_closed() {
+        pline.vertex_count()
+    } else {
+        pline.vertex_count().saturating_sub(1)
+    };
+
+    for i in 0..segment_count {
+        let start = pline.at(i);
+        let end = pline.at((i + 1) % pline.vertex_count());
+        if start.bulge.fuzzy_eq_eps(0.0, SHAPE_TEST_EPS) {
+            path.push_str(&format!(" L {} {}", end.x, end.y));
+        } else {
+            let (radius, _) = seg_arc_radius_and_center(start, end);
+            let sweep_angle = 4.0 * start.bulge.atan();
+            let large_arc = i32::from(sweep_angle.abs() > PI);
+            let sweep = i32::from(start.bulge > 0.0);
+            path.push_str(&format!(
+                " A {radius} {radius} 0 {large_arc} {sweep} {} {}",
+                end.x, end.y
+            ));
+        }
+    }
+
+    if pline.is_closed() {
+        path.push_str(" Z");
+    }
+
+    Some(path)
+}
+
 fn write_shape_svg(path: &Path, shapes: &[(&Shape<f64>, &'static str)]) -> std::io::Result<()> {
     let extents = combined_extents(
         &shapes
@@ -422,13 +461,11 @@ fn write_shape_svg(path: &Path, shapes: &[(&Shape<f64>, &'static str)]) -> std::
             .chain(shape.cw_plines.iter())
             .map(|ip| &ip.polyline)
         {
-            let points = pline
-                .iter_vertexes()
-                .map(|v| format!("{},{}", v.x, v.y))
-                .collect::<Vec<_>>()
-                .join(" ");
+            let Some(path) = pline_svg_path(pline) else {
+                continue;
+            };
             svg.push_str(&format!(
-                r#"<polygon points="{points}" stroke="{color}" fill="{color}" fill-opacity="0.08" />
+                r#"<path d="{path}" stroke="{color}" fill="{color}" fill-opacity="0.08" />
 "#
             ));
         }
@@ -731,6 +768,34 @@ fn shape_boolean_identical_donut_all_ops() {
     assert_boolean_result(&donut, &same_donut, BooleanOp::And, 80.0, 1, 1, &samples);
     assert_boolean_result(&donut, &same_donut, BooleanOp::Not, 0.0, 0, 0, &samples);
     assert_boolean_result(&donut, &same_donut, BooleanOp::Xor, 0.0, 0, 0, &samples);
+}
+
+#[test]
+fn shape_boolean_same_shape_identity_ignores_loop_order_and_start_index() {
+    // The identity fast path must be geometric, not storage-order based. This variant keeps the
+    // same signed loop bins but reorders the CCW loops and rotates every closed-loop start index.
+    let base = Shape::from_plines(vec![
+        create_rectangle(0.0, 0.0, 20.0, 20.0),
+        create_cw_rectangle(5.0, 5.0, 15.0, 15.0),
+        create_rectangle(8.0, 8.0, 12.0, 12.0),
+    ]);
+    let variant = Shape::from_plines(vec![
+        rotate_pline_start(&create_rectangle(8.0, 8.0, 12.0, 12.0), 2),
+        rotate_pline_start(&create_cw_rectangle(5.0, 5.0, 15.0, 15.0), 1),
+        rotate_pline_start(&create_rectangle(0.0, 0.0, 20.0, 20.0), 3),
+    ]);
+    let samples = [
+        (2.0, 2.0),
+        (6.0, 6.0),
+        (10.0, 10.0),
+        (18.0, 18.0),
+        (25.0, 25.0),
+    ];
+
+    assert_boolean_result(&base, &variant, BooleanOp::Or, 316.0, 2, 1, &samples);
+    assert_boolean_result(&base, &variant, BooleanOp::And, 316.0, 2, 1, &samples);
+    assert_boolean_result(&base, &variant, BooleanOp::Not, 0.0, 0, 0, &samples);
+    assert_boolean_result(&base, &variant, BooleanOp::Xor, 0.0, 0, 0, &samples);
 }
 
 #[test]
