@@ -149,7 +149,12 @@ fn create_deeper_nested_rect_shape(
     }))
 }
 
-fn create_arc_ring(center_x: f64, center_y: f64, outer_radius: f64, inner_radius: f64) -> Shape<f64> {
+fn create_arc_ring(
+    center_x: f64,
+    center_y: f64,
+    outer_radius: f64,
+    inner_radius: f64,
+) -> Shape<f64> {
     let outer = create_approx_circle(center_x, center_y, outer_radius);
     let mut inner = create_approx_circle(center_x, center_y, inner_radius);
     inner.invert_direction_mut();
@@ -2494,7 +2499,13 @@ fn shape_boolean_or_multi_island_rectangle_set_reduced_proptest_failure() {
     let union = a_shape.boolean(&b_shape, BooleanOp::Or);
 
     assert_shape_valid(&union);
-    assert_boolean_samples(&a_shape, &b_shape, &union, BooleanOp::Or, &[(-44.37, -61.53)]);
+    assert_boolean_samples(
+        &a_shape,
+        &b_shape,
+        &union,
+        BooleanOp::Or,
+        &[(-44.37, -61.53)],
+    );
     assert!(
         shape_contains(&union, -44.37, -61.53),
         "OR dropped material inside the third A island"
@@ -2633,22 +2644,14 @@ mod shape_boolean_differential_tests {
         pline
     }
 
-    fn shape_from_geo_case_polys(
-        polys: &[(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)],
-    ) -> Shape<f64> {
+    fn shape_from_geo_case_polys(polys: &[(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)]) -> Shape<f64> {
         Shape::from_plines(polys.iter().flat_map(|(shell, holes)| {
-            std::iter::once(normalized_closed_loop(shell, true)).chain(
-                holes
-                    .iter()
-                    .map(|hole| normalized_closed_loop(hole, false)),
-            )
+            std::iter::once(normalized_closed_loop(shell, true))
+                .chain(holes.iter().map(|hole| normalized_closed_loop(hole, false)))
         }))
     }
 
-    fn geo_polygon_from_case(
-        shell: &[(f64, f64)],
-        holes: &[Vec<(f64, f64)>],
-    ) -> geo::Polygon<f64> {
+    fn geo_polygon_from_case(shell: &[(f64, f64)], holes: &[Vec<(f64, f64)>]) -> geo::Polygon<f64> {
         geo::Polygon::new(
             geo::LineString::from(shell.to_vec()),
             holes
@@ -2677,9 +2680,10 @@ mod shape_boolean_differential_tests {
             .chain(shape.cw_plines.iter())
             .filter(|ip| ip.polyline.is_closed())
             .any(|ip| {
-                ip.polyline
-                    .iter_segments()
-                    .any(|(v1, v2)| seg_closest_point(v1, v2, point, SHAPE_TEST_EPS).fuzzy_eq_eps(point, SHAPE_TEST_EPS))
+                ip.polyline.iter_segments().any(|(v1, v2)| {
+                    seg_closest_point(v1, v2, point, SHAPE_TEST_EPS)
+                        .fuzzy_eq_eps(point, SHAPE_TEST_EPS)
+                })
             })
     }
 
@@ -3010,12 +3014,7 @@ mod shape_boolean_differential_tests {
                     vec![],
                 )],
                 b_polys: vec![(
-                    vec![
-                        (10.0, 10.0),
-                        (16.0, 10.0),
-                        (13.0, 15.0),
-                        (10.0, 10.0),
-                    ],
+                    vec![(10.0, 10.0), (16.0, 10.0), (13.0, 15.0), (10.0, 10.0)],
                     vec![],
                 )],
             },
@@ -3992,14 +3991,11 @@ fn shape_boolean_shared_hole_boundaries_are_regularized() {
 #[test]
 #[ignore = "known deep nested multi-shell OR semantic failure exposed by adversarial corpus"]
 fn shape_boolean_ludicrous_closed_loop_corpus_all_ops() {
-    let mut arc_ring_plines = vec![
-        create_approx_circle(0.0, 0.0, 18.0),
-        {
-            let mut inner = create_approx_circle(0.0, 0.0, 7.0);
-            inner.invert_direction_mut();
-            inner
-        },
-    ];
+    let mut arc_ring_plines = vec![create_approx_circle(0.0, 0.0, 18.0), {
+        let mut inner = create_approx_circle(0.0, 0.0, 7.0);
+        inner.invert_direction_mut();
+        inner
+    }];
     arc_ring_plines.extend([
         create_rectangle(-35.0, -2.0, -18.0, 2.0),
         create_rectangle(18.0, -2.0, 35.0, 2.0),
@@ -4074,14 +4070,11 @@ fn shape_boolean_ludicrous_closed_loop_corpus_all_ops() {
                         .iter()
                         .chain(ring.cw_plines.iter())
                         .map(|ip| ip.polyline.clone())
-                        .chain([
-                            create_approx_circle(0.0, 0.0, 14.0),
-                            {
-                                let mut lake = create_approx_circle(0.0, 0.0, 6.0);
-                                lake.invert_direction_mut();
-                                lake
-                            },
-                        ]),
+                        .chain([create_approx_circle(0.0, 0.0, 14.0), {
+                            let mut lake = create_approx_circle(0.0, 0.0, 6.0);
+                            lake.invert_direction_mut();
+                            lake
+                        }]),
                 )
             },
             create_deeper_nested_rect_shape(-30.0, -30.0, 60.0, 7),
@@ -4137,7 +4130,12 @@ fn shape_boolean_ludicrous_open_line_clipping_corpus_all_ops() {
             "open triangle fan buried in filled material",
             Shape::from_plines([
                 create_rectangle(-30.0, -30.0, 30.0, 30.0),
-                pline_open![(-25.0, -20.0, 0.0), (20.0, 0.0, 0.0), (-25.0, 20.0, 0.0), (-25.0, -20.0, 0.0)],
+                pline_open![
+                    (-25.0, -20.0, 0.0),
+                    (20.0, 0.0, 0.0),
+                    (-25.0, 20.0, 0.0),
+                    (-25.0, -20.0, 0.0)
+                ],
                 create_line_segment(-40.0, 0.0, 40.0, 0.0),
                 create_line_segment(0.0, -40.0, 0.0, 40.0),
             ]),

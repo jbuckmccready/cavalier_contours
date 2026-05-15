@@ -239,8 +239,7 @@ where
                 .filter(|ip| ip.polyline.winding_number(point) != 0)
                 .count() as isize;
 
-        material_depth > 0
-            || self.point_on_closed_boundary(point, eps)
+        material_depth > 0 || self.point_on_closed_boundary(point, eps)
     }
 
     fn segment_param(v1: Vector2<T>, v2: Vector2<T>, point: Vector2<T>) -> T {
@@ -775,15 +774,16 @@ where
 
                 let mut next_uncovered = Vec::new();
                 for piece in uncovered_pieces {
-                    let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        piece.boolean(other, BooleanOp::Not)
-                    })) {
-                        Ok(result) => result,
-                        Err(_) => {
-                            retained.push(candidate.clone());
-                            continue 'next_candidate;
-                        }
-                    };
+                    let result =
+                        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            piece.boolean(other, BooleanOp::Not)
+                        })) {
+                            Ok(result) => result,
+                            Err(_) => {
+                                retained.push(candidate.clone());
+                                continue 'next_candidate;
+                            }
+                        };
 
                     next_uncovered.extend(
                         result
@@ -864,7 +864,8 @@ where
             } else {
                 other_shell_area
             };
-            if pos_plines.is_empty() || pos_area + Self::shape_boolean_area_epsilon() < min_union_area
+            if pos_plines.is_empty()
+                || pos_area + Self::shape_boolean_area_epsilon() < min_union_area
             {
                 return self.boolean_or_degenerate_shell_fallback(other);
             } else {
