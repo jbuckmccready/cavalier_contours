@@ -25,6 +25,9 @@ use test_utils::to_debug_json_str;
 /// probe results after arc conversion, pairwise clipping, loop merging, and index rebuilds.
 const SHAPE_TEST_EPS: f64 = 1e-7;
 
+type LineSegmentCoords = (f64, f64, f64, f64);
+type ClippedLineSegments = (Vec<LineSegmentCoords>, Vec<LineSegmentCoords>);
+
 /// A small helper to verify bounding boxes.
 fn assert_extents_fuzzy_eq(
     shape: &Shape<f64>,
@@ -353,9 +356,7 @@ fn assert_open_linework_outside_closed_material(shape: &Shape<f64>, context: &st
     }
 }
 
-fn clipped_line_segments_against_unit_square(
-    line: (f64, f64, f64, f64),
-) -> (Vec<(f64, f64, f64, f64)>, Vec<(f64, f64, f64, f64)>) {
+fn clipped_line_segments_against_unit_square(line: LineSegmentCoords) -> ClippedLineSegments {
     let (x1, y1, x2, y2) = line;
     let dx = x2 - x1;
     let dy = y2 - y1;
@@ -2522,6 +2523,11 @@ mod shape_boolean_differential_tests {
 
     use super::*;
 
+    type GeoCoord = (f64, f64);
+    type GeoRing = Vec<GeoCoord>;
+    type GeoPolygonCase = (GeoRing, Vec<GeoRing>);
+    type GeoMultiPolygonCase = Vec<GeoPolygonCase>;
+
     /// Independent axis-aligned rectangle used by the manual point-membership oracle.
     #[derive(Clone, Copy)]
     struct OracleRect {
@@ -2625,12 +2631,12 @@ mod shape_boolean_differential_tests {
     #[derive(Clone)]
     struct GeoBooleanCase {
         name: &'static str,
-        a_polys: Vec<(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)>,
-        b_polys: Vec<(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)>,
+        a_polys: GeoMultiPolygonCase,
+        b_polys: GeoMultiPolygonCase,
         area_abs_eps: f64,
     }
 
-    fn normalized_closed_loop(coords: &[(f64, f64)], want_ccw: bool) -> Polyline<f64> {
+    fn normalized_closed_loop(coords: &[GeoCoord], want_ccw: bool) -> Polyline<f64> {
         let mut pline = Polyline::new_closed();
         let end = coords.len().saturating_sub(1);
         for &(x, y) in &coords[..end] {
@@ -2644,14 +2650,14 @@ mod shape_boolean_differential_tests {
         pline
     }
 
-    fn shape_from_geo_case_polys(polys: &[(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)]) -> Shape<f64> {
+    fn shape_from_geo_case_polys(polys: &[GeoPolygonCase]) -> Shape<f64> {
         Shape::from_plines(polys.iter().flat_map(|(shell, holes)| {
             std::iter::once(normalized_closed_loop(shell, true))
                 .chain(holes.iter().map(|hole| normalized_closed_loop(hole, false)))
         }))
     }
 
-    fn geo_polygon_from_case(shell: &[(f64, f64)], holes: &[Vec<(f64, f64)>]) -> geo::Polygon<f64> {
+    fn geo_polygon_from_case(shell: &[GeoCoord], holes: &[GeoRing]) -> geo::Polygon<f64> {
         geo::Polygon::new(
             geo::LineString::from(shell.to_vec()),
             holes
@@ -2661,9 +2667,7 @@ mod shape_boolean_differential_tests {
         )
     }
 
-    fn geo_multipolygon_from_case(
-        polys: &[(Vec<(f64, f64)>, Vec<Vec<(f64, f64)>>)],
-    ) -> geo::MultiPolygon<f64> {
+    fn geo_multipolygon_from_case(polys: &[GeoPolygonCase]) -> geo::MultiPolygon<f64> {
         geo::MultiPolygon::new(
             polys
                 .iter()
