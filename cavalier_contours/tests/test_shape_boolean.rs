@@ -76,6 +76,10 @@ fn create_approx_circle(center_x: f64, center_y: f64, radius: f64) -> Polyline<f
     pl
 }
 
+fn create_line_segment(x1: f64, y1: f64, x2: f64, y2: f64) -> Polyline<f64> {
+    pline_open![(x1, y1, 0.0), (x2, y2, 0.0)]
+}
+
 fn create_cw_rectangle(xmin: f64, ymin: f64, xmax: f64, ymax: f64) -> Polyline<f64> {
     let mut pl = create_rectangle(xmin, ymin, xmax, ymax);
     pl.invert_direction_mut();
@@ -106,6 +110,40 @@ fn create_donut(outer: (f64, f64, f64, f64), holes: &[(f64, f64, f64, f64)]) -> 
             .map(|&(xmin, ymin, xmax, ymax)| create_cw_rectangle(xmin, ymin, xmax, ymax)),
     );
     Shape::from_plines(plines)
+}
+
+fn create_multi_pline_boolean_scene_default_shape() -> Shape<f64> {
+    Shape::from_plines(vec![
+        pline_closed![
+            (100.0, 100.0, -0.5),
+            (80.0, 90.0, 0.374794619217547),
+            (210.0, 0.0, 0.0),
+            (230.0, 0.0, 1.0),
+            (320.0, 0.0, -0.5),
+            (280.0, 0.0, 0.5),
+            (390.0, 210.0, 0.0),
+            (280.0, 120.0, 0.5),
+        ],
+        pline_closed![
+            (150.0, 50.0, 0.0),
+            (150.0, 100.0, 0.0),
+            (223.74732137849435, 142.16931273980475, 0.0),
+            (199.491310072685, 52.51543504258919, 0.5),
+        ],
+        pline_closed![
+            (261.11232783167395, 35.79686193615828, -1.0),
+            (250.0, 100.0, -1.0),
+        ],
+        pline_closed![
+            (320.2986109239592, 103.52378781211337, 0.0),
+            (320.5065990423979, 76.14222955572362, -1.0),
+        ],
+        pline_closed![
+            (273.6131273938006, -13.968608715397636, -0.3),
+            (256.61336060995995, -25.49387433156079, 0.0),
+            (249.69820124026208, 27.234215862385582, 0.0),
+        ],
+    ])
 }
 
 /// Rotate a closed loop's start vertex without changing its geometry.
@@ -148,6 +186,115 @@ fn shape_winding_number(shape: &Shape<f64>, point: Vector2<f64>) -> i32 {
 /// Test membership helper used by sampled boolean oracles.
 fn shape_contains(shape: &Shape<f64>, x: f64, y: f64) -> bool {
     shape_winding_number(shape, Vector2::new(x, y)) != 0
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct LineSegSignature {
+    x1: i64,
+    y1: i64,
+    x2: i64,
+    y2: i64,
+}
+
+fn line_seg_signature(a: Vector2<f64>, b: Vector2<f64>) -> LineSegSignature {
+    let p1 = (sig_num(a.x), sig_num(a.y));
+    let p2 = (sig_num(b.x), sig_num(b.y));
+    let (p1, p2) = if p1 <= p2 { (p1, p2) } else { (p2, p1) };
+    LineSegSignature {
+        x1: p1.0,
+        y1: p1.1,
+        x2: p2.0,
+        y2: p2.1,
+    }
+}
+
+fn collect_open_line_segments(shape: &Shape<f64>) -> Vec<LineSegSignature> {
+    let mut result = shape
+        .ccw_plines
+        .iter()
+        .chain(shape.cw_plines.iter())
+        .filter(|ip| !ip.polyline.is_closed())
+        .flat_map(|ip| {
+            ip.polyline
+                .iter_segments()
+                .filter(|(v1, v2)| {
+                    v1.bulge.fuzzy_eq_eps(0.0, SHAPE_TEST_EPS)
+                        && !v1.pos().fuzzy_eq_eps(v2.pos(), SHAPE_TEST_EPS)
+                })
+                .map(|(v1, v2)| line_seg_signature(v1.pos(), v2.pos()))
+        })
+        .collect::<Vec<_>>();
+    result.sort();
+    result
+}
+
+fn assert_open_line_segments(shape: &Shape<f64>, expected: &[(f64, f64, f64, f64)]) {
+    let mut expected = expected
+        .iter()
+        .map(|&(x1, y1, x2, y2)| line_seg_signature(Vector2::new(x1, y1), Vector2::new(x2, y2)))
+        .collect::<Vec<_>>();
+    expected.sort();
+
+    let actual = collect_open_line_segments(shape);
+    assert_eq!(actual, expected, "open line segment mismatch");
+}
+
+fn clipped_line_segments_against_unit_square(
+    line: (f64, f64, f64, f64),
+) -> (Vec<(f64, f64, f64, f64)>, Vec<(f64, f64, f64, f64)>) {
+    let (x1, y1, x2, y2) = line;
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let mut t0: f64 = 0.0;
+    let mut t1: f64 = 1.0;
+
+    let mut clip = |p: f64, q: f64| -> bool {
+        if p.fuzzy_eq_eps(0.0, SHAPE_TEST_EPS) {
+            return q >= -SHAPE_TEST_EPS;
+        }
+
+        let r = q / p;
+        if p < 0.0 {
+            if r > t1 {
+                return false;
+            }
+            t0 = t0.max(r);
+        } else {
+            if r < t0 {
+                return false;
+            }
+            t1 = t1.min(r);
+        }
+
+        true
+    };
+
+    let intersects = clip(-dx, x1) && clip(dx, 10.0 - x1) && clip(-dy, y1) && clip(dy, 10.0 - y1);
+
+    let point_at = |t: f64| (x1 + dx * t, y1 + dy * t);
+    let segment = |a: f64, b: f64| {
+        let (sx, sy) = point_at(a);
+        let (ex, ey) = point_at(b);
+        (sx, sy, ex, ey)
+    };
+    let non_degenerate = |a: f64, b: f64| (b - a).abs() > SHAPE_TEST_EPS;
+
+    if !intersects || !non_degenerate(t0, t1) {
+        return (Vec::new(), vec![line]);
+    }
+
+    let mut inside = Vec::new();
+    let mut outside = Vec::new();
+
+    inside.push(segment(t0, t1));
+    if non_degenerate(0.0, t0) {
+        outside.push(segment(0.0, t0));
+    }
+    if non_degenerate(t1, 1.0) {
+        outside.push(segment(t1, 1.0));
+    }
+
+    (inside, outside)
 }
 
 /// Quantized per-loop summary used in diagnostics and duplicate-loop checks.
@@ -957,6 +1104,53 @@ fn assert_shapes_equivalent_by_samples(a: &Shape<f64>, b: &Shape<f64>, samples: 
     }
 }
 
+fn assert_shape_output_finite(shape: &Shape<f64>) {
+    for ip in shape.ccw_plines.iter().chain(shape.cw_plines.iter()) {
+        assert!(ip.polyline.vertex_count() > 1);
+        for v in ip.polyline.iter_vertexes() {
+            assert!(
+                v.x.is_finite(),
+                "non-finite x coordinate in {:?}",
+                ip.polyline
+            );
+            assert!(
+                v.y.is_finite(),
+                "non-finite y coordinate in {:?}",
+                ip.polyline
+            );
+            assert!(v.bulge.is_finite(), "non-finite bulge in {:?}", ip.polyline);
+        }
+    }
+}
+
+fn dense_samples_for_shapes(
+    shapes: &[&Shape<f64>],
+    x_steps: usize,
+    y_steps: usize,
+) -> Vec<(f64, f64)> {
+    let Some(extents) = combined_extents(shapes) else {
+        return Vec::new();
+    };
+
+    let width = (extents.max_x - extents.min_x).max(1.0);
+    let height = (extents.max_y - extents.min_y).max(1.0);
+    let min_x = extents.min_x - width * 0.05;
+    let max_x = extents.max_x + width * 0.05;
+    let min_y = extents.min_y - height * 0.05;
+    let max_y = extents.max_y + height * 0.05;
+
+    let mut samples = Vec::with_capacity((x_steps + 1) * (y_steps + 1));
+    for ix in 0..=x_steps {
+        let x = min_x + (max_x - min_x) * (ix as f64 / x_steps.max(1) as f64);
+        for iy in 0..=y_steps {
+            let y = min_y + (max_y - min_y) * (iy as f64 / y_steps.max(1) as f64);
+            samples.push((x, y));
+        }
+    }
+
+    samples
+}
+
 #[test]
 fn shape_boolean_empty_identities_are_valid() {
     // Empty-shape identities catch missing unused-loop retention and accidental top-level bounds.
@@ -973,6 +1167,173 @@ fn shape_boolean_empty_identities_are_valid() {
     assert_boolean_result(&solid, &empty, BooleanOp::Not, 100.0, 1, 0, &samples);
     assert_boolean_result(&empty, &solid, BooleanOp::Not, 0.0, 0, 0, &samples);
     assert_boolean_result(&solid, &empty, BooleanOp::Xor, 100.0, 1, 0, &samples);
+}
+
+#[test]
+fn shape_boolean_multi_pline_ui_default_xor_does_not_panic() {
+    let mut shape1 = create_multi_pline_boolean_scene_default_shape();
+    let mut shape2 = create_multi_pline_boolean_scene_default_shape();
+    shape1.translate_mut(-20.0, -20.0);
+    shape2.translate_mut(20.0, 20.0);
+
+    let result = shape1.boolean(&shape2, BooleanOp::Xor);
+
+    for ip in result.ccw_plines.iter().chain(result.cw_plines.iter()) {
+        assert!(ip.polyline.is_closed());
+        for v in ip.polyline.iter_vertexes() {
+            assert!(v.x.is_finite());
+            assert!(v.y.is_finite());
+            assert!(v.bulge.is_finite());
+        }
+    }
+}
+
+fn multi_pline_ui_default_pair() -> (Shape<f64>, Shape<f64>) {
+    let mut shape1 = create_multi_pline_boolean_scene_default_shape();
+    let mut shape2 = create_multi_pline_boolean_scene_default_shape();
+    shape1.translate_mut(-20.0, -20.0);
+    shape2.translate_mut(20.0, 20.0);
+    (shape1, shape2)
+}
+
+fn assert_multi_pline_ui_default_dense_semantics(op: BooleanOp) {
+    let (shape1, shape2) = multi_pline_ui_default_pair();
+    let samples = dense_samples_for_shapes(&[&shape1, &shape2], 64, 64);
+
+    let result = shape1.boolean(&shape2, op);
+    assert_shape_output_finite(&result);
+    assert_boolean_samples(&shape1, &shape2, &result, op, &samples);
+
+    let result = shape2.boolean(&shape1, op);
+    assert_shape_output_finite(&result);
+    assert_boolean_samples(&shape2, &shape1, &result, op, &samples);
+}
+
+fn closed_loop_shapes(shape: &Shape<f64>) -> Vec<Shape<f64>> {
+    shape
+        .ccw_plines
+        .iter()
+        .chain(shape.cw_plines.iter())
+        .filter(|ip| ip.polyline.is_closed())
+        .map(|ip| Shape::from_plines([ip.polyline.clone()]))
+        .collect()
+}
+
+fn multi_pline_ui_default_loop_pair(i: usize, j: usize) -> (Shape<f64>, Shape<f64>) {
+    let (shape1, shape2) = multi_pline_ui_default_pair();
+    let shape1_loops = closed_loop_shapes(&shape1);
+    let shape2_loops = closed_loop_shapes(&shape2);
+    (shape1_loops[i].clone(), shape2_loops[j].clone())
+}
+
+fn assert_boolean_samples_with_context(
+    context: &str,
+    a: &Shape<f64>,
+    b: &Shape<f64>,
+    result: &Shape<f64>,
+    op: BooleanOp,
+    samples: &[(f64, f64)],
+) {
+    for (x, y) in semantic_samples(a, b, result, samples) {
+        let in_a = shape_contains(a, x, y);
+        let in_b = shape_contains(b, x, y);
+        let expected = match op {
+            BooleanOp::Or => in_a || in_b,
+            BooleanOp::And => in_a && in_b,
+            BooleanOp::Not => in_a && !in_b,
+            BooleanOp::Xor => in_a != in_b,
+        };
+        let actual = shape_contains(result, x, y);
+        assert_eq!(
+            actual,
+            expected,
+            "{context}: sample ({x}, {y}) mismatch for {op:?}: in_a={in_a}, in_b={in_b}, result={actual}, result_area={}",
+            shape_signed_area(result)
+        );
+    }
+}
+
+#[test]
+fn shape_boolean_multi_pline_ui_default_pairwise_loop_semantics() {
+    let (shape1, shape2) = multi_pline_ui_default_pair();
+    let shape1_loops = closed_loop_shapes(&shape1);
+    let shape2_loops = closed_loop_shapes(&shape2);
+
+    for (i, a) in shape1_loops.iter().enumerate() {
+        for (j, b) in shape2_loops.iter().enumerate() {
+            let samples = dense_samples_for_shapes(&[a, b], 24, 24);
+            for op in [
+                BooleanOp::Or,
+                BooleanOp::And,
+                BooleanOp::Not,
+                BooleanOp::Xor,
+            ] {
+                let result = a.boolean(b, op);
+                assert_shape_output_finite(&result);
+                assert_boolean_samples_with_context(
+                    &format!("shape1 loop {i} vs shape2 loop {j}"),
+                    a,
+                    b,
+                    &result,
+                    op,
+                    &samples,
+                );
+
+                let result = b.boolean(a, op);
+                assert_shape_output_finite(&result);
+                assert_boolean_samples_with_context(
+                    &format!("shape2 loop {j} vs shape1 loop {i}"),
+                    b,
+                    a,
+                    &result,
+                    op,
+                    &samples,
+                );
+            }
+
+            assert!(
+                !samples.is_empty(),
+                "expected samples for UI loop pair {i}/{j}"
+            );
+        }
+    }
+}
+
+#[test]
+fn shape_boolean_multi_pline_ui_default_loop0_loop0_xor_dense_semantics() {
+    let (a, b) = multi_pline_ui_default_loop_pair(0, 0);
+    let samples = dense_samples_for_shapes(&[&a, &b], 64, 64);
+    let result = a.boolean(&b, BooleanOp::Xor);
+
+    assert_shape_output_finite(&result);
+    assert_boolean_samples_with_context(
+        "UI loop 0 vs translated loop 0",
+        &a,
+        &b,
+        &result,
+        BooleanOp::Xor,
+        &samples,
+    );
+}
+
+#[test]
+fn shape_boolean_multi_pline_ui_default_or_dense_semantics() {
+    assert_multi_pline_ui_default_dense_semantics(BooleanOp::Or);
+}
+
+#[test]
+fn shape_boolean_multi_pline_ui_default_and_dense_semantics() {
+    assert_multi_pline_ui_default_dense_semantics(BooleanOp::And);
+}
+
+#[test]
+fn shape_boolean_multi_pline_ui_default_not_dense_semantics() {
+    assert_multi_pline_ui_default_dense_semantics(BooleanOp::Not);
+}
+
+#[test]
+fn shape_boolean_multi_pline_ui_default_xor_dense_semantics() {
+    assert_multi_pline_ui_default_dense_semantics(BooleanOp::Xor);
 }
 
 #[test]
@@ -2039,6 +2400,561 @@ fn shape_open_pline_included_in_boolean() {
     // union => same as shape
     // though the shape is "not fully closed," area = 0, etc.
     assert_eq!(union_result.ccw_plines.len(), shape.ccw_plines.len());
+}
+
+#[test]
+fn shape_boolean_clips_open_line_against_area_for_all_ops_and_operand_orders() {
+    let rect = create_rectangle(0.0, 0.0, 10.0, 10.0);
+    let configurations = [
+        ("crossing_horizontal", (-5.0, 5.0, 15.0, 5.0)),
+        ("crossing_vertical", (5.0, -5.0, 5.0, 15.0)),
+        ("crossing_diagonal", (-5.0, -5.0, 15.0, 15.0)),
+        ("fully_inside", (2.0, 2.0, 8.0, 8.0)),
+        ("fully_outside", (-8.0, 12.0, -2.0, 12.0)),
+        ("left_endpoint_inside", (5.0, 5.0, 15.0, 5.0)),
+        ("right_endpoint_inside", (-5.0, 5.0, 5.0, 5.0)),
+        ("boundary_full_overlap", (0.0, 0.0, 10.0, 0.0)),
+        ("boundary_partial_overlap", (-5.0, 0.0, 5.0, 0.0)),
+        ("vertex_touch_only", (-5.0, -5.0, 0.0, 0.0)),
+    ];
+
+    for (name, line) in configurations {
+        for (direction, line) in [
+            ("forward", line),
+            ("reverse", (line.2, line.3, line.0, line.1)),
+        ] {
+            let (inside, outside) = clipped_line_segments_against_unit_square(line);
+            let line_shape =
+                Shape::from_plines([create_line_segment(line.0, line.1, line.2, line.3)]);
+            let rect_shape = Shape::from_plines([rect.clone()]);
+
+            for op in [
+                BooleanOp::Or,
+                BooleanOp::And,
+                BooleanOp::Not,
+                BooleanOp::Xor,
+            ] {
+                let result = line_shape.boolean(&rect_shape, op);
+                let expected_lines = match op {
+                    BooleanOp::Or | BooleanOp::Not | BooleanOp::Xor => outside.as_slice(),
+                    BooleanOp::And => inside.as_slice(),
+                };
+                let expected_area_count = matches!(op, BooleanOp::Or | BooleanOp::Xor) as usize;
+                assert_eq!(
+                    result
+                        .ccw_plines
+                        .iter()
+                        .filter(|ip| ip.polyline.is_closed())
+                        .count(),
+                    expected_area_count,
+                    "{name}/{direction}: line op rect area count for {op:?}"
+                );
+                assert_open_line_segments(&result, expected_lines);
+
+                let result = rect_shape.boolean(&line_shape, op);
+                let expected_lines = match op {
+                    BooleanOp::Or | BooleanOp::Xor => outside.as_slice(),
+                    BooleanOp::And => inside.as_slice(),
+                    BooleanOp::Not => &[][..],
+                };
+                let expected_area_count =
+                    matches!(op, BooleanOp::Or | BooleanOp::Not | BooleanOp::Xor) as usize;
+                assert_eq!(
+                    result
+                        .ccw_plines
+                        .iter()
+                        .filter(|ip| ip.polyline.is_closed())
+                        .count(),
+                    expected_area_count,
+                    "{name}/{direction}: rect op line area count for {op:?}"
+                );
+                assert_open_line_segments(&result, expected_lines);
+            }
+        }
+    }
+}
+
+#[test]
+fn shape_boolean_clips_open_lines_through_holes_and_multi_segment_paths() {
+    let donut = create_donut((0.0, 0.0, 10.0, 10.0), &[(4.0, 4.0, 6.0, 6.0)]);
+    let line_shape = Shape::from_plines([
+        create_line_segment(-2.0, 5.0, 12.0, 5.0),
+        pline_open![
+            (-2.0, 2.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (8.0, 8.0, 0.0),
+            (12.0, 8.0, 0.0)
+        ],
+    ]);
+
+    let inside = [
+        (0.0, 5.0, 4.0, 5.0),
+        (6.0, 5.0, 10.0, 5.0),
+        (0.0, 2.0, 2.0, 2.0),
+        (2.0, 2.0, 4.0, 4.0),
+        (6.0, 6.0, 8.0, 8.0),
+        (8.0, 8.0, 10.0, 8.0),
+    ];
+    let outside = [
+        (-2.0, 5.0, 0.0, 5.0),
+        (4.0, 5.0, 6.0, 5.0),
+        (10.0, 5.0, 12.0, 5.0),
+        (-2.0, 2.0, 0.0, 2.0),
+        (4.0, 4.0, 6.0, 6.0),
+        (10.0, 8.0, 12.0, 8.0),
+    ];
+
+    for op in [
+        BooleanOp::Or,
+        BooleanOp::And,
+        BooleanOp::Not,
+        BooleanOp::Xor,
+    ] {
+        let result = line_shape.boolean(&donut, op);
+        let expected_lines = match op {
+            BooleanOp::Or | BooleanOp::Not | BooleanOp::Xor => outside.as_slice(),
+            BooleanOp::And => inside.as_slice(),
+        };
+        let expected_area_count = matches!(op, BooleanOp::Or | BooleanOp::Xor) as usize;
+        assert_eq!(
+            result
+                .ccw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            expected_area_count,
+            "line op donut area count for {op:?}"
+        );
+        assert_open_line_segments(&result, expected_lines);
+
+        let result = donut.boolean(&line_shape, op);
+        let expected_lines = match op {
+            BooleanOp::Or | BooleanOp::Xor => outside.as_slice(),
+            BooleanOp::And => inside.as_slice(),
+            BooleanOp::Not => &[][..],
+        };
+        let expected_ccw_count =
+            matches!(op, BooleanOp::Or | BooleanOp::Not | BooleanOp::Xor) as usize;
+        let expected_cw_count = expected_ccw_count;
+        assert_eq!(
+            result
+                .ccw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            expected_ccw_count,
+            "donut op line ccw area count for {op:?}"
+        );
+        assert_eq!(
+            result
+                .cw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            expected_cw_count,
+            "donut op line cw area count for {op:?}"
+        );
+        assert_open_line_segments(&result, expected_lines);
+    }
+}
+
+#[test]
+fn shape_boolean_or_removes_open_triangle_fully_inside_filled_area() {
+    let rect_shape = Shape::from_plines([create_rectangle(0.0, 0.0, 10.0, 10.0)]);
+    let triangle_line_shape = Shape::from_plines([pline_open![
+        (2.0, 2.0, 0.0),
+        (8.0, 2.0, 0.0),
+        (5.0, 8.0, 0.0),
+        (2.0, 2.0, 0.0)
+    ]]);
+
+    let result = rect_shape.boolean(&triangle_line_shape, BooleanOp::Or);
+
+    assert_eq!(
+        result
+            .ccw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        1
+    );
+    assert_open_line_segments(&result, &[]);
+
+    let result = triangle_line_shape.boolean(&rect_shape, BooleanOp::Or);
+
+    assert_eq!(
+        result
+            .ccw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        1
+    );
+    assert_open_line_segments(&result, &[]);
+}
+
+#[test]
+fn shape_boolean_or_clips_line_path_entering_filled_area_from_outside() {
+    let rect_shape = Shape::from_plines([create_rectangle(0.0, 0.0, 10.0, 10.0)]);
+    let line_shape = Shape::from_plines([pline_open![
+        (-4.0, 5.0, 0.0),
+        (4.0, 5.0, 0.0),
+        (6.0, 8.0, 0.0)
+    ]]);
+
+    let result = rect_shape.boolean(&line_shape, BooleanOp::Or);
+
+    assert_eq!(
+        result
+            .ccw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        1
+    );
+    assert_open_line_segments(&result, &[(-4.0, 5.0, 0.0, 5.0)]);
+
+    let result = line_shape.boolean(&rect_shape, BooleanOp::Or);
+
+    assert_eq!(
+        result
+            .ccw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        1
+    );
+    assert_open_line_segments(&result, &[(-4.0, 5.0, 0.0, 5.0)]);
+}
+
+#[test]
+fn shape_boolean_or_absorbs_closed_triangle_fully_inside_filled_area() {
+    let rect_shape = Shape::from_plines([create_rectangle(0.0, 0.0, 10.0, 10.0)]);
+    let ccw_triangle = pline_closed![(2.0, 2.0, 0.0), (8.0, 2.0, 0.0), (5.0, 8.0, 0.0)];
+    let mut cw_triangle = ccw_triangle.clone();
+    cw_triangle.invert_direction_mut();
+
+    for triangle in [ccw_triangle, cw_triangle] {
+        let triangle_shape = Shape::from_plines([triangle]);
+
+        let result = rect_shape.boolean(&triangle_shape, BooleanOp::Or);
+        assert_eq!(
+            result
+                .ccw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            1
+        );
+        assert_eq!(
+            result
+                .cw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            0
+        );
+        assert_fuzzy_eq!(shape_signed_area(&result), 100.0);
+
+        let result = triangle_shape.boolean(&rect_shape, BooleanOp::Or);
+        assert_eq!(
+            result
+                .ccw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            1
+        );
+        assert_eq!(
+            result
+                .cw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            0
+        );
+        assert_fuzzy_eq!(shape_signed_area(&result), 100.0);
+    }
+}
+
+#[test]
+fn shape_boolean_or_removes_open_linework_inside_same_operand_fill() {
+    let shape_with_internal_linework = Shape::from_plines([
+        create_rectangle(0.0, 0.0, 10.0, 10.0),
+        pline_open![
+            (2.0, 2.0, 0.0),
+            (8.0, 2.0, 0.0),
+            (5.0, 8.0, 0.0),
+            (2.0, 2.0, 0.0)
+        ],
+        create_line_segment(-4.0, 5.0, 4.0, 5.0),
+    ]);
+    let disjoint_shape = Shape::from_plines([create_rectangle(20.0, 20.0, 30.0, 30.0)]);
+
+    let result = shape_with_internal_linework.boolean(&disjoint_shape, BooleanOp::Or);
+
+    assert_eq!(
+        result
+            .ccw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        2
+    );
+    assert_open_line_segments(&result, &[(-4.0, 5.0, 0.0, 5.0)]);
+
+    let result = disjoint_shape.boolean(&shape_with_internal_linework, BooleanOp::Or);
+
+    assert_eq!(
+        result
+            .ccw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        2
+    );
+    assert_open_line_segments(&result, &[(-4.0, 5.0, 0.0, 5.0)]);
+}
+
+#[test]
+fn shape_boolean_and_clips_closed_polyline_loop_to_filled_intersection() {
+    let rect_shape = Shape::from_plines([create_rectangle(0.0, 0.0, 10.0, 10.0)]);
+    let triangle_shape = Shape::from_plines([pline_closed![
+        (-2.0, 5.0, 0.0),
+        (12.0, 5.0, 0.0),
+        (5.0, 12.0, 0.0)
+    ]]);
+
+    for result in [
+        rect_shape.boolean(&triangle_shape, BooleanOp::And),
+        triangle_shape.boolean(&rect_shape, BooleanOp::And),
+    ] {
+        assert_eq!(
+            result
+                .ccw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            1
+        );
+        assert_eq!(
+            result
+                .cw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            0
+        );
+        assert_open_line_segments(&result, &[]);
+
+        let bounds = result.plines_index.bounds().unwrap();
+        assert!(bounds.min_x >= -SHAPE_TEST_EPS, "min_x={}", bounds.min_x);
+        assert!(
+            bounds.max_x <= 10.0 + SHAPE_TEST_EPS,
+            "max_x={}",
+            bounds.max_x
+        );
+        assert!(
+            bounds.min_y >= 5.0 - SHAPE_TEST_EPS,
+            "min_y={}",
+            bounds.min_y
+        );
+        assert!(
+            bounds.max_y <= 10.0 + SHAPE_TEST_EPS,
+            "max_y={}",
+            bounds.max_y
+        );
+        assert!(shape_signed_area(&result) > 0.0);
+        assert!(shape_signed_area(&result) < 49.0);
+    }
+}
+
+#[test]
+fn shape_boolean_and_does_not_keep_filled_area_when_intersecting_open_lines() {
+    let filled = Shape::from_plines([create_rectangle(0.0, 0.0, 10.0, 10.0)]);
+    let open_lines = Shape::from_plines([
+        create_line_segment(-2.0, 5.0, 12.0, 5.0),
+        pline_open![
+            (-2.0, 2.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (8.0, 8.0, 0.0),
+            (12.0, 8.0, 0.0)
+        ],
+    ]);
+    let expected = [
+        (0.0, 5.0, 10.0, 5.0),
+        (0.0, 2.0, 2.0, 2.0),
+        (2.0, 2.0, 8.0, 8.0),
+        (8.0, 8.0, 10.0, 8.0),
+    ];
+
+    for result in [
+        filled.boolean(&open_lines, BooleanOp::And),
+        open_lines.boolean(&filled, BooleanOp::And),
+    ] {
+        assert_eq!(
+            result
+                .ccw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            0
+        );
+        assert_eq!(
+            result
+                .cw_plines
+                .iter()
+                .filter(|ip| ip.polyline.is_closed())
+                .count(),
+            0
+        );
+        assert_open_line_segments(&result, &expected);
+    }
+}
+
+#[test]
+fn shape_boolean_and_uses_open_lines_only_where_both_operands_are_filled() {
+    let lhs = Shape::from_plines([
+        create_rectangle(0.0, 0.0, 10.0, 10.0),
+        create_line_segment(-2.0, 5.0, 12.0, 5.0),
+    ]);
+    let rhs = Shape::from_plines([
+        create_rectangle(4.0, -2.0, 14.0, 8.0),
+        create_line_segment(6.0, -4.0, 6.0, 12.0),
+    ]);
+
+    let result = lhs.boolean(&rhs, BooleanOp::And);
+
+    assert_eq!(
+        result
+            .ccw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        1
+    );
+    assert_eq!(
+        result
+            .cw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        0
+    );
+    assert_open_line_segments(&result, &[(10.0, 5.0, 12.0, 5.0), (6.0, 8.0, 6.0, 10.0)]);
+    assert_fuzzy_eq!(shape_signed_area(&result), 48.0);
+}
+
+#[test]
+fn shape_boolean_not_clips_lines_inside_subtracted_filled_boundary() {
+    let lhs = Shape::from_plines([
+        create_line_segment(-2.0, 5.0, 12.0, 5.0),
+        create_line_segment(5.0, -2.0, 5.0, 12.0),
+    ]);
+    let rhs = Shape::from_plines([create_rectangle(0.0, 0.0, 10.0, 10.0)]);
+
+    let result = lhs.boolean(&rhs, BooleanOp::Not);
+
+    assert_eq!(
+        result
+            .ccw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        0
+    );
+    assert_eq!(
+        result
+            .cw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        0
+    );
+    assert_open_line_segments(
+        &result,
+        &[
+            (-2.0, 5.0, 0.0, 5.0),
+            (10.0, 5.0, 12.0, 5.0),
+            (5.0, -2.0, 5.0, 0.0),
+            (5.0, 10.0, 5.0, 12.0),
+        ],
+    );
+}
+
+#[test]
+fn shape_boolean_not_removes_lines_inside_remaining_same_operand_fill() {
+    let lhs = Shape::from_plines([
+        create_rectangle(0.0, 0.0, 10.0, 10.0),
+        pline_open![
+            (2.0, 2.0, 0.0),
+            (8.0, 2.0, 0.0),
+            (5.0, 8.0, 0.0),
+            (2.0, 2.0, 0.0)
+        ],
+        create_line_segment(-2.0, 5.0, 12.0, 5.0),
+    ]);
+    let rhs = Shape::from_plines([create_rectangle(20.0, 20.0, 30.0, 30.0)]);
+
+    let result = lhs.boolean(&rhs, BooleanOp::Not);
+
+    assert_eq!(
+        result
+            .ccw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        1
+    );
+    assert_eq!(
+        result
+            .cw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        0
+    );
+    assert_open_line_segments(&result, &[(-2.0, 5.0, 0.0, 5.0), (10.0, 5.0, 12.0, 5.0)]);
+}
+
+#[test]
+fn shape_boolean_not_clips_lines_against_holes_in_remaining_area() {
+    let lhs = create_donut((0.0, 0.0, 10.0, 10.0), &[(4.0, 4.0, 6.0, 6.0)]);
+    let lhs = Shape::from_plines(
+        lhs.ccw_plines
+            .into_iter()
+            .chain(lhs.cw_plines)
+            .map(|ip| ip.polyline)
+            .chain([create_line_segment(-2.0, 5.0, 12.0, 5.0)]),
+    );
+    let rhs = Shape::<f64>::empty();
+
+    let result = lhs.boolean(&rhs, BooleanOp::Not);
+
+    assert_eq!(
+        result
+            .ccw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        1
+    );
+    assert_eq!(
+        result
+            .cw_plines
+            .iter()
+            .filter(|ip| ip.polyline.is_closed())
+            .count(),
+        1
+    );
+    assert_open_line_segments(
+        &result,
+        &[
+            (-2.0, 5.0, 0.0, 5.0),
+            (4.0, 5.0, 6.0, 5.0),
+            (10.0, 5.0, 12.0, 5.0),
+        ],
+    );
 }
 
 #[test]

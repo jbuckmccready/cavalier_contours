@@ -7,8 +7,8 @@ use crate::{
     polyline::{
         FindIntersectsOptions, PlineBasicIntersect, PlineIntersectVisitContext,
         PlineIntersectVisitor, PlineIntersectsCollection, PlineOverlappingIntersect, PlineSegIntr,
-        PlineSource, PlineView, PlineViewData, TwoPlinesIntersectVisitor, pline_seg_intr,
-        seg_fast_approx_bounding_box, seg_split_at_point, seg_tangent_vector,
+        PlineSource, PlineView, PlineViewData, TwoPlinesIntersectVisitor, ViewDataValidation,
+        pline_seg_intr, seg_fast_approx_bounding_box, seg_split_at_point, seg_tangent_vector,
     },
 };
 use static_aabb2d_index as aabb_index;
@@ -830,6 +830,7 @@ where
             let first_slice = &mut result[0];
             first_slice.start_indexes = last_slice.start_indexes;
             first_slice.view_data.updated_start = last_slice.view_data.updated_start;
+            first_slice.view_data.start_index = first_slice.start_indexes.1;
             first_slice.view_data.end_index_offset += last_slice.view_data.end_index_offset;
 
             if last_slice
@@ -839,6 +840,11 @@ where
             {
                 // add one to offset to capture pline2[0] vertex (it is at point of connection)
                 first_slice.view_data.end_index_offset += 1;
+            }
+
+            if first_slice.view_data.validate_for_source(pline2) != ViewDataValidation::IsValid {
+                first_slice.view_data.end_index_offset = pline2
+                    .fwd_wrapping_dist(first_slice.start_indexes.1, first_slice.end_indexes.1);
             }
         }
     }
