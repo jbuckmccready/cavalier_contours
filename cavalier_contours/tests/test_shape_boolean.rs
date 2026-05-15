@@ -239,6 +239,34 @@ fn assert_open_line_segments(shape: &Shape<f64>, expected: &[(f64, f64, f64, f64
     assert_eq!(actual, expected, "open line segment mismatch");
 }
 
+fn assert_open_linework_outside_closed_material(shape: &Shape<f64>, context: &str) {
+    let closed_area = Shape::from_plines(
+        shape
+            .ccw_plines
+            .iter()
+            .chain(shape.cw_plines.iter())
+            .filter(|ip| ip.polyline.is_closed())
+            .map(|ip| ip.polyline.clone()),
+    );
+
+    for ip in shape.ccw_plines.iter().chain(shape.cw_plines.iter()) {
+        if ip.polyline.is_closed() {
+            continue;
+        }
+
+        for (v1, v2) in ip.polyline.iter_segments() {
+            for fraction in [0.25, 0.5, 0.75] {
+                let x = v1.x + (v2.x - v1.x) * fraction;
+                let y = v1.y + (v2.y - v1.y) * fraction;
+                assert!(
+                    !shape_contains(&closed_area, x, y),
+                    "{context}: open linework sample ({x}, {y}) is inside closed material"
+                );
+            }
+        }
+    }
+}
+
 fn clipped_line_segments_against_unit_square(
     line: (f64, f64, f64, f64),
 ) -> (Vec<(f64, f64, f64, f64)>, Vec<(f64, f64, f64, f64)>) {
@@ -576,6 +604,20 @@ fn semantic_samples(
     push_shape_probe_samples(a, &mut samples);
     push_shape_probe_samples(b, &mut samples);
     samples
+}
+
+fn dense_sample_grid(min: f64, max: f64, step: f64) -> Vec<(f64, f64)> {
+    let count = ((max - min) / step).ceil() as usize;
+    (0..=count)
+        .flat_map(|ix| {
+            (0..=count).map(move |iy| {
+                (
+                    min + ix as f64 * step + step * 0.37,
+                    min + iy as f64 * step + step * 0.61,
+                )
+            })
+        })
+        .collect()
 }
 
 /// Convert a polyline to an SVG path while preserving arc segments.
@@ -2955,6 +2997,112 @@ fn shape_boolean_not_clips_lines_against_holes_in_remaining_area() {
             (10.0, 5.0, 12.0, 5.0),
         ],
     );
+}
+
+#[test]
+fn shape_boolean_open_linework_is_clipped_out_of_final_material_for_adversarial_modes() {
+    let donut = create_donut(
+        (0.0, 0.0, 20.0, 20.0),
+        &[(4.0, 4.0, 7.0, 16.0), (11.0, 3.0, 16.0, 8.0)],
+    );
+    let lhs = Shape::from_plines(
+        donut
+            .ccw_plines
+            .into_iter()
+            .chain(donut.cw_plines)
+            .map(|ip| ip.polyline)
+            .chain([
+                create_line_segment(-3.0, 10.0, 23.0, 10.0),
+                create_line_segment(2.0, 2.0, 18.0, 18.0),
+                pline_open![
+                    (6.0, 5.0, 0.0),
+                    (14.0, 5.0, 0.0),
+                    (18.0, 14.0, 0.0),
+                    (6.0, 5.0, 0.0)
+                ],
+            ]),
+    );
+    let rhs = Shape::from_plines([
+        create_rectangle(6.0, -2.0, 24.0, 14.0),
+        create_line_segment(10.0, -4.0, 10.0, 24.0),
+        create_line_segment(-2.0, 6.0, 24.0, 18.0),
+    ]);
+
+    for op in [
+        BooleanOp::Or,
+        BooleanOp::And,
+        BooleanOp::Not,
+        BooleanOp::Xor,
+    ] {
+        let result = lhs.boolean(&rhs, op);
+        assert_open_linework_outside_closed_material(&result, &format!("lhs {op:?} rhs"));
+        assert_boolean_samples(&lhs, &rhs, &result, op, &dense_sample_grid(-4.0, 26.0, 2.0));
+
+        let result = rhs.boolean(&lhs, op);
+        assert_open_linework_outside_closed_material(&result, &format!("rhs {op:?} lhs"));
+        assert_boolean_samples(&rhs, &lhs, &result, op, &dense_sample_grid(-4.0, 26.0, 2.0));
+    }
+}
+
+#[test]
+fn shape_boolean_staggered_holes_dense_adversarial_all_ops() {
+    let a = Shape::from_plines([
+        create_rectangle(0.0, 0.0, 30.0, 24.0),
+        create_cw_rectangle(4.0, 4.0, 10.0, 20.0),
+        create_cw_rectangle(15.0, 3.0, 24.0, 11.0),
+    ]);
+    let b = Shape::from_plines([
+        create_rectangle(8.0, -2.0, 28.0, 26.0),
+        create_cw_rectangle(12.0, 2.0, 18.0, 18.0),
+        create_cw_rectangle(20.0, 9.0, 26.0, 22.0),
+    ]);
+    let samples = dense_sample_grid(-2.0, 32.0, 1.25);
+
+    for op in [
+        BooleanOp::Or,
+        BooleanOp::And,
+        BooleanOp::Not,
+        BooleanOp::Xor,
+    ] {
+        if matches!(op, BooleanOp::Not) {
+            let result = a.boolean(&b, op);
+            assert_shape_valid(&result);
+            assert_boolean_samples(&a, &b, &result, op, &samples);
+        } else {
+            assert_commutative_samples(&a, &b, op, &samples);
+        }
+    }
+}
+
+#[test]
+fn shape_boolean_shared_hole_boundaries_are_regularized() {
+    let a = Shape::from_plines([
+        create_rectangle(0.0, 0.0, 40.0, 20.0),
+        create_cw_rectangle(5.0, 5.0, 15.0, 15.0),
+        create_cw_rectangle(25.0, 5.0, 35.0, 15.0),
+    ]);
+    let b = Shape::from_plines([
+        create_rectangle(10.0, -2.0, 30.0, 22.0),
+        create_cw_rectangle(15.0, 5.0, 25.0, 15.0),
+    ]);
+    let samples = dense_sample_grid(-2.0, 42.0, 1.0);
+
+    for op in [
+        BooleanOp::Or,
+        BooleanOp::And,
+        BooleanOp::Not,
+        BooleanOp::Xor,
+    ] {
+        let result = a.boolean(&b, op);
+        assert_shape_valid(&result);
+        assert_boolean_samples(&a, &b, &result, op, &samples);
+
+        if !matches!(op, BooleanOp::Not) {
+            let result = b.boolean(&a, op);
+            assert_shape_valid(&result);
+            assert_boolean_samples(&b, &a, &result, op, &samples);
+        }
+    }
 }
 
 #[test]

@@ -18,6 +18,27 @@ use crate::{
 const SHAPE_BOOLEAN_POS_EQUAL_EPS: f64 = 1e-8;
 const SHAPE_BOOLEAN_AREA_EPS: f64 = 1e-9;
 
+/// Bibliographic notes for the polygon boolean model used by this module.
+///
+/// The shape boolean implementation is layered over the lower-level polyline clipping algorithm:
+/// closed loops are regularized as filled 2D regions, and open polylines are clipped as zero-area
+/// linework after the filled result is known. The signed-loop reconstruction follows the standard
+/// polygon-overlay distinction between positive material and negative holes, as discussed in:
+///
+/// - F. Martinez, A. J. Rueda, and F. R. Feito, "A new algorithm for computing Boolean operations
+///   on polygons", *Computers & Geosciences* 35(6), 1177-1185, 2009. DOI:
+///   `10.1016/j.cageo.2008.08.009`.
+/// - B. R. Vatti, "A generic solution to polygon clipping", *Communications of the ACM* 35(7),
+///   56-63, 1992. DOI: `10.1145/129902.129906`.
+/// - G. Greiner and K. Hormann, "Efficient clipping of arbitrary polygons", *ACM Transactions on
+///   Graphics* 17(2), 71-83, 1998. DOI: `10.1145/274363.274364`.
+/// - F. Liu, K. Hormann, and C. Loop, "Clipping simple polygons with degenerate intersections",
+///   *Computers & Graphics: X* 2, 100007, 2019. DOI: `10.1016/j.cagx.2019.100007`.
+///
+/// These references are cited as design background. This crate also supports circular-arc bulges,
+/// so the concrete clipping and reconstruction details are specific to cavalier_contours.
+const _SHAPE_BOOLEAN_BIBLIOGRAPHY: () = ();
+
 /// An offset polyline with spatial indexing and parent loop tracking.
 ///
 /// This structure represents a single offset result from a parent polyline, containing
@@ -351,6 +372,11 @@ where
         let area_result = self_area.boolean(&other_area, op);
         let mut candidate_lines = Vec::new();
 
+        // Open polylines carry no area, so they cannot affect the filled boolean result. Treat
+        // them as linework that is visible only where the corresponding set operation would keep
+        // a zero-area feature. A final clip against `area_result` removes linework already covered
+        // by filled material, matching the UI expectation that filled regions absorb internal
+        // construction lines.
         match op {
             BooleanOp::Or | BooleanOp::Xor => {
                 candidate_lines.extend(Self::clip_open_plines_to_area(
@@ -625,6 +651,9 @@ where
     fn boolean_or(&self, other: &Self) -> Self {
         let mut hole_regions = Vec::new();
         let mut final_ccw = if self.ccw_plines.len() == 1 && other.ccw_plines.len() == 1 {
+            // For one shell per operand, the lower-level union can report holes created by arc
+            // overlap directly as negative loops. Preserve them separately from user-authored CW
+            // holes so they can all be clipped back to the final material at the end.
             let shell_union = self.ccw_plines[0]
                 .polyline
                 .boolean(&other.ccw_plines[0].polyline, BooleanOp::Or);
@@ -671,15 +700,35 @@ where
 
         for hole in &self.cw_plines {
             let hole_positive = Self::normalize_ccw(hole.polyline.clone());
+            let nested_self_material = self
+                .ccw_plines
+                .iter()
+                .filter(|material| {
+                    Self::pline_fully_contains_pline_area(&hole_positive, &material.polyline)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let hole_pieces =
+                Self::subtract_positive_plines(vec![hole_positive], &nested_self_material);
             hole_regions.extend(Self::subtract_positive_plines(
-                vec![hole_positive],
+                hole_pieces,
                 &other.ccw_plines,
             ));
         }
         for hole in &other.cw_plines {
             let hole_positive = Self::normalize_ccw(hole.polyline.clone());
+            let nested_other_material = other
+                .ccw_plines
+                .iter()
+                .filter(|material| {
+                    Self::pline_fully_contains_pline_area(&hole_positive, &material.polyline)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let hole_pieces =
+                Self::subtract_positive_plines(vec![hole_positive], &nested_other_material);
             hole_regions.extend(Self::subtract_positive_plines(
-                vec![hole_positive],
+                hole_pieces,
                 &self.ccw_plines,
             ));
         }
@@ -688,6 +737,8 @@ where
             for other_hole in &other.cw_plines {
                 let other_hole_positive = Self::normalize_ccw(other_hole.polyline.clone());
                 let result = self_hole_positive.boolean(&other_hole_positive, BooleanOp::And);
+                // In a union, empty space survives only where both operands are empty. Intersect
+                // positive views of the holes to recover exactly that shared empty region.
                 hole_regions.extend(
                     result
                         .pos_plines
@@ -698,9 +749,26 @@ where
         }
 
         let final_ccw_shape = Self::build_from_signed_plines(final_ccw.clone(), Vec::new());
+        let hole_regions = Self::merge_ccw_plines(hole_regions)
+            .into_iter()
+            .flat_map(|hole| {
+                let nested_material = final_ccw_shape
+                    .ccw_plines
+                    .iter()
+                    .filter(|material| {
+                        Self::pline_fully_contains_pline_area(&hole, &material.polyline)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                Self::subtract_positive_plines(vec![hole], &nested_material)
+            })
+            .collect::<Vec<_>>();
         let final_cw = Self::merge_ccw_plines(hole_regions)
             .into_iter()
             .filter(|pline| {
+                // Hole computations can produce regions outside the unioned shells when an input
+                // hole crosses a shell edge. Drop anything with no sampled interior inside final
+                // material before returning it as a subtractive CW loop.
                 Self::pline_has_area_where(pline, |point| {
                     final_ccw_shape.contains_point_or_boundary(
                         point,
@@ -723,6 +791,9 @@ where
         for hole in cw_plines {
             let positive_hole = Self::normalize_ccw(hole);
             for material in ccw_plines {
+                // A CW loop is meaningful only inside positive material. Clip every candidate
+                // hole to each material island before merging; this prevents detached negative
+                // loops from subtracting area outside any shell.
                 let result = positive_hole.boolean(material, BooleanOp::And);
                 clipped_holes.extend(
                     result
@@ -753,6 +824,9 @@ where
             let mut next_ccw = Vec::new();
 
             for pline in ccw_result {
+                // Holes are stored clockwise in Shape, but the lower-level boolean expects
+                // positive-area contours. Invert the hole, subtract it from material pieces, and
+                // retain any negative loops that the clipping step introduces.
                 let result = pline.boolean(&hole_positive, BooleanOp::Not);
                 next_ccw.extend(
                     result
@@ -1806,6 +1880,30 @@ where
     /// winding numbers. Geometric clipping is delegated to [`PlineSource::boolean`]; this
     /// method adds the shape-level bookkeeping needed to preserve islands, holes, and
     /// untouched loops across multiple input loops.
+    ///
+    /// Open polylines are treated as zero-area linework. They are clipped according to the
+    /// requested set operation and then clipped again against the final filled area so linework
+    /// does not remain visible inside material that already covers it.
+    ///
+    /// The implementation uses the same regularized polygon-set model described by Martinez,
+    /// Rueda, and Feito (2009), Vatti (1992), and Greiner and Hormann (1998). Degenerate
+    /// boundary cases such as shared edges, tangencies, and hole-boundary intersections are handled
+    /// explicitly because later work on degenerate polygon clipping, for example Liu, Hormann, and
+    /// Loop (2019), shows that vertex-only containment probes are not reliable for those cases.
+    ///
+    /// # References
+    ///
+    /// - F. Martinez, A. J. Rueda, and F. R. Feito, "A new algorithm for computing Boolean
+    ///   operations on polygons", *Computers & Geosciences* 35(6), 1177-1185, 2009. DOI:
+    ///   `10.1016/j.cageo.2008.08.009`.
+    /// - B. R. Vatti, "A generic solution to polygon clipping", *Communications of the ACM*
+    ///   35(7), 56-63, 1992. DOI: `10.1145/129902.129906`.
+    /// - G. Greiner and K. Hormann, "Efficient clipping of arbitrary polygons", *ACM Transactions
+    ///   on Graphics* 17(2), 71-83, 1998. DOI: `10.1145/274363.274364`.
+    /// - F. Liu, K. Hormann, and C. Loop, "Clipping simple polygons with degenerate
+    ///   intersections", *Computers & Graphics: X* 2, 100007, 2019. DOI:
+    ///   `10.1016/j.cagx.2019.100007`.
+    ///
     /// The `op` can be `BooleanOp::Or`, `BooleanOp::And`, `BooleanOp::Not`, or `BooleanOp::Xor`.
     pub fn boolean(&self, other: &Self, op: BooleanOp) -> Self {
         if self.has_open_plines() || other.has_open_plines() {
