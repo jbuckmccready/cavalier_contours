@@ -95,33 +95,16 @@ pub struct ShapeOffsetOptions<T> {
     pub slice_join_eps: T,
 }
 
-/// A builder type for performing multiple transformations on a `Shape`
-/// without rebuilding indexes each time. The transforms are recorded
-/// and only applied in the final `build` step.
+/// A builder type for accumulating transformations on a `Shape`
+/// without rebuilding indexes until the final `build` step.
 pub struct ShapeTransformBuilder<T: Real> {
-    // We can either store an owned shape or a borrowed shape. Typically
-    // you might store an owned shape if you want to produce a new shape
-    // at the end and let the builder consume the old shape.
     shape: Shape<T>,
-
-    // We can store the transformations in a small struct of
-    // "accumulated transform" if we only want uniform scale, rotate, etc.
-    // But we also want "invert direction" logic, which cannot be captured by a matrix alone.
-    // So let's store each step in an enum, or keep separate booleans/accumulations.
     scale_factor: T,
-    // For non-uniform scale:
-    // scale_x: T,
-    // scale_y: T,
     rotate_angle: T,
     rotate_anchor: Option<(T, T)>,
     translate_x: T,
     translate_y: T,
-
-    // If we want to invert direction or do multiple times, we only need to track an invert bool:
     invert_direction: bool,
-    // Possibly track repeated rotates or merges them. But let's keep it simple:
-    // We'll just store these as "accumulated transformations" for scale/rotate/translate,
-    // plus a boolean for invert direction. More complicated steps can be added if needed.
 }
 
 impl<T> ShapeOffsetOptions<T>
@@ -152,9 +135,11 @@ impl<T> Shape<T>
 where
     T: Real,
 {
-    /// Construct a Shape from list of plines in which CW winding / negative area correspond, and CCW and positive area correspond.
-    /// Polylines will be tested for area and sorted into CCW and CW bins.  If you'd like to do this sorting manually or skipt it
-    /// alltogether, construct the Shape manually.
+    /// Construct a `Shape` from polylines, sorting CCW loops into filled material and CW loops
+    /// into holes.
+    ///
+    /// Empty polylines are ignored. If the loop bins are already known, construct `Shape`
+    /// directly to avoid reclassifying by signed area.
     pub fn from_plines<I>(plines: I) -> Self
     where
         I: IntoIterator<Item = Polyline<T>>,
@@ -948,10 +933,7 @@ where
                     let skip_result = matches!(op, BooleanOp::Not)
                         || other_inside_self_hole
                         || (matches!(op, BooleanOp::Or | BooleanOp::And)
-                            && matches!(result.result_info, BooleanResultInfo::Pline2InsidePline1))
-                        || (matches!(op, BooleanOp::Not)
-                            && matches!(result.result_info, BooleanResultInfo::Pline2InsidePline1)
-                            && !shape_contains_point(self, loop_center(&jp.polyline)));
+                            && matches!(result.result_info, BooleanResultInfo::Pline2InsidePline1));
 
                     if !skip_result && !matches!(result.result_info, BooleanResultInfo::Disjoint) {
                         self_used_cw[i] = true;
@@ -1043,50 +1025,47 @@ where
             'next_pline: for pline in plines {
                 let mut pending = normalize_ccw(pline);
 
-                loop {
-                    let mut i = 0;
-                    while i < merged.len() {
-                        let result = merged[i].boolean(&pending, BooleanOp::Or);
-                        if matches!(result.result_info, BooleanResultInfo::Disjoint) {
-                            i += 1;
-                            continue;
-                        }
-
-                        if !matches!(
-                            result.result_info,
-                            BooleanResultInfo::Intersected | BooleanResultInfo::Overlapping
-                        ) {
-                            i += 1;
-                            continue;
-                        }
-
-                        let mut pos_plines = result
-                            .pos_plines
-                            .into_iter()
-                            .map(|rp| normalize_ccw(rp.pline))
-                            .collect::<Vec<_>>();
-
-                        if pos_plines.len() == 1 {
-                            merged.remove(i);
-                            pending = pos_plines.remove(0);
-                            continue;
-                        }
-
-                        if pos_plines.is_empty() {
-                            merged.remove(i);
-                            continue 'next_pline;
-                        }
-
-                        // The lower polyline boolean can intentionally leave edge-touching
-                        // regularized regions as separate loops. Keep that behavior at shape
-                        // level instead of inventing a stronger merge rule here.
+                let mut i = 0;
+                while i < merged.len() {
+                    let result = merged[i].boolean(&pending, BooleanOp::Or);
+                    if matches!(result.result_info, BooleanResultInfo::Disjoint) {
                         i += 1;
+                        continue;
                     }
 
-                    if pending.area().abs() > area_eps {
-                        merged.push(pending);
+                    if !matches!(
+                        result.result_info,
+                        BooleanResultInfo::Intersected | BooleanResultInfo::Overlapping
+                    ) {
+                        i += 1;
+                        continue;
                     }
-                    continue 'next_pline;
+
+                    let mut pos_plines = result
+                        .pos_plines
+                        .into_iter()
+                        .map(|rp| normalize_ccw(rp.pline))
+                        .collect::<Vec<_>>();
+
+                    if pos_plines.len() == 1 {
+                        merged.remove(i);
+                        pending = pos_plines.remove(0);
+                        continue;
+                    }
+
+                    if pos_plines.is_empty() {
+                        merged.remove(i);
+                        continue 'next_pline;
+                    }
+
+                    // The lower polyline boolean can intentionally leave edge-touching
+                    // regularized regions as separate loops. Keep that behavior at shape
+                    // level instead of inventing a stronger merge rule here.
+                    i += 1;
+                }
+
+                if pending.area().abs() > area_eps {
+                    merged.push(pending);
                 }
             }
 
@@ -1397,7 +1376,6 @@ where
 impl<T: Real> ShapeTransformBuilder<T> {
     /// Creates a builder from an existing shape (consumes the shape).
     pub fn new(shape: Shape<T>) -> Self {
-        // default no transformation
         ShapeTransformBuilder {
             shape,
             scale_factor: T::one(),
@@ -1409,8 +1387,7 @@ impl<T: Real> ShapeTransformBuilder<T> {
         }
     }
 
-    /// Apply a uniform scale factor (accumulated). If you want x/y separate,
-    /// you'd keep scale_x and scale_y, etc.
+    /// Apply an additional uniform scale factor.
     pub fn scale_mut(&mut self, factor: T) -> &mut Self {
         self.scale_factor = self.scale_factor * factor;
         self
@@ -1423,16 +1400,14 @@ impl<T: Real> ShapeTransformBuilder<T> {
         self
     }
 
-    /// Invert directions of all polylines once we apply transforms
+    /// Toggle direction inversion for every polyline in the final shape.
     pub fn invert_direction_mut(&mut self) -> &mut Self {
         self.invert_direction = !self.invert_direction;
         self
     }
 
-    /// Rotate about an anchor point with some angle in radians
+    /// Add a rotation about an anchor point.
     pub fn rotate_about_mut(&mut self, anchor: Vector2<T>, angle: T) -> &mut Self {
-        // If you want multiple rotates about different anchors, you'd store them in a list
-        // or accumulate them with the existing rotate anchor. We'll do the simple approach:
         self.rotate_angle = self.rotate_angle + angle;
         self.rotate_anchor = Some((anchor.x, anchor.y));
         self
@@ -1441,10 +1416,6 @@ impl<T: Real> ShapeTransformBuilder<T> {
     /// Final build step: apply all transformations in the recorded order
     /// to each polyline, then rebuild the shape-level indexes once.
     pub fn build(mut self) -> Shape<T> {
-        // apply transformations to all polylines
-        // We'll do them in the order: invert => scale => rotate => translate
-        // or the user might want a different order. Typically you'd define the order or let them specify.
-
         let do_invert = self.invert_direction;
         let s = self.scale_factor;
         let angle = self.rotate_angle;
@@ -1456,10 +1427,7 @@ impl<T: Real> ShapeTransformBuilder<T> {
             Some(a) => a,
         };
 
-        // We'll do the transformations in that order for each polyline:
-        // invert direction (bulges), scale, then rotate about anchor, then translate.
-
-        // We'll update self.shape in place
+        // Apply transforms in a fixed order: invert direction, scale, rotate, then translate.
         for ip in &mut self.shape.ccw_plines {
             let p = &mut ip.polyline;
             if do_invert {
@@ -1468,7 +1436,6 @@ impl<T: Real> ShapeTransformBuilder<T> {
             for i in 0..p.vertex_count() {
                 let v = p.at(i);
 
-                // invert bulge is done by invert_direction_mut above, so skip if that's the user approach
                 let (mut x, mut y) = (v.x, v.y);
 
                 // scale
@@ -1490,7 +1457,6 @@ impl<T: Real> ShapeTransformBuilder<T> {
 
                 p.set(i, x, y, v.bulge);
             }
-            // now rebuild polyline's own index
             ip.spatial_index = p.create_aabb_index();
         }
         for ip in &mut self.shape.cw_plines {
@@ -1534,7 +1500,6 @@ impl<T: Real> ShapeTransformBuilder<T> {
         }
         self.shape.plines_index = builder.build().unwrap();
 
-        // Return the transformed shape
         self.shape
     }
 }

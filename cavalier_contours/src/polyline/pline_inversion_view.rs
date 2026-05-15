@@ -80,7 +80,7 @@ mod test {
         let inv_view = PlineInversionView::new(&pline);
 
         assert_eq!(inv_view.vertex_count(), 5);
-        assert_eq!(inv_view.is_closed(), false);
+        assert!(!inv_view.is_closed());
 
         assert_eq!(inv_view.at(0), PlineVertex::new(4.0, 5.5, -0.4));
         assert_eq!(inv_view.at(1), PlineVertex::new(3.0, 4.4, -0.3));
@@ -101,7 +101,7 @@ mod test {
         let inv_view = PlineInversionView::new(&pline);
 
         assert_eq!(inv_view.vertex_count(), 5);
-        assert_eq!(inv_view.is_closed(), true);
+        assert!(inv_view.is_closed());
 
         assert_eq!(inv_view.at(0), PlineVertex::new(4.0, 5.5, -0.4));
         assert_eq!(inv_view.at(1), PlineVertex::new(3.0, 4.4, -0.3));

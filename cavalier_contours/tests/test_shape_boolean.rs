@@ -629,7 +629,10 @@ mod shape_boolean_proptests {
     use super::*;
     use proptest::prelude::*;
 
-    fn rect_strategy() -> impl Strategy<Value = (f64, f64, f64, f64)> {
+    type Rect = (f64, f64, f64, f64);
+    type RectPair = (Rect, Rect);
+
+    fn rect_strategy() -> impl Strategy<Value = Rect> {
         // Integer coordinates keep expected areas exact while still exploring many placements.
         (-100i32..100, -100i32..100, 1i32..40, 1i32..40).prop_map(|(x, y, w, h)| {
             let xmin = f64::from(x);
@@ -638,19 +641,19 @@ mod shape_boolean_proptests {
         })
     }
 
-    fn rect_area(rect: (f64, f64, f64, f64)) -> f64 {
+    fn rect_area(rect: Rect) -> f64 {
         (rect.2 - rect.0) * (rect.3 - rect.1)
     }
 
-    fn rect_center(rect: (f64, f64, f64, f64)) -> (f64, f64) {
+    fn rect_center(rect: Rect) -> (f64, f64) {
         ((rect.0 + rect.2) * 0.5, (rect.1 + rect.3) * 0.5)
     }
 
-    fn outside_sample(rect: (f64, f64, f64, f64)) -> (f64, f64) {
+    fn outside_sample(rect: Rect) -> (f64, f64) {
         (rect.2 + 10.0, rect.3 + 10.0)
     }
 
-    fn rect_overlap_area(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> f64 {
+    fn rect_overlap_area(a: Rect, b: Rect) -> f64 {
         let xmin = a.0.max(b.0);
         let ymin = a.1.max(b.1);
         let xmax = a.2.min(b.2);
@@ -662,8 +665,7 @@ mod shape_boolean_proptests {
         }
     }
 
-    fn overlapping_rect_pair_strategy()
-    -> impl Strategy<Value = ((f64, f64, f64, f64), (f64, f64, f64, f64))> {
+    fn overlapping_rect_pair_strategy() -> impl Strategy<Value = RectPair> {
         // Bias toward guaranteed overlaps so area identities exercise clipping instead of only
         // unused-loop retention.
         (-50i32..50, -50i32..50, 6i32..40, 6i32..40, 1i32..6, 1i32..6).prop_map(
@@ -1032,7 +1034,7 @@ fn shape_center_works() {
 
 #[test]
 fn shape_transform_mut() {
-    // We'll apply a 2D transform [a b; c d] + translation
+    // Apply a 2D transform [a b; c d] plus translation.
     let rect = pline_closed![
         (0.0, 0.0, 0.0),
         (1.0, 0.0, 0.0),
@@ -1040,8 +1042,7 @@ fn shape_transform_mut() {
         (0.0, 1.0, 0.0)
     ];
     let mut shape = Shape::from_plines(vec![rect]);
-    // transform is M = [2  0; 0 2], plus (10,10) translation
-    // so a=2,b=0,c=0,d=2,tx=10,ty=10
+    // Matrix [2 0; 0 2] plus (10,10) translation.
     shape.transform_mut(2.0, 0.0, 0.0, 2.0, 10.0, 10.0);
 
     // bounding box now from (10,10) to (12,12)
@@ -1124,20 +1125,15 @@ fn transform_builder_rotate_test() {
 
 #[test]
 fn shape_offset_simple_test() {
-    // Make a single circle-like shape from approx. circle
+    // Make a single circle-like shape from an approximate circle.
     let circle_pline = create_approx_circle(0.0, 0.0, 5.0);
     let shape = Shape::from_plines(vec![circle_pline]);
 
-    // offset outward by 2 => bounding box with radius ~ 7
-    // bounding box => from (-7, -0.0) to (7, 0.0) along major axis for our 2-vertex half circle
-    // but user’s shape might be incomplete, so we just check that min_x ~ -7.0 or so.
+    // Offset outward by 2; the two-arc circle should expand to roughly radius 7.
     let offset_opts = ShapeOffsetOptions::default();
     let result = shape.parallel_offset(-2.0, offset_opts);
     assert_eq!(result.ccw_plines.len(), 1);
     let final_bb = result.plines_index.bounds().unwrap();
-    // radius => 7 => min_x => -7, max_x => 7
-    // we have half circle, so final bounding box might show up. We'll do a small check:
-    // not exact because of half circle, but let's do an approximate check
     assert!(
         final_bb.min_x < -6.95 && final_bb.min_x > -7.05,
         "expected min_x ~ -7.0, got {}",

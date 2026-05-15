@@ -4,25 +4,23 @@ use cavalier_contours::{
     shape_algorithms::Shape,
 };
 use eframe::egui::{CentralPanel, Color32, Rect, ScrollArea, SidePanel, Ui, Vec2};
-use egui_plot::{Plot, PlotPoint};
 use egui::Pos2;
+use egui_plot::{Plot, PlotPoint};
 
 use crate::plotting::PlinesPlotItem;
 use crate::scenes::SceneSettings;
 
 use super::{super::plotting::PLOT_VERTEX_RADIUS, Scene};
 
-/// A simple example scene demonstrating shape boolean operations.
+/// Interactive scene for shape boolean operations.
 pub struct MultiPlineBooleanScene {
-    /// The first shape object.
+    /// First operand.
     shape1: Shape<f64>,
-    /// The second shape object.
+    /// Second operand.
     shape2: Shape<f64>,
-    /// Local interactive state (which shape or vertex, if any, we have grabbed, etc.).
     interaction_state: InteractionState,
 }
 
-/// Simple container for our user interaction (dragging, etc.).
 struct InteractionState {
     grabbed_vertex: Option<(usize, bool, usize, usize)>,
     dragging: bool,
@@ -33,8 +31,6 @@ struct InteractionState {
 /// Provide a default starting scene with two shapes that partially overlap.
 impl Default for MultiPlineBooleanScene {
     fn default() -> Self {
-        // For demonstration: let both shapes start with the same polylines but
-        // offset them so shape1 and shape2 partially overlap.
         let plines = vec![
             pline_closed![
                 (100.0, 100.0, -0.5),
@@ -67,10 +63,9 @@ impl Default for MultiPlineBooleanScene {
                 (249.69820124026208, 27.234215862385582, 0.0),
             ],
         ];
-        // Build two shapes from the same polylines, then translate them so they overlap
+
         let mut shape1 = Shape::from_plines(plines.clone());
         let mut shape2 = Shape::from_plines(plines);
-        // Translate them so they partially overlap
         shape1.translate_mut(-20.0, -20.0);
         shape2.translate_mut(20.0, 20.0);
 
@@ -87,42 +82,34 @@ impl Default for MultiPlineBooleanScene {
     }
 }
 
-/// Implement the `Scene` trait for our shape boolean example.
 impl Scene for MultiPlineBooleanScene {
     fn name(&self) -> &'static str {
         "Multi Polyline Boolean"
     }
 
     fn ui(&mut self, ui: &mut Ui, settings: &SceneSettings, init: bool) {
-        // destructure for convenience
         let MultiPlineBooleanScene {
             shape1,
             shape2,
             interaction_state,
         } = self;
 
-        // create the "controls" panel on the right side
         controls_panel(ui, interaction_state);
 
-        // force a "Zoom to Fit" if this is the first frame
         interaction_state.zoom_to_fit |= init;
 
-        // next, render the "plot" area
         plot_area(ui, settings, shape1, shape2, interaction_state);
     }
 }
 
-/// The panel with controls where the user can pick the boolean op, etc.
 fn controls_panel(ui: &mut Ui, interaction_state: &mut InteractionState) {
     SidePanel::right("multi_pline_boolean_panel")
         .min_width(200.0)
         .default_width(200.0)
         .show_inside(ui, |ui| {
-            // use a scroll area if you expect to have many controls
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
 
-                // pick boolean op
                 ui.label("Boolean Operation");
                 ui.radio_value(&mut interaction_state.boolean_op, None, "None");
                 ui.radio_value(&mut interaction_state.boolean_op, Some(BooleanOp::Or), "Or");
@@ -142,7 +129,6 @@ fn controls_panel(ui: &mut Ui, interaction_state: &mut InteractionState) {
                     "Xor",
                 );
 
-                // "Zoom to Fit" button
                 interaction_state.zoom_to_fit = ui
                     .button("Zoom to Fit")
                     .on_hover_text("Zoom to fit contents")
@@ -152,7 +138,7 @@ fn controls_panel(ui: &mut Ui, interaction_state: &mut InteractionState) {
 }
 
 /// A helper function to search for any vertex in the provided shape's CCW or CW polylines that
-/// lies "near" a given screen coordinate. If found, returns `(shape_index, orientation, pline_idx, vertex_idx)`.
+/// lies near a given screen coordinate.
 fn find_near_vertex(
     ui_coord: Pos2,
     plot_ui: &egui_plot::PlotUi,
@@ -161,16 +147,13 @@ fn find_near_vertex(
 ) -> Option<(usize, bool, usize, usize)> {
     let _pointer_pos = plot_ui.plot_from_screen(ui_coord);
 
-    // We'll check CCW polylines first (orientation = true), then CW polylines (orientation = false).
-    // If you want the opposite priority, simply reverse the checks.
-    // The first match we find, we return immediately (so we pick the "topmost" or first found).
+    // Prefer filled loops over holes when both bins have a nearby vertex.
     for (pline_idx, rpline) in shape.ccw_plines.iter().enumerate() {
         let pline = &rpline.polyline;
         for v_idx in 0..pline.vertex_count() {
             let v = pline.at(v_idx);
             let screen_v = plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y));
-            let hit_size =
-                2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
+            let hit_size = 2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
             let rect = Rect::from_center_size(screen_v, Vec2::splat(hit_size));
             if rect.contains(ui_coord) {
                 return Some((shape_index, true, pline_idx, v_idx));
@@ -183,8 +166,7 @@ fn find_near_vertex(
         for v_idx in 0..pline.vertex_count() {
             let v = pline.at(v_idx);
             let screen_v = plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y));
-            let hit_size =
-                2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
+            let hit_size = 2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
             let rect = Rect::from_center_size(screen_v, Vec2::splat(hit_size));
             if rect.contains(ui_coord) {
                 return Some((shape_index, false, pline_idx, v_idx));
@@ -195,20 +177,14 @@ fn find_near_vertex(
     None
 }
 
-/// Return a mutable reference to shape1 or shape2, based on `shape_idx`.
 fn pick_shape_mut<'a>(
     shape_idx: usize,
     shape1: &'a mut Shape<f64>,
     shape2: &'a mut Shape<f64>,
 ) -> &'a mut Shape<f64> {
-    if shape_idx == 0 {
-        shape1
-    } else {
-        shape2
-    }
+    if shape_idx == 0 { shape1 } else { shape2 }
 }
 
-/// The center "plot" area where we draw our shapes and do user interactions.
 fn plot_area(
     ui: &mut Ui,
     settings: &SceneSettings,
@@ -224,11 +200,9 @@ fn plot_area(
     } = interaction_state;
 
     CentralPanel::default().show_inside(ui, |ui| {
-        // set up the Plot widget
         let plot =
             settings.apply_to_plot(Plot::new("plot_area").data_aspect(1.0).allow_drag(false));
 
-        // TODO: color pickers
         let color1 = Color32::LIGHT_BLUE;
         let color2 = Color32::LIGHT_RED;
         let color3 = Color32::LIGHT_GREEN;
@@ -239,15 +213,12 @@ fn plot_area(
         let fill_color3 = color3.gamma_multiply(opacity2);
 
         plot.show(ui, |plot_ui| {
-            // disable auto-bounds by default; we can set them manually or on user action
             plot_ui.set_auto_bounds([false, false]);
 
-            // check for pointer releases
             if plot_ui.ctx().input(|i| i.pointer.any_released()) {
                 if grabbed_vertex.is_none() {
                     *dragging = false;
                 } else {
-                    // release vertex (stop dragging that vertex)
                     *grabbed_vertex = None;
                 }
             }
@@ -260,8 +231,7 @@ fn plot_area(
                     &mut shape.cw_plines[pline_idx]
                 };
                 let pline = &mut rpline.polyline;
-            
-                // Apply the pointer delta
+
                 let delta = plot_ui.pointer_coordinate_drag_delta();
                 if v_idx < pline.vertex_count() {
                     let v = pline.at(v_idx);
@@ -269,10 +239,8 @@ fn plot_area(
                 }
                 rpline.spatial_index = pline.create_aabb_index();
             } else if *dragging {
-                // if we're not dragging a vertex, but the user is dragging the mouse, pan the plot
                 plot_ui.translate_bounds(-plot_ui.pointer_coordinate_drag_delta());
             } else if plot_ui.ctx().input(|i| i.pointer.any_pressed()) {
-                // pointer pressed, see if we clicked near any vertex from shape1 or shape2
                 if let Some(coord) = plot_ui.ctx().pointer_interact_pos() {
                     let found_vertex = find_near_vertex(coord, plot_ui, 0, &*shape1)
                         .or_else(|| find_near_vertex(coord, plot_ui, 1, &*shape2));
@@ -287,15 +255,12 @@ fn plot_area(
             }
 
             if boolean_op.is_none() {
-                // draw shapes
-                // 1) shape1
                 plot_ui.add(
                     PlinesPlotItem::new(&*shape1)
                         .stroke_color(color1)
                         .fill_color(fill_color1)
                         .vertex_color(color1),
                 );
-                // 2) shape2
                 plot_ui.add(
                     PlinesPlotItem::new(&*shape2)
                         .stroke_color(color2)
@@ -303,10 +268,7 @@ fn plot_area(
                         .vertex_color(color2),
                 );
             } else {
-                // We have a boolean op; compute the shape and draw the result
                 let bool_result = shape1.boolean(shape2, boolean_op.unwrap());
-
-                // add the shape result to the plot as well
                 plot_ui.add(
                     PlinesPlotItem::new(bool_result)
                         .stroke_color(color3)
@@ -315,7 +277,6 @@ fn plot_area(
                 );
             }
 
-            // if user asked "zoom to fit," we do it
             if *zoom_to_fit {
                 plot_ui.set_auto_bounds([true, true]);
             }
