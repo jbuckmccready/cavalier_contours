@@ -11,31 +11,37 @@ pub trait Real:
     + IndexableNum
     + 'static
 {
+    /// Return pi for the concrete floating point type.
     #[inline]
     fn pi() -> Self {
         Self::from(std::f64::consts::PI).unwrap()
     }
 
+    /// Return tau, equal to `2 * pi`, for the concrete floating point type.
     #[inline]
     fn tau() -> Self {
         Self::from(std::f64::consts::TAU).unwrap()
     }
 
+    /// Return the numeric value `2`.
     #[inline]
     fn two() -> Self {
         Self::one() + Self::one()
     }
 
+    /// Return the numeric value `4`.
     #[inline]
     fn four() -> Self {
         Self::two() + Self::two()
     }
 
+    /// Return the smallest finite value representable by the type.
     #[inline]
     fn min_value() -> Self {
         num_traits::real::Real::min_value()
     }
 
+    /// Return the largest finite value representable by the type.
     #[inline]
     fn max_value() -> Self {
         num_traits::real::Real::max_value()

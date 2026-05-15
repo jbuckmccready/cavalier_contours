@@ -690,24 +690,39 @@ where
 /// Enum used for view data validation debugging and asserting.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ViewDataValidation<T> {
+    /// Source polyline has no valid segments.
     SourceHasNoSegments,
+    /// A slice offset references a segment outside the source polyline.
     OffsetOutOfRange {
+        /// Requested offset.
         offset: usize,
+        /// Number of vertexes in the source polyline.
         source_length: usize,
     },
+    /// The updated start point is not on the expected source segment.
     UpdatedStartNotOnSegment {
+        /// Updated start point that failed validation.
         start_point: Vector2<T>,
     },
+    /// The end point is not on the expected source segment.
     EndPointNotOnSegment {
+        /// End point that failed validation.
         end_point: Vector2<T>,
     },
+    /// The end point coincides with the final offset vertex, making the slice ambiguous.
     EndPointOnFinalOffsetVertex {
+        /// End point that failed validation.
         end_point: Vector2<T>,
+        /// Final offset vertex of the source slice.
         final_offset_vertex: PlineVertex<T>,
     },
+    /// The updated end bulge does not match the source geometry.
     UpdatedBulgeDoesNotMatch {
+        /// Bulge value stored on the view data.
         updated_bulge: T,
+        /// Expected bulge value for the source slice.
         expected: T,
     },
+    /// The view data is valid for the source polyline.
     IsValid,
 }

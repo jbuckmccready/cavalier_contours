@@ -1,3 +1,11 @@
+//! Shape-level operations over sets of closed and open polylines.
+//!
+//! A [`Shape`](crate::shape_algorithms::Shape) stores counter-clockwise loops as filled material
+//! and clockwise loops as holes.
+//! Shape booleans regularize closed-loop area first, then clip open linework against the final
+//! filled result. This keeps the public API compatible with the lower-level polyline algorithms
+//! while supporting nested islands, lakes, and mixed open/closed inputs.
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use static_aabb2d_index::{StaticAABB2DIndex, StaticAABB2DIndexBuilder};
@@ -8,9 +16,9 @@ use crate::{
         traits::Real,
     },
     polyline::{
-        BooleanOp, BooleanResult, BooleanResultInfo, FindIntersectsOptions, PlineBasicIntersect,
-        PlineBooleanOptions, PlineCreation, PlineInversionView, PlineOffsetOptions,
-        PlineOrientation, PlineSource, PlineSourceMut, PlineViewData, Polyline,
+        BooleanOp, BooleanResult, BooleanResultInfo, BooleanResultPline, FindIntersectsOptions,
+        PlineBasicIntersect, PlineBooleanOptions, PlineCreation, PlineInversionView,
+        PlineOffsetOptions, PlineOrientation, PlineSource, PlineSourceMut, PlineViewData, Polyline,
         internal::pline_offset::point_valid_for_offset, seg_closest_point, seg_midpoint,
     },
 };
@@ -88,10 +96,40 @@ pub struct IndexedPolyline<T: Real> {
     pub spatial_index: StaticAABB2DIndex<T>,
 }
 
+/// A borrowed polyline with an owned spatial index.
+///
+/// This is the borrowed counterpart to [`IndexedPolyline`]. It avoids cloning the source polyline
+/// while still carrying the segment AABB index needed by shape-level operations.
+#[derive(Debug, Clone)]
+pub struct BorrowedIndexedPolyline<'a, T: Real> {
+    /// Borrowed polyline geometry.
+    pub polyline: &'a Polyline<T>,
+    /// Spatial index built from the polyline's segment bounding boxes.
+    pub spatial_index: StaticAABB2DIndex<T>,
+}
+
+/// Borrowed view of a [`Shape`]-like set of polylines.
+///
+/// `ShapeView` is useful when caller-owned polylines should be classified and indexed without
+/// cloning their vertex storage. Operations that create new geometry, such as booleans and
+/// offsets, still return owned [`Shape`] values.
+#[derive(Debug, Clone)]
+pub struct ShapeView<'a, T: Real> {
+    /// Positive/filled area counter clockwise polylines.
+    pub ccw_plines: Vec<BorrowedIndexedPolyline<'a, T>>,
+    /// Negative/hole area clockwise polylines.
+    pub cw_plines: Vec<BorrowedIndexedPolyline<'a, T>>,
+    /// Spatial index of all borrowed polyline area bounding boxes.
+    ///
+    /// Index positions match [`Shape::plines_index`]: all CCW loops first, then all CW loops.
+    pub plines_index: StaticAABB2DIndex<T>,
+}
+
 impl<T> IndexedPolyline<T>
 where
     T: Real,
 {
+    /// Create an indexed polyline and build its segment AABB index.
     pub fn new(polyline: Polyline<T>) -> Self {
         let spatial_index = polyline.create_aabb_index();
         Self {
@@ -100,6 +138,7 @@ where
         }
     }
 
+    /// Offset this polyline using options suitable for shape-level offset assembly.
     pub fn parallel_offset_for_shape(
         &self,
         offset: T,
@@ -114,6 +153,293 @@ where
         };
 
         self.polyline.parallel_offset_opt(offset, &opts)
+    }
+}
+
+impl<'a, T> BorrowedIndexedPolyline<'a, T>
+where
+    T: Real,
+{
+    /// Create a borrowed indexed polyline and build its segment AABB index.
+    pub fn new(polyline: &'a Polyline<T>) -> Self {
+        let spatial_index = polyline.create_aabb_index();
+        Self {
+            polyline,
+            spatial_index,
+        }
+    }
+}
+
+impl<'a, T> ShapeView<'a, T>
+where
+    T: Real,
+{
+    fn build_plines_index(
+        ccw_plines: &[BorrowedIndexedPolyline<'a, T>],
+        cw_plines: &[BorrowedIndexedPolyline<'a, T>],
+    ) -> StaticAABB2DIndex<T> {
+        let mut builder = StaticAABB2DIndexBuilder::new(ccw_plines.len() + cw_plines.len());
+        for ip in ccw_plines.iter().chain(cw_plines.iter()) {
+            if let Some(bounds) = ip.spatial_index.bounds() {
+                builder.add(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y);
+            }
+        }
+        builder.build().unwrap()
+    }
+
+    /// Construct a borrowed shape view from polylines.
+    ///
+    /// Empty polylines are ignored. CCW closed loops are classified as filled material and CW
+    /// closed loops are classified as holes, matching [`Shape::from_plines`]. Open polylines are
+    /// retained in the CW bin by the existing orientation convention.
+    pub fn from_plines<I>(plines: I) -> Self
+    where
+        I: IntoIterator<Item = &'a Polyline<T>>,
+    {
+        let mut ccw_plines = Vec::new();
+        let mut cw_plines = Vec::new();
+        for pline in plines.into_iter().filter(|p| p.vertex_count() > 1) {
+            if pline.orientation() == PlineOrientation::CounterClockwise {
+                ccw_plines.push(BorrowedIndexedPolyline::new(pline));
+            } else {
+                cw_plines.push(BorrowedIndexedPolyline::new(pline));
+            }
+        }
+
+        let plines_index = Self::build_plines_index(&ccw_plines, &cw_plines);
+        Self {
+            ccw_plines,
+            cw_plines,
+            plines_index,
+        }
+    }
+
+    /// Construct a borrowed shape view when signed loop bins are already known.
+    ///
+    /// The input iterators are trusted to provide CCW material loops and CW hole loops. Use
+    /// [`ShapeView::from_plines`] when loops should be classified by orientation.
+    pub fn from_signed_plines<I, J>(ccw_plines: I, cw_plines: J) -> Self
+    where
+        I: IntoIterator<Item = &'a Polyline<T>>,
+        J: IntoIterator<Item = &'a Polyline<T>>,
+    {
+        let ccw_plines = ccw_plines
+            .into_iter()
+            .filter(|p| p.vertex_count() > 1)
+            .map(BorrowedIndexedPolyline::new)
+            .collect::<Vec<_>>();
+        let cw_plines = cw_plines
+            .into_iter()
+            .filter(|p| p.vertex_count() > 1)
+            .map(BorrowedIndexedPolyline::new)
+            .collect::<Vec<_>>();
+        let plines_index = Self::build_plines_index(&ccw_plines, &cw_plines);
+        Self {
+            ccw_plines,
+            cw_plines,
+            plines_index,
+        }
+    }
+
+    /// Borrow the loop bins and indexes from an owned [`Shape`].
+    pub fn from_shape(shape: &'a Shape<T>) -> Self {
+        let ccw_plines = shape
+            .ccw_plines
+            .iter()
+            .map(|ip| BorrowedIndexedPolyline {
+                polyline: &ip.polyline,
+                spatial_index: ip.spatial_index.clone(),
+            })
+            .collect();
+        let cw_plines = shape
+            .cw_plines
+            .iter()
+            .map(|ip| BorrowedIndexedPolyline {
+                polyline: &ip.polyline,
+                spatial_index: ip.spatial_index.clone(),
+            })
+            .collect();
+        Self {
+            ccw_plines,
+            cw_plines,
+            plines_index: shape.plines_index.clone(),
+        }
+    }
+
+    /// Materialize this borrowed view into an owned [`Shape`].
+    ///
+    /// Polyline vertex storage is cloned at this boundary; the already-built indexes are cloned
+    /// rather than rebuilt.
+    pub fn to_owned_shape(&self) -> Shape<T> {
+        let ccw_plines = self
+            .ccw_plines
+            .iter()
+            .map(|ip| IndexedPolyline {
+                polyline: ip.polyline.clone(),
+                spatial_index: ip.spatial_index.clone(),
+            })
+            .collect();
+        let cw_plines = self
+            .cw_plines
+            .iter()
+            .map(|ip| IndexedPolyline {
+                polyline: ip.polyline.clone(),
+                spatial_index: ip.spatial_index.clone(),
+            })
+            .collect();
+        Shape {
+            ccw_plines,
+            cw_plines,
+            plines_index: self.plines_index.clone(),
+        }
+    }
+
+    fn is_empty_shape(&self) -> bool {
+        self.ccw_plines.is_empty() && self.cw_plines.is_empty()
+    }
+
+    fn has_open_plines(&self) -> bool {
+        self.ccw_plines
+            .iter()
+            .chain(self.cw_plines.iter())
+            .any(|ip| !ip.polyline.is_closed())
+    }
+
+    fn cloned_ccw_plines(&self) -> Vec<Polyline<T>> {
+        self.ccw_plines
+            .iter()
+            .map(|ip| ip.polyline.clone())
+            .collect()
+    }
+
+    fn same_loop_set(
+        a: &[BorrowedIndexedPolyline<'_, T>],
+        b: &[BorrowedIndexedPolyline<'_, T>],
+    ) -> bool {
+        if a.len() != b.len() {
+            return false;
+        }
+
+        let mut b_matched = vec![false; b.len()];
+        'next_a: for a_loop in a {
+            for (b_idx, b_loop) in b.iter().enumerate() {
+                if !b_matched[b_idx]
+                    && Shape::<T>::same_loop_geometry(a_loop.polyline, b_loop.polyline)
+                {
+                    b_matched[b_idx] = true;
+                    continue 'next_a;
+                }
+            }
+
+            return false;
+        }
+
+        true
+    }
+
+    fn same_loop_bins(&self, other: &Self) -> bool {
+        Self::same_loop_set(&self.ccw_plines, &other.ccw_plines)
+            && Self::same_loop_set(&self.cw_plines, &other.cw_plines)
+    }
+
+    fn borrowed_boolean_fast_path(&self, other: &Self, op: BooleanOp) -> Option<Shape<T>> {
+        if self.has_open_plines() || other.has_open_plines() {
+            return None;
+        }
+
+        if self.is_empty_shape() {
+            return Some(match op {
+                BooleanOp::Or | BooleanOp::Xor => other.to_owned_shape(),
+                BooleanOp::And | BooleanOp::Not => Shape::empty(),
+            });
+        }
+
+        if other.is_empty_shape() {
+            return Some(match op {
+                BooleanOp::Or | BooleanOp::Xor | BooleanOp::Not => self.to_owned_shape(),
+                BooleanOp::And => Shape::empty(),
+            });
+        }
+
+        if self.same_loop_bins(other) {
+            return Some(match op {
+                BooleanOp::Or | BooleanOp::And => self.to_owned_shape(),
+                BooleanOp::Not | BooleanOp::Xor => Shape::empty(),
+            });
+        }
+
+        if self.cw_plines.is_empty() && other.cw_plines.is_empty() {
+            if matches!(op, BooleanOp::Or) {
+                let mut source_plines = self.cloned_ccw_plines();
+                source_plines.extend(other.cloned_ccw_plines());
+                let merged = Shape::<T>::merge_ccw_plines_fixpoint(source_plines);
+                let merged = Shape::<T>::remove_ccw_plines_covered_by_others(merged);
+                return Some(Shape::build_from_signed_plines(merged, Vec::new()));
+            }
+
+            if self.ccw_plines.len() == 1 && other.ccw_plines.len() == 1 {
+                let result = Shape::<T>::pline_boolean(
+                    self.ccw_plines[0].polyline,
+                    other.ccw_plines[0].polyline,
+                    op,
+                );
+                let (ccw_plines, cw_plines) = Shape::<T>::signed_plines_from_boolean_result(result);
+                return Some(Shape::build_from_nested_signed_plines(
+                    ccw_plines, cw_plines,
+                ));
+            }
+        }
+
+        None
+    }
+
+    /// Perform a boolean operation against another borrowed shape view.
+    ///
+    /// Common read-only cases are handled directly from borrowed loop references. More complex
+    /// recursive cell cases still materialize owned shapes before dispatching to the canonical
+    /// implementation. Benchmarks in `benches/shape_borrowed_api.rs` measure both paths.
+    pub fn boolean(&self, other: &Self, op: BooleanOp) -> Shape<T> {
+        if let Some(result) = self.borrowed_boolean_fast_path(other, op) {
+            return result;
+        }
+
+        let lhs = self.to_owned_shape();
+        let rhs = other.to_owned_shape();
+        lhs.boolean(&rhs, op)
+    }
+
+    /// Perform a union against another borrowed shape view.
+    pub fn union(&self, other: &Self) -> Shape<T> {
+        self.boolean(other, BooleanOp::Or)
+    }
+
+    /// Perform an intersection against another borrowed shape view.
+    pub fn intersection(&self, other: &Self) -> Shape<T> {
+        self.boolean(other, BooleanOp::And)
+    }
+
+    /// Subtract `other` from this borrowed shape view.
+    pub fn difference(&self, other: &Self) -> Shape<T> {
+        self.boolean(other, BooleanOp::Not)
+    }
+
+    /// Perform a symmetric difference against another borrowed shape view.
+    pub fn xor(&self, other: &Self) -> Shape<T> {
+        self.boolean(other, BooleanOp::Xor)
+    }
+
+    /// Offset this borrowed shape view and return an owned result.
+    pub fn parallel_offset(&self, offset: T, options: ShapeOffsetOptions<T>) -> Shape<T> {
+        self.to_owned_shape().parallel_offset(offset, options)
+    }
+}
+
+impl<'a, T> From<&'a Shape<T>> for ShapeView<'a, T>
+where
+    T: Real,
+{
+    fn from(shape: &'a Shape<T>) -> Self {
+        Self::from_shape(shape)
     }
 }
 
@@ -161,6 +487,7 @@ impl<T> ShapeOffsetOptions<T>
 where
     T: Real,
 {
+    /// Create default shape offset options.
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -573,6 +900,52 @@ where
         }
     }
 
+    fn push_ccw_pline(target: &mut Vec<Polyline<T>>, pline: Polyline<T>) {
+        target.push(Self::normalize_ccw(pline));
+    }
+
+    fn push_cw_pline(target: &mut Vec<Polyline<T>>, pline: Polyline<T>) {
+        target.push(Self::normalize_cw(pline));
+    }
+
+    fn extend_ccw_from_result_plines(
+        target: &mut Vec<Polyline<T>>,
+        plines: Vec<BooleanResultPline<Polyline<T>>>,
+    ) {
+        target.extend(plines.into_iter().map(|rp| Self::normalize_ccw(rp.pline)));
+    }
+
+    fn extend_cw_from_result_plines(
+        target: &mut Vec<Polyline<T>>,
+        plines: Vec<BooleanResultPline<Polyline<T>>>,
+    ) {
+        target.extend(plines.into_iter().map(|rp| Self::normalize_cw(rp.pline)));
+    }
+
+    fn signed_plines_from_boolean_result(
+        result: BooleanResult<Polyline<T>>,
+    ) -> (Vec<Polyline<T>>, Vec<Polyline<T>>) {
+        let mut ccw_plines = Vec::with_capacity(result.pos_plines.len());
+        let mut cw_plines = Vec::with_capacity(result.neg_plines.len());
+        Self::extend_ccw_from_result_plines(&mut ccw_plines, result.pos_plines);
+        Self::extend_cw_from_result_plines(&mut cw_plines, result.neg_plines);
+        (ccw_plines, cw_plines)
+    }
+
+    fn cloned_ccw_plines(&self) -> Vec<Polyline<T>> {
+        self.ccw_plines
+            .iter()
+            .map(|ip| ip.polyline.clone())
+            .collect()
+    }
+
+    fn cloned_cw_plines(&self) -> Vec<Polyline<T>> {
+        self.cw_plines
+            .iter()
+            .map(|ip| ip.polyline.clone())
+            .collect()
+    }
+
     fn pline_interior_probes(pline: &Polyline<T>) -> Vec<Vector2<T>> {
         let mut probes = Vec::new();
         let Some(extents) = pline.extents() else {
@@ -704,12 +1077,7 @@ where
 
         let mut builder =
             StaticAABB2DIndexBuilder::new(final_ccw_result.len() + final_cw_result.len());
-        for ip in &final_ccw_result {
-            if let Some(bds) = ip.spatial_index.bounds() {
-                builder.add(bds.min_x, bds.min_y, bds.max_x, bds.max_y);
-            }
-        }
-        for ip in &final_cw_result {
+        for ip in final_ccw_result.iter().chain(final_cw_result.iter()) {
             if let Some(bds) = ip.spatial_index.bounds() {
                 builder.add(bds.min_x, bds.min_y, bds.max_x, bds.max_y);
             }
@@ -1153,16 +1521,8 @@ where
             return self.clone();
         }
 
-        let mut final_ccw = self
-            .ccw_plines
-            .iter()
-            .map(|ip| ip.polyline.clone())
-            .collect::<Vec<_>>();
-        let mut final_cw = self
-            .cw_plines
-            .iter()
-            .map(|ip| ip.polyline.clone())
-            .collect::<Vec<_>>();
+        let mut final_ccw = self.cloned_ccw_plines();
+        let mut final_cw = self.cloned_cw_plines();
 
         final_ccw.extend(uncovered_other.ccw_plines.into_iter().map(|ip| ip.polyline));
         let eps = T::from(SHAPE_BOOLEAN_POS_EQUAL_EPS).unwrap();
@@ -1212,12 +1572,7 @@ where
                 // hole to each material island before merging; this prevents detached negative
                 // loops from subtracting area outside any shell.
                 let result = Self::pline_boolean(&positive_hole, material, BooleanOp::And);
-                clipped_holes.extend(
-                    result
-                        .pos_plines
-                        .into_iter()
-                        .map(|rp| Self::normalize_ccw(rp.pline)),
-                );
+                Self::extend_ccw_from_result_plines(&mut clipped_holes, result.pos_plines);
             }
         }
 
@@ -1273,16 +1628,7 @@ where
             &other.ccw_plines[0].polyline,
             BooleanOp::And,
         );
-        let ccw_plines = shell_intersection
-            .pos_plines
-            .into_iter()
-            .map(|rp| Self::normalize_ccw(rp.pline))
-            .collect::<Vec<_>>();
-        let cw_plines = shell_intersection
-            .neg_plines
-            .into_iter()
-            .map(|rp| Self::normalize_cw(rp.pline))
-            .collect::<Vec<_>>();
+        let (ccw_plines, cw_plines) = Self::signed_plines_from_boolean_result(shell_intersection);
 
         let (ccw_plines, cw_plines) =
             Self::subtract_holes_from_signed_plines(ccw_plines, cw_plines, &self.cw_plines);
@@ -1307,18 +1653,8 @@ where
             let mut next_ccw = Vec::new();
             for pline in ccw_plines {
                 let result = Self::pline_boolean(&pline, &cutter, BooleanOp::Not);
-                next_ccw.extend(
-                    result
-                        .pos_plines
-                        .into_iter()
-                        .map(|rp| Self::normalize_ccw(rp.pline)),
-                );
-                cw_plines.extend(
-                    result
-                        .neg_plines
-                        .into_iter()
-                        .map(|rp| Self::normalize_cw(rp.pline)),
-                );
+                Self::extend_ccw_from_result_plines(&mut next_ccw, result.pos_plines);
+                Self::extend_cw_from_result_plines(&mut cw_plines, result.neg_plines);
             }
             ccw_plines = next_ccw;
         }
@@ -1330,12 +1666,7 @@ where
                 &other_hole_positive,
                 BooleanOp::And,
             );
-            ccw_plines.extend(
-                result
-                    .pos_plines
-                    .into_iter()
-                    .map(|rp| Self::normalize_ccw(rp.pline)),
-            );
+            Self::extend_ccw_from_result_plines(&mut ccw_plines, result.pos_plines);
         }
 
         let (ccw_plines, cw_plines) =
@@ -1376,18 +1707,10 @@ where
             BooleanOp::Not,
         );
 
-        let mut ccw_plines = left_shell_difference
-            .pos_plines
-            .into_iter()
-            .chain(right_shell_difference.pos_plines)
-            .map(|rp| Self::normalize_ccw(rp.pline))
-            .collect::<Vec<_>>();
-        let mut cw_plines = left_shell_difference
-            .neg_plines
-            .into_iter()
-            .chain(right_shell_difference.neg_plines)
-            .map(|rp| Self::normalize_cw(rp.pline))
-            .collect::<Vec<_>>();
+        let (mut ccw_plines, mut cw_plines) =
+            Self::signed_plines_from_boolean_result(left_shell_difference);
+        Self::extend_ccw_from_result_plines(&mut ccw_plines, right_shell_difference.pos_plines);
+        Self::extend_cw_from_result_plines(&mut cw_plines, right_shell_difference.neg_plines);
 
         let (left_ccw, left_cw) =
             Self::subtract_holes_from_signed_plines(ccw_plines, cw_plines, &self.cw_plines);
@@ -1401,11 +1724,8 @@ where
                 &other.ccw_plines[0].polyline,
                 BooleanOp::And,
             );
-            let hole_overlap = result
-                .pos_plines
-                .into_iter()
-                .map(|rp| Self::normalize_ccw(rp.pline))
-                .collect::<Vec<_>>();
+            let mut hole_overlap = Vec::with_capacity(result.pos_plines.len());
+            Self::extend_ccw_from_result_plines(&mut hole_overlap, result.pos_plines);
             let (hole_overlap, overlap_holes) =
                 Self::subtract_holes_from_signed_plines(hole_overlap, Vec::new(), &other.cw_plines);
             outside_ccw.extend(hole_overlap);
@@ -1419,11 +1739,8 @@ where
                 &self.ccw_plines[0].polyline,
                 BooleanOp::And,
             );
-            let hole_overlap = result
-                .pos_plines
-                .into_iter()
-                .map(|rp| Self::normalize_ccw(rp.pline))
-                .collect::<Vec<_>>();
+            let mut hole_overlap = Vec::with_capacity(result.pos_plines.len());
+            Self::extend_ccw_from_result_plines(&mut hole_overlap, result.pos_plines);
             let (hole_overlap, overlap_holes) =
                 Self::subtract_holes_from_signed_plines(hole_overlap, Vec::new(), &self.cw_plines);
             outside_ccw.extend(hole_overlap);
@@ -1748,6 +2065,14 @@ where
         }
     }
 
+    /// Borrow this shape as a [`ShapeView`].
+    ///
+    /// The view borrows polyline geometry and clones the existing spatial indexes, avoiding vertex
+    /// storage copies.
+    pub fn as_view(&self) -> ShapeView<'_, T> {
+        ShapeView::from_shape(self)
+    }
+
     /// Return an empty shape (0 polylines).
     #[inline]
     pub fn empty() -> Self {
@@ -1758,6 +2083,7 @@ where
         }
     }
 
+    /// Offset all loops in the shape and assemble the valid offset result as a new shape.
     pub fn parallel_offset(&self, offset: T, options: ShapeOffsetOptions<T>) -> Self {
         let (ccw_offset_loops, cw_offset_loops, offset_loops_index) =
             self.create_offset_loops_with_index(offset, &options);
@@ -2522,13 +2848,9 @@ where
         }
 
         if matches!(op, BooleanOp::Or) && self.cw_plines.is_empty() && other.cw_plines.is_empty() {
-            let merged = Self::merge_ccw_plines_fixpoint(
-                self.ccw_plines
-                    .iter()
-                    .chain(other.ccw_plines.iter())
-                    .map(|ip| ip.polyline.clone())
-                    .collect(),
-            );
+            let mut source_plines = self.cloned_ccw_plines();
+            source_plines.extend(other.cloned_ccw_plines());
+            let merged = Self::merge_ccw_plines_fixpoint(source_plines);
             let merged = Self::remove_ccw_plines_covered_by_others(merged);
             return Self::build_from_signed_plines(merged, Vec::new());
         }
@@ -2571,16 +2893,7 @@ where
                     &other.ccw_plines[0].polyline,
                     BooleanOp::Xor,
                 );
-                let final_ccw = result
-                    .pos_plines
-                    .into_iter()
-                    .map(|rp| Self::normalize_ccw(rp.pline))
-                    .collect::<Vec<_>>();
-                let final_cw = result
-                    .neg_plines
-                    .into_iter()
-                    .map(|rp| Self::normalize_cw(rp.pline))
-                    .collect::<Vec<_>>();
+                let (final_ccw, final_cw) = Self::signed_plines_from_boolean_result(result);
                 return Self::build_from_nested_signed_plines(final_ccw, final_cw);
             }
         }
@@ -2609,16 +2922,7 @@ where
                 // needed for intersecting arc-heavy contours where composing two differences
                 // through a later union can lose a valid piece.
             } else {
-                let final_ccw = result
-                    .pos_plines
-                    .into_iter()
-                    .map(|rp| Self::normalize_ccw(rp.pline))
-                    .collect::<Vec<_>>();
-                let final_cw = result
-                    .neg_plines
-                    .into_iter()
-                    .map(|rp| Self::normalize_cw(rp.pline))
-                    .collect::<Vec<_>>();
+                let (final_ccw, final_cw) = Self::signed_plines_from_boolean_result(result);
 
                 return Self::build_from_nested_signed_plines(final_ccw, final_cw);
             }
@@ -2926,23 +3230,11 @@ where
         let mut final_ccw = Vec::new();
         let mut final_cw = Vec::new();
 
-        let add_ccw = |pline: Polyline<T>, final_ccw: &mut Vec<Polyline<T>>| {
-            final_ccw.push(Self::normalize_ccw(pline));
-        };
-
-        let add_cw = |pline: Polyline<T>, final_cw: &mut Vec<Polyline<T>>| {
-            final_cw.push(Self::normalize_cw(pline));
-        };
-
         for boolean_result in all_results {
             // Each lower-level result can contain positive material or negative holes; normalize
             // them back into shape bins before retaining untouched input loops.
-            for rp in boolean_result.pos_plines {
-                add_ccw(rp.pline, &mut final_ccw);
-            }
-            for rp in boolean_result.neg_plines {
-                add_cw(rp.pline, &mut final_cw);
-            }
+            Self::extend_ccw_from_result_plines(&mut final_ccw, boolean_result.pos_plines);
+            Self::extend_cw_from_result_plines(&mut final_cw, boolean_result.neg_plines);
         }
 
         if matches!(op, BooleanOp::Or) {
@@ -2961,22 +3253,22 @@ where
             BooleanOp::Or | BooleanOp::Xor => {
                 for (i, used) in self_used_ccw.iter().enumerate() {
                     if !used {
-                        add_ccw(self.ccw_plines[i].polyline.clone(), &mut final_ccw);
+                        Self::push_ccw_pline(&mut final_ccw, self.ccw_plines[i].polyline.clone());
                     }
                 }
                 for (i, used) in self_used_cw.iter().enumerate() {
                     if !used {
-                        add_cw(self.cw_plines[i].polyline.clone(), &mut final_cw);
+                        Self::push_cw_pline(&mut final_cw, self.cw_plines[i].polyline.clone());
                     }
                 }
                 for (j, used) in othr_used_ccw.iter().enumerate() {
                     if !used {
-                        add_ccw(other.ccw_plines[j].polyline.clone(), &mut final_ccw);
+                        Self::push_ccw_pline(&mut final_ccw, other.ccw_plines[j].polyline.clone());
                     }
                 }
                 for (j, used) in othr_used_cw.iter().enumerate() {
                     if !used {
-                        add_cw(other.cw_plines[j].polyline.clone(), &mut final_cw);
+                        Self::push_cw_pline(&mut final_cw, other.cw_plines[j].polyline.clone());
                     }
                 }
             }
@@ -2987,12 +3279,12 @@ where
                 // For difference, only untouched loops from the left-hand shape remain.
                 for (i, used) in self_used_ccw.iter().enumerate() {
                     if !used {
-                        add_ccw(self.ccw_plines[i].polyline.clone(), &mut final_ccw);
+                        Self::push_ccw_pline(&mut final_ccw, self.ccw_plines[i].polyline.clone());
                     }
                 }
                 for (i, used) in self_used_cw.iter().enumerate() {
                     if !used {
-                        add_cw(self.cw_plines[i].polyline.clone(), &mut final_cw);
+                        Self::push_cw_pline(&mut final_cw, self.cw_plines[i].polyline.clone());
                     }
                 }
             }
@@ -3027,6 +3319,16 @@ where
         }
 
         Self::build_from_nested_signed_plines(final_ccw, final_cw)
+    }
+
+    /// Perform a boolean operation against a borrowed shape view.
+    pub fn boolean_view(&self, other: &ShapeView<'_, T>, op: BooleanOp) -> Self {
+        let self_view = self.as_view();
+        if let Some(result) = self_view.borrowed_boolean_fast_path(other, op) {
+            return result;
+        }
+
+        self.boolean(&other.to_owned_shape(), op)
     }
 
     /// Union

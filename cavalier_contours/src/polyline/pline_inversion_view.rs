@@ -18,6 +18,7 @@ impl<'a, P> PlineInversionView<'a, P>
 where
     P: PlineSource + ?Sized,
 {
+    /// Create an inverted view over `original`.
     pub fn new(original: &'a P) -> Self {
         Self { original }
     }

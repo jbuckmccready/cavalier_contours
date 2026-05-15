@@ -1,5 +1,6 @@
 //! This module has all the types and functions associated with polylines, polyline vertexes, and
 //! polyline segments.
+#[doc(hidden)]
 pub mod internal;
 mod pline;
 mod pline_inversion_view;

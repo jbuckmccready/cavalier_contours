@@ -2217,6 +2217,7 @@ impl<'a, P> VertexIter<'a, P>
 where
     P: PlineSource + ?Sized,
 {
+    /// Create an iterator over all vertexes in `pline`.
     #[inline]
     pub fn new(pline: &'a P) -> Self {
         Self {
@@ -2306,6 +2307,7 @@ impl<'a, P> SegmentIter<'a, P>
 where
     P: PlineSource + ?Sized,
 {
+    /// Create an iterator over all segments in `pline`.
     #[inline]
     pub fn new(pline: &'a P) -> Self {
         Self {
@@ -2391,6 +2393,7 @@ pub struct PlineSegIndexIterator {
 }
 
 impl PlineSegIndexIterator {
+    /// Create an iterator over segment start/end index pairs.
     #[inline]
     pub fn new(vertex_count: usize, is_closed: bool) -> PlineSegIndexIterator {
         let remaining = if vertex_count < 2 {

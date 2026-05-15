@@ -69,6 +69,7 @@ impl<T> PlineOffsetOptions<'_, T>
 where
     T: Real,
 {
+    /// Create default offset options.
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -107,6 +108,7 @@ pub enum PlineContainsResult {
     Intersected,
 }
 
+/// Options controlling polyline containment checks.
 #[derive(Debug)]
 pub struct PlineContainsOptions<'a, T = f64>
 where
@@ -122,6 +124,7 @@ impl<T> PlineContainsOptions<'_, T>
 where
     T: Real,
 {
+    /// Create default containment options.
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -180,6 +183,7 @@ impl<P> BooleanResultPline<P>
 where
     P: PlineCreation,
 {
+    /// Create a boolean result polyline with its source slices.
     #[inline]
     pub fn new(pline: P, subslices: Vec<BooleanPlineSlice<P::Num>>) -> Self {
         Self { pline, subslices }
@@ -221,6 +225,7 @@ impl<P> BooleanResult<P>
 where
     P: PlineCreation,
 {
+    /// Create a boolean result from positive and negative result polylines.
     #[inline]
     pub fn new(
         pos_plines: Vec<BooleanResultPline<P>>,
@@ -234,11 +239,16 @@ where
         }
     }
 
+    /// Create an empty boolean result with the given result information.
     #[inline]
     pub fn empty(result_info: BooleanResultInfo) -> Self {
         Self::new(Vec::new(), Vec::new(), result_info)
     }
 
+    /// Create a boolean result from whole positive and negative polylines.
+    ///
+    /// The resulting polylines have empty `subslices` metadata because they were not stitched from
+    /// recorded slices.
     #[inline]
     pub fn from_whole_plines<I>(
         pos_plines: I,
@@ -262,6 +272,7 @@ where
     }
 }
 
+/// Options controlling polyline boolean operations.
 #[derive(Debug)]
 pub struct PlineBooleanOptions<'a, T = f64>
 where
@@ -282,6 +293,7 @@ impl<T> PlineBooleanOptions<'_, T>
 where
     T: Real,
 {
+    /// Create default polyline boolean options.
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -315,6 +327,7 @@ pub enum SelfIntersectsInclude {
     Global,
 }
 
+/// Options controlling self-intersection scans.
 #[derive(Debug)]
 pub struct PlineSelfIntersectOptions<'a, T = f64>
 where
@@ -333,6 +346,7 @@ impl<T> PlineSelfIntersectOptions<'_, T>
 where
     T: Real,
 {
+    /// Create default self-intersection scan options.
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -353,6 +367,7 @@ where
     }
 }
 
+/// Options controlling intersection searches between two polylines.
 #[derive(Debug)]
 pub struct FindIntersectsOptions<'a, T = f64>
 where
@@ -368,6 +383,7 @@ impl<T> FindIntersectsOptions<'_, T>
 where
     T: Real,
 {
+    /// Create default intersection search options.
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -399,6 +415,7 @@ pub struct PlineBasicIntersect<T = f64> {
 }
 
 impl<T> PlineBasicIntersect<T> {
+    /// Create a point-intersection record.
     #[inline]
     pub fn new(start_index1: usize, start_index2: usize, point: Vector2<T>) -> Self {
         Self {
@@ -423,6 +440,7 @@ pub struct PlineOverlappingIntersect<T = f64> {
 }
 
 impl<T> PlineOverlappingIntersect<T> {
+    /// Create an overlapping-intersection record.
     #[inline]
     pub fn new(
         start_index1: usize,
@@ -443,16 +461,20 @@ impl<T> PlineOverlappingIntersect<T> {
 /// [PlineOverlappingIntersect].
 #[derive(Debug, Clone, Copy)]
 pub enum PlineIntersect<T = f64> {
+    /// A single point intersection.
     Basic(PlineBasicIntersect<T>),
+    /// A coincident segment overlap.
     Overlapping(PlineOverlappingIntersect<T>),
 }
 
 impl<T> PlineIntersect<T> {
+    /// Create a [PlineIntersect::Basic] value.
     #[inline]
     pub fn new_basic(start_index1: usize, start_index2: usize, point: Vector2<T>) -> Self {
         PlineIntersect::Basic(PlineBasicIntersect::new(start_index1, start_index2, point))
     }
 
+    /// Create a [PlineIntersect::Overlapping] value.
     #[inline]
     pub fn new_overlapping(
         start_index1: usize,
@@ -475,7 +497,9 @@ where
     T: Real,
     C: ControlFlow,
 {
+    /// Visit a single point intersection.
     fn visit_basic_intr(&mut self, intr: PlineBasicIntersect<T>) -> C;
+    /// Visit a coincident segment overlap.
     fn visit_overlapping_intr(&mut self, intr: PlineOverlappingIntersect<T>) -> C;
 }
 
@@ -496,12 +520,16 @@ where
     }
 }
 
-// Simple struct that bundles up the context information for visiting intersections of two polylines.
-// Note: two of these are used when making a visit, one for each polyline.
+/// Context information for one side of a two-polyline intersection visit.
+///
+/// Two contexts are passed to the visitor, one for each source polyline.
 #[derive(Default, Copy, Clone)]
 pub struct PlineIntersectVisitContext<T> {
+    /// Start vertex index of the segment currently being tested.
     pub vertex_index: usize,
+    /// First vertex of the tested segment.
     pub v1: PlineVertex<T>,
+    /// Second vertex of the tested segment.
     pub v2: PlineVertex<T>,
 }
 
@@ -543,6 +571,7 @@ where
     T: Real,
     C: ControlFlow,
 {
+    /// Visit a polyline vertex.
     fn visit_vertex(&mut self, vertex: PlineVertex<T>) -> C;
 }
 
@@ -564,6 +593,7 @@ where
     T: Real,
     C: ControlFlow,
 {
+    /// Visit a polyline segment represented by its two endpoint vertexes.
     fn visit_seg(&mut self, v1: PlineVertex<T>, v2: PlineVertex<T>) -> C;
 }
 
@@ -582,11 +612,14 @@ where
 /// Represents a collection of basic and overlapping polyline intersects.
 #[derive(Debug, Clone)]
 pub struct PlineIntersectsCollection<T = f64> {
+    /// Single point intersections.
     pub basic_intersects: Vec<PlineBasicIntersect<T>>,
+    /// Coincident segment overlaps.
     pub overlapping_intersects: Vec<PlineOverlappingIntersect<T>>,
 }
 
 impl<T> PlineIntersectsCollection<T> {
+    /// Create an intersection collection from point and overlapping intersections.
     #[inline]
     pub fn new(
         basic_intersects: Vec<PlineBasicIntersect<T>>,
@@ -598,6 +631,7 @@ impl<T> PlineIntersectsCollection<T> {
         }
     }
 
+    /// Create an empty intersection collection.
     #[inline]
     pub fn new_empty() -> Self {
         Self::new(Vec::new(), Vec::new())
@@ -627,6 +661,7 @@ impl<T> BooleanPlineSlice<T>
 where
     T: Real,
 {
+    /// Create a boolean slice from an open polyline view.
     #[inline]
     pub fn from_open_pline_slice(
         data: &PlineViewData<T>,
@@ -647,6 +682,7 @@ where
         }
     }
 
+    /// Create a boolean slice from an overlapping-slice record.
     #[inline]
     pub fn from_overlapping<P>(
         source: &P,
@@ -675,6 +711,7 @@ where
         result
     }
 
+    /// View this slice against its source polyline.
     #[inline]
     pub fn view<'a, P>(&self, source: &'a P) -> PlineView<'a, P>
     where

@@ -35,15 +35,19 @@ pub struct cavc_aabbindex(pub StaticAABB2DIndex<f64>);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_point {
+    /// X coordinate.
     pub x: f64,
+    /// Y coordinate.
     pub y: f64,
 }
 
 impl cavc_point {
+    /// Create a point from x and y coordinates.
     pub fn new(x: f64, y: f64) -> Self {
         cavc_point { x, y }
     }
 
+    /// Convert an internal vector to the FFI point type.
     pub fn from_internal(v: Vector2<f64>) -> Self {
         cavc_point::new(v.x, v.y)
     }
@@ -53,16 +57,21 @@ impl cavc_point {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_vertex {
+    /// X coordinate.
     pub x: f64,
+    /// Y coordinate.
     pub y: f64,
+    /// Polyline bulge value describing the outgoing segment arc.
     pub bulge: f64,
 }
 
 impl cavc_vertex {
+    /// Create a vertex from coordinates and a bulge value.
     pub fn new(x: f64, y: f64, bulge: f64) -> Self {
         cavc_vertex { x, y, bulge }
     }
 
+    /// Convert an internal polyline vertex to the FFI vertex type.
     pub fn from_internal(v: PlineVertex<f64>) -> Self {
         cavc_vertex::new(v.x, v.y, v.bulge)
     }
@@ -79,10 +88,15 @@ pub struct cavc_pline(pub Polyline<f64>);
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_pline_parallel_offset_o {
+    /// Optional precomputed AABB index for the input polyline; may be null.
     pub aabb_index: *const cavc_aabbindex,
+    /// Position equality epsilon.
     pub pos_equal_eps: f64,
+    /// Slice stitching epsilon.
     pub slice_join_eps: f64,
+    /// Offset validity distance epsilon.
     pub offset_dist_eps: f64,
+    /// Nonzero to handle self intersections.
     pub handle_self_intersects: u8,
 }
 
@@ -187,7 +201,9 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset_o_init(
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_pline_boolean_o {
+    /// Optional precomputed AABB index for the first input polyline; may be null.
     pub pline1_aabb_index: *const cavc_aabbindex,
+    /// Position equality epsilon.
     pub pos_equal_eps: f64,
     /// NOTE: optional parameter, set to NaN for None.
     pub collapsed_area_eps: f64,
@@ -302,15 +318,20 @@ fn boolean_op_from_u32(i: u32) -> Option<BooleanOp> {
 
 /// FFI representation of SelfIntersectsInclude enum
 pub const CAVC_SELF_INTERSECTS_INCLUDE_ALL: u32 = 0;
+/// Include only local self intersections.
 pub const CAVC_SELF_INTERSECTS_INCLUDE_LOCAL: u32 = 1;
+/// Include only global self intersections.
 pub const CAVC_SELF_INTERSECTS_INCLUDE_GLOBAL: u32 = 2;
 
 /// FFI representation of [PlineSelfIntersectOptions].
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_pline_self_intersect_o {
+    /// Optional precomputed AABB index for the input polyline; may be null.
     pub pline_aabb_index: *const cavc_aabbindex,
+    /// Position equality epsilon.
     pub pos_equal_eps: f64,
+    /// One of the `CAVC_SELF_INTERSECTS_INCLUDE_*` constants.
     pub include: u32,
 }
 
@@ -418,7 +439,9 @@ pub unsafe extern "C" fn cavc_pline_self_intersect_o_init(
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_pline_contains_o {
+    /// Optional precomputed AABB index for the first input polyline; may be null.
     pub pline1_aabb_index: *const cavc_aabbindex,
+    /// Position equality epsilon.
     pub pos_equal_eps: f64,
 }
 
@@ -527,6 +550,7 @@ impl Drop for cavc_plinelist {
 }
 
 impl cavc_plinelist {
+    /// Convert internal polylines into an owned FFI polyline list.
     pub fn from_internal<I>(plines: I) -> *mut cavc_plinelist
     where
         I: IntoIterator<Item = Polyline>,
@@ -1507,9 +1531,13 @@ pub unsafe extern "C" fn cavc_pline_scan_for_self_intersect(
 
 /// FFI Representation of PlineContainsResult enum
 pub const CAVC_CONTAINS_RESULT_INVALID_INPUT: u32 = 0;
+/// First polyline is fully inside the second polyline.
 pub const CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2: u32 = 1;
+/// Second polyline is fully inside the first polyline.
 pub const CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1: u32 = 2;
+/// Polylines are disjoint.
 pub const CAVC_CONTAINS_RESULT_DISJOINT: u32 = 3;
+/// Polylines intersect.
 pub const CAVC_CONTAINS_RESULT_INTERSECTED: u32 = 4;
 
 /// Wraps [PlineSource::contains_opt].
@@ -1927,8 +1955,11 @@ pub unsafe extern "C" fn cavc_plinelist_take(
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_shape_offset_o {
+    /// Position equality epsilon.
     pub pos_equal_eps: f64,
+    /// Offset validity distance epsilon.
     pub offset_dist_eps: f64,
+    /// Slice stitching epsilon.
     pub slice_join_eps: f64,
 }
 

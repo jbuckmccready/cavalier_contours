@@ -25,16 +25,15 @@ use super::{
 
 /// Core trait for plotting polylines data, supports plotting multiple polylines.
 pub trait PlinesPlotData {
+    /// Polyline source type yielded by this data set.
     type Source: PlineSource<Num = f64>;
 
-    // `visitor` is a closure that takes a polyline and its bounds used to plot the polyline (bounds used
-    // to cull from scene). When implementing this trait, the visitor should be called for each
-    // polyline (along with its bounds) to be plotted.
+    /// Visit each polyline and its bounds for plotting and culling.
     fn plines<F>(&self, visitor: F)
     where
         F: FnMut(&Self::Source, AABB);
 
-    // Total bounds of all polylines (used for zoom to fit and culling from scene).
+    /// Return the total bounds of all polylines.
     fn bounds(&self) -> AABB;
 }
 
@@ -66,6 +65,7 @@ pub struct PlinePlotData<'a> {
 }
 
 impl<'a> PlinePlotData<'a> {
+    /// Create plot data for one polyline.
     pub fn new(pline: &'a Polyline) -> Self {
         let bounds = match pline.vertex_count() {
             0 => empty_aabb(),
@@ -130,6 +130,7 @@ pub struct PlinesPlotItem<T> {
 }
 
 impl<T> PlinesPlotItem<T> {
+    /// Create a plot item from polyline plot data.
     pub fn new(data: T) -> Self {
         Self {
             data,
@@ -140,16 +141,19 @@ impl<T> PlinesPlotItem<T> {
         }
     }
 
+    /// Set the vertex marker color.
     pub fn vertex_color(mut self, color: epaint::Color32) -> Self {
         self.vertex_color = color;
         self
     }
 
+    /// Set the stroke color.
     pub fn stroke_color(mut self, color: epaint::Color32) -> Self {
         self.stroke_color = color;
         self
     }
 
+    /// Set the fill color.
     pub fn fill_color(mut self, color: epaint::Color32) -> Self {
         self.fill_color = color;
         self

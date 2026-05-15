@@ -30,3 +30,7 @@ static_aabb2d_index = "2.0"
 [dev-dependencies]
 geo = "0.32"
 proptest = "1"
+
+[[bench]]
+name = "shape_borrowed_api"
+harness = false

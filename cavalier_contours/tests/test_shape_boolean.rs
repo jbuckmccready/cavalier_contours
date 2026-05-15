@@ -13,7 +13,7 @@ use cavalier_contours::polyline::{
     BooleanOp, BooleanResultInfo, PlineInversionView, PlineOrientation, PlineSource,
     PlineSourceMut, Polyline, seg_arc_radius_and_center, seg_closest_point,
 };
-use cavalier_contours::shape_algorithms::{Shape, ShapeOffsetOptions};
+use cavalier_contours::shape_algorithms::{Shape, ShapeOffsetOptions, ShapeView};
 use cavalier_contours::{assert_fuzzy_eq, pline_closed, pline_open};
 use std::f64::consts::PI;
 use std::{env, fmt::Write as _, fs, path::Path};
@@ -1326,6 +1326,121 @@ fn shape_boolean_empty_identities_are_valid() {
     assert_boolean_result(&solid, &empty, BooleanOp::Not, 100.0, 1, 0, &samples);
     assert_boolean_result(&empty, &solid, BooleanOp::Not, 0.0, 0, 0, &samples);
     assert_boolean_result(&solid, &empty, BooleanOp::Xor, 100.0, 1, 0, &samples);
+}
+
+#[test]
+fn shape_view_from_plines_materializes_like_owned_shape_without_consuming_inputs() {
+    let plines = vec![
+        create_rectangle(-10.0, -10.0, 10.0, 10.0),
+        create_cw_rectangle(-4.0, -4.0, 4.0, 4.0),
+        create_rectangle(20.0, -5.0, 30.0, 5.0),
+    ];
+    let samples = [
+        (-8.0, 0.0),
+        (0.0, 0.0),
+        (8.0, 0.0),
+        (25.0, 0.0),
+        (35.0, 0.0),
+    ];
+
+    let borrowed = ShapeView::from_plines(plines.iter());
+    assert_eq!(borrowed.ccw_plines.len(), 2);
+    assert_eq!(borrowed.cw_plines.len(), 1);
+    assert_eq!(plines[0].vertex_count(), 4);
+
+    let owned = Shape::from_plines(plines.clone());
+    let materialized = borrowed.to_owned_shape();
+    assert_shapes_equivalent_by_samples(&owned, &materialized, &samples);
+
+    let signed = ShapeView::from_signed_plines([&plines[0], &plines[2]], [&plines[1]]);
+    assert_shapes_equivalent_by_samples(&owned, &signed.to_owned_shape(), &samples);
+
+    let view_from_shape = owned.as_view();
+    assert_shapes_equivalent_by_samples(&owned, &view_from_shape.to_owned_shape(), &samples);
+}
+
+#[test]
+fn shape_view_boolean_matches_owned_shape_for_all_boolean_ops() {
+    let a_plines = vec![
+        create_rectangle(-20.0, -20.0, 20.0, 20.0),
+        create_cw_rectangle(-8.0, -8.0, 8.0, 8.0),
+        create_rectangle(28.0, -6.0, 40.0, 6.0),
+    ];
+    let b_plines = vec![
+        create_rectangle(-5.0, -25.0, 32.0, 12.0),
+        create_cw_rectangle(2.0, -4.0, 10.0, 4.0),
+    ];
+    let a_owned = Shape::from_plines(a_plines.clone());
+    let b_owned = Shape::from_plines(b_plines.clone());
+    let a_view = ShapeView::from_plines(a_plines.iter());
+    let b_view = ShapeView::from_plines(b_plines.iter());
+    let samples = [
+        (-18.0, 0.0),
+        (-6.0, 0.0),
+        (0.0, 0.0),
+        (6.0, 0.0),
+        (15.0, 0.0),
+        (30.0, 0.0),
+        (36.0, 0.0),
+    ];
+
+    for op in [
+        BooleanOp::Or,
+        BooleanOp::And,
+        BooleanOp::Not,
+        BooleanOp::Xor,
+    ] {
+        let owned = a_owned.boolean(&b_owned, op);
+        let borrowed = a_view.boolean(&b_view, op);
+        assert_shapes_equivalent_by_samples(&owned, &borrowed, &samples);
+
+        let mixed = a_owned.boolean_view(&b_view, op);
+        assert_shapes_equivalent_by_samples(&owned, &mixed, &samples);
+    }
+}
+
+#[test]
+fn shape_view_boolean_fast_paths_match_owned_shape() {
+    let a_plines = vec![
+        create_rectangle(0.0, 0.0, 12.0, 12.0),
+        create_rectangle(18.0, 0.0, 30.0, 12.0),
+    ];
+    let b_plines = vec![create_rectangle(6.0, -4.0, 24.0, 8.0)];
+    let a_owned = Shape::from_plines(a_plines.clone());
+    let b_owned = Shape::from_plines(b_plines.clone());
+    let a_view = ShapeView::from_plines(a_plines.iter());
+    let b_view = ShapeView::from_plines(b_plines.iter());
+    let samples = [
+        (2.0, 2.0),
+        (8.0, 2.0),
+        (15.0, 2.0),
+        (20.0, 2.0),
+        (28.0, 2.0),
+    ];
+
+    let owned_union = a_owned.boolean(&b_owned, BooleanOp::Or);
+    let borrowed_union = a_view.boolean(&b_view, BooleanOp::Or);
+    assert_shapes_equivalent_by_samples(&owned_union, &borrowed_union, &samples);
+
+    let one_a_plines = vec![create_rectangle(0.0, 0.0, 20.0, 20.0)];
+    let one_b_plines = vec![create_rectangle(8.0, -4.0, 26.0, 12.0)];
+    let one_a_owned = Shape::from_plines(one_a_plines.clone());
+    let one_b_owned = Shape::from_plines(one_b_plines.clone());
+    let one_a_view = ShapeView::from_plines(one_a_plines.iter());
+    let one_b_view = ShapeView::from_plines(one_b_plines.iter());
+    let single_shell_samples = [
+        (4.0, 4.0),
+        (10.0, 4.0),
+        (18.0, 4.0),
+        (24.0, 4.0),
+        (10.0, 16.0),
+    ];
+
+    for op in [BooleanOp::And, BooleanOp::Not, BooleanOp::Xor] {
+        let owned = one_a_owned.boolean(&one_b_owned, op);
+        let borrowed = one_a_view.boolean(&one_b_view, op);
+        assert_shapes_equivalent_by_samples(&owned, &borrowed, &single_shell_samples);
+    }
 }
 
 #[test]
@@ -4013,6 +4128,82 @@ fn shape_boolean_shared_hole_boundaries_are_regularized() {
             assert_boolean_samples(&b, &a, &result, op, &samples);
         }
     }
+}
+
+#[test]
+fn shape_boolean_near_coincident_island_in_hole_is_not_cancelled() {
+    // Opposite-sign loops should cancel only when they are actually coincident. A too-loose
+    // equality check fills this epsilon-wide moat between the donut hole and the inserted island.
+    let moat = 1e-4;
+    let donut = Shape::from_plines([
+        create_rectangle(-10.0, -10.0, 10.0, 10.0),
+        create_cw_rectangle(-5.0, -5.0, 5.0, 5.0),
+    ]);
+    let island = Shape::from_plines([create_rectangle(
+        -5.0 + moat,
+        -5.0 + moat,
+        5.0 - moat,
+        5.0 - moat,
+    )]);
+    let expected_island_area = (10.0 - 2.0 * moat) * (10.0 - 2.0 * moat);
+    let samples = [
+        (0.0, 0.0),
+        (4.99995, 0.0),
+        (5.00005, 0.0),
+        (8.0, 0.0),
+        (11.0, 0.0),
+    ];
+
+    assert_boolean_result(
+        &donut,
+        &island,
+        BooleanOp::Or,
+        300.0 + expected_island_area,
+        2,
+        1,
+        &samples,
+    );
+    assert_boolean_result(&donut, &island, BooleanOp::And, 0.0, 0, 0, &samples);
+    assert_boolean_result(&donut, &island, BooleanOp::Not, 300.0, 1, 1, &samples);
+    assert_boolean_result(
+        &donut,
+        &island,
+        BooleanOp::Xor,
+        300.0 + expected_island_area,
+        2,
+        1,
+        &samples,
+    );
+}
+
+#[test]
+fn shape_boolean_large_coordinate_hole_overlap_keeps_area_and_membership() {
+    // Large offsets used to expose cancellation in area calculations and lower-level clipping.
+    // The expected values are intentionally small relative to the coordinate magnitude.
+    let base = 1_000_000_000.0;
+    let a = Shape::from_plines([
+        create_rectangle(base, base, base + 100.0, base + 100.0),
+        create_cw_rectangle(base + 20.0, base + 20.0, base + 80.0, base + 80.0),
+    ]);
+    let b = Shape::from_plines([create_rectangle(
+        base + 50.0,
+        base - 10.0,
+        base + 120.0,
+        base + 60.0,
+    )]);
+    let samples = [
+        (base + 10.0, base + 10.0),
+        (base + 40.0, base + 40.0),
+        (base + 55.0, base + 10.0),
+        (base + 55.0, base + 40.0),
+        (base + 90.0, base + 50.0),
+        (base + 110.0, base + 50.0),
+    ];
+
+    assert_boolean_area_and_samples(&a, &b, BooleanOp::Or, 9500.0, &samples);
+    assert_boolean_area_and_samples(&a, &b, BooleanOp::And, 1800.0, &samples);
+    assert_boolean_area_and_samples(&a, &b, BooleanOp::Not, 4600.0, &samples);
+    assert_boolean_area_and_samples(&a, &b, BooleanOp::Xor, 7700.0, &samples);
 }
 
 #[test]

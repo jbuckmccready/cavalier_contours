@@ -75,6 +75,7 @@ impl<T> PlineVertex<T>
 where
     T: Real,
 {
+    /// Create a polyline vertex from coordinates and a bulge value.
     #[inline]
     pub fn new(x: T, y: T, bulge: T) -> Self {
         PlineVertex { x, y, bulge }

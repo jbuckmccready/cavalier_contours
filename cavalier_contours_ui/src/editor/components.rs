@@ -1,6 +1,9 @@
+//! Reusable egui widgets for polyline editing.
+
 use cavalier_contours::polyline::PlineVertex;
 use eframe::egui::Ui;
 
+/// Show a vertex table and return true when any vertex value changed.
 pub fn show_vertex_table(ui: &mut Ui, vertex_data: &mut Vec<PlineVertex>, table_id: &str) -> bool {
     use egui_extras::{Column, TableBuilder};
 
@@ -80,6 +83,7 @@ pub fn show_vertex_table(ui: &mut Ui, vertex_data: &mut Vec<PlineVertex>, table_
     changed
 }
 
+/// Show apply/cancel controls for pending editor changes.
 pub fn show_pending_changes_ui<F>(
     ui: &mut Ui,
     has_pending_changes: bool,
