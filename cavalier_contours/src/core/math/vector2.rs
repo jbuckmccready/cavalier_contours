@@ -1,9 +1,30 @@
 use crate::core::traits::Real;
 use std::{fmt::Display, ops};
 
+/// A 2D vector with x and y components.
+///
+/// This is the fundamental 2D vector type used throughout the library for representing
+/// points, directions, and performing vector operations. The type parameter `T` defaults
+/// to `f64` but can be any type that implements the [`Real`] trait.
+///
+/// # Examples
+///
+/// ```
+/// # use cavalier_contours::core::math::{Vector2, vec2};
+/// let v1 = Vector2::new(3.0, 4.0);
+/// let v2 = vec2(1.0, 2.0); // shorthand constructor
+///
+/// // Vector operations
+/// let sum = v1 + v2;
+/// let dot_product = v1.dot(v2);
+/// let length = v1.length();
+/// let normalized = v1.normalize();
+/// ```
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct Vector2<T = f64> {
+    /// The x-coordinate component.
     pub x: T,
+    /// The y-coordinate component.
     pub y: T,
 }
 
@@ -68,6 +89,22 @@ where
         self.scale(T::one() / self.length())
     }
 
+    /// Normalize the vector unless it is too small to do so robustly.
+    ///
+    /// Returns a zero vector when `length_squared <= fuzzy_epsilon^2`.
+    ///
+    /// This guards geometry algorithms against degenerate segments (for example, repeated input
+    /// points during parallel offset) where `normalize()` can produce unstable results.
+    #[inline]
+    pub fn safe_normalize(&self) -> Self {
+        let eps = T::fuzzy_epsilon();
+        if self.length_squared() <= eps * eps {
+            Vector2::zero()
+        } else {
+            self.normalize()
+        }
+    }
+
     /// Fuzzy equal comparison with another vector using `fuzzy_epsilon` given.
     #[inline]
     pub fn fuzzy_eq_eps(&self, other: Self, fuzzy_epsilon: T) -> bool {
@@ -90,6 +127,15 @@ where
     #[inline]
     pub fn unit_perp(&self) -> Self {
         self.perp().normalize()
+    }
+
+    /// Create a perpendicular unit vector, or zero for near-zero inputs.
+    ///
+    /// Example breakdown case: offsetting a segment whose endpoints are effectively the same point.
+    /// A plain `unit_perp()` is unstable there, while this keeps the offset step finite.
+    #[inline]
+    pub fn safe_unit_perp(&self) -> Self {
+        self.perp().safe_normalize()
     }
 
     /// Rotate this point around an `origin` point by some `angle` in radians.
@@ -144,6 +190,24 @@ mod serde_impl {
         }
     }
 }
+#[cfg(feature = "serde")]
+// Re-export trait implementations for serde support
+// Note: clippy may warn about unused imports, but these are needed for trait impls
+#[allow(unused_imports)]
+pub use serde_impl::*;
+
+/// Shorthand constructor for creating a [`Vector2`].
+///
+/// This is a convenience function equivalent to `Vector2::new(x, y)`.
+///
+/// # Examples
+///
+/// ```
+/// # use cavalier_contours::core::math::vec2;
+/// let v = vec2(3.0, 4.0);
+/// assert_eq!(v.x, 3.0);
+/// assert_eq!(v.y, 4.0);
+/// ```
 #[inline(always)]
 pub fn vec2<T>(x: T, y: T) -> Vector2<T>
 where

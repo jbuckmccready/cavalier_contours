@@ -7,7 +7,6 @@ edition.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 license.workspace = true
-readme.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 version.workspace = true
@@ -17,4 +16,4 @@ version.workspace = true
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-cavalier_contours = {version = "0.4", path = "../cavalier_contours"}
+cavalier_contours = {version = "0.7", path = "../cavalier_contours"}

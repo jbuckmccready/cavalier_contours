@@ -240,18 +240,18 @@ fn plot_area(
                 rpline.spatial_index = pline.create_aabb_index();
             } else if *dragging {
                 plot_ui.translate_bounds(-plot_ui.pointer_coordinate_drag_delta());
-            } else if plot_ui.ctx().input(|i| i.pointer.any_pressed()) {
-                if let Some(coord) = plot_ui.ctx().pointer_interact_pos() {
-                    let found_vertex = find_near_vertex(coord, plot_ui, 0, &*shape1)
-                        .or_else(|| find_near_vertex(coord, plot_ui, 1, &*shape2));
+            } else if plot_ui.ctx().input(|i| i.pointer.any_pressed())
+                && let Some(coord) = plot_ui.ctx().pointer_interact_pos()
+            {
+                let found_vertex = find_near_vertex(coord, plot_ui, 0, &*shape1)
+                    .or_else(|| find_near_vertex(coord, plot_ui, 1, &*shape2));
 
-                    if let Some(gv) = found_vertex {
-                        *grabbed_vertex = Some(gv);
-                    }
-
-                    // If we didn't grab a vertex, treat the drag as a plot pan.
-                    *dragging = grabbed_vertex.is_none();
+                if let Some(gv) = found_vertex {
+                    *grabbed_vertex = Some(gv);
                 }
+
+                // If we didn't grab a vertex, treat the drag as a plot pan.
+                *dragging = grabbed_vertex.is_none();
             }
 
             if boolean_op.is_none() {

@@ -329,43 +329,152 @@ pub struct PrunedSlices<T> {
     pub start_of_pline2_overlapping_slices: usize,
 }
 
-pub fn prune_slices<P, R, T, F, U>(
+/// Prunes slices from polylines based on the specified boolean operation.
+///
+/// This function slices both polylines at their intersection points and filters the resulting
+/// slices based on the boolean operation's requirements. For example:
+/// - **OR**: Keeps slices that are outside the other polyline
+/// - **AND**: Keeps slices that are inside the other polyline
+/// - **NOT**: Keeps pline1 slices outside pline2, and pline2 slices inside pline1
+/// - **XOR**: Same as NOT (first pass only - XOR requires two passes, see `prune_slices_impl`)
+///
+/// The resulting slices are organized into categories:
+/// 1. Non-overlapping slices from pline1
+/// 2. Non-overlapping slices from pline2
+/// 3. Overlapping slices from pline1
+/// 4. Overlapping slices from pline2
+///
+/// These categorized slices can then be stitched together to form the final boolean result.
+///
+/// # Argument
+///
+/// - `pline1`: First polyline
+/// - `pline2`: Second polyline
+/// - `boolean_info`: Precomputed intersection and overlap information
+/// - `operation`: The boolean operation to perform
+/// - `pos_equal_eps`: Epsilon for position equality comparisons
+///
+/// # Returns
+///
+/// A `PrunedSlices` struct containing the filtered slices organized by category.
+///
+/// # Public Visibility
+///
+/// This method is made public for visualization and testing purposes.
+pub fn prune_slices<P, R, T>(
     pline1: &P,
     pline2: &R,
     boolean_info: &ProcessForBooleanResult<T>,
-    pline1_point_on_slice_pred: &mut F,
-    pline2_point_on_slice_pred: &mut U,
-    set_opposing_direction: bool,
+    operation: BooleanOp,
     pos_equal_eps: T,
 ) -> PrunedSlices<T>
 where
     P: PlineSource<Num = T> + ?Sized,
     R: PlineSource<Num = T> + ?Sized,
     T: Real,
-    F: FnMut(Vector2<T>) -> bool,
-    U: FnMut(Vector2<T>) -> bool,
 {
-    let mut slices_remaining = Vec::new();
-    // slice pline1
-    slice_at_intersects(
+    prune_slices_impl(
         pline1,
-        boolean_info,
-        false,
-        pline1_point_on_slice_pred,
-        &mut slices_remaining,
-        pos_equal_eps,
-    );
-
-    let start_of_pline2_slices = slices_remaining.len();
-    // slice pline2
-    slice_at_intersects(
         pline2,
         boolean_info,
-        true,
-        pline2_point_on_slice_pred,
-        &mut slices_remaining,
+        operation,
+        false,
         pos_equal_eps,
-    );
+    )
+}
+
+// Internal implementation that supports XOR second pass logic
+fn prune_slices_impl<P, R, T>(
+    pline1: &P,
+    pline2: &R,
+    boolean_info: &ProcessForBooleanResult<T>,
+    operation: BooleanOp,
+    xor_second_pass: bool,
+    pos_equal_eps: T,
+) -> PrunedSlices<T>
+where
+    P: PlineSource<Num = T> + ?Sized,
+    R: PlineSource<Num = T> + ?Sized,
+    T: Real,
+{
+    let mut slices_remaining = Vec::new();
+
+    let mut point_in_pline1 = |pt: Vector2<T>| pline1.winding_number(pt) != 0;
+    let mut point_in_pline2 = |pt: Vector2<T>| pline2.winding_number(pt) != 0;
+
+    // slice pline1
+    if xor_second_pass {
+        // For XOR second pass: pline2 NOT pline1
+        slice_at_intersects(
+            pline1,
+            boolean_info,
+            false,
+            &mut point_in_pline2,
+            &mut slices_remaining,
+            pos_equal_eps,
+        );
+    } else {
+        match operation {
+            BooleanOp::Or => slice_at_intersects(
+                pline1,
+                boolean_info,
+                false,
+                &mut |pt: Vector2<T>| !point_in_pline2(pt),
+                &mut slices_remaining,
+                pos_equal_eps,
+            ),
+            BooleanOp::And => slice_at_intersects(
+                pline1,
+                boolean_info,
+                false,
+                &mut point_in_pline2,
+                &mut slices_remaining,
+                pos_equal_eps,
+            ),
+            BooleanOp::Not | BooleanOp::Xor => slice_at_intersects(
+                pline1,
+                boolean_info,
+                false,
+                &mut |pt: Vector2<T>| !point_in_pline2(pt),
+                &mut slices_remaining,
+                pos_equal_eps,
+            ),
+        }
+    }
+
+    let start_of_pline2_slices = slices_remaining.len();
+
+    // slice pline2
+    if xor_second_pass {
+        // For XOR second pass: pline2 NOT pline1
+        slice_at_intersects(
+            pline2,
+            boolean_info,
+            true,
+            &mut |pt: Vector2<T>| !point_in_pline1(pt),
+            &mut slices_remaining,
+            pos_equal_eps,
+        );
+    } else {
+        match operation {
+            BooleanOp::Or | BooleanOp::Xor => slice_at_intersects(
+                pline2,
+                boolean_info,
+                true,
+                &mut |pt: Vector2<T>| !point_in_pline1(pt),
+                &mut slices_remaining,
+                pos_equal_eps,
+            ),
+            BooleanOp::And | BooleanOp::Not => slice_at_intersects(
+                pline2,
+                boolean_info,
+                true,
+                &mut point_in_pline1,
+                &mut slices_remaining,
+                pos_equal_eps,
+            ),
+        }
+    }
 
     let start_of_pline1_overlapping_slices = slices_remaining.len();
 
@@ -389,6 +498,12 @@ where
             .iter()
             .map(|s| BooleanPlineSlice::from_overlapping(pline2, s, false)),
     );
+
+    // Determine set_opposing_direction based on operation
+    let set_opposing_direction = match operation {
+        BooleanOp::Or | BooleanOp::And => false,
+        BooleanOp::Not | BooleanOp::Xor => true,
+    };
 
     if set_opposing_direction != boolean_info.opposing_directions() {
         // invert pline1 directions to match request to set opposing direction
@@ -561,6 +676,7 @@ pub fn stitch_slices_into_closed_polylines<P, R, T, S, O>(
     source_pline2: &R,
     stitch_selector: &S,
     pos_equal_eps: T,
+    collapsed_area_eps: Option<T>,
 ) -> Vec<BooleanResultPline<O>>
 where
     P: PlineSource<Num = T> + ?Sized,
@@ -607,6 +723,12 @@ where
         }
         pline.remove_last();
         pline.set_is_closed(true);
+        if let Some(collapsed_area) = collapsed_area_eps
+            && pline.area().abs() < collapsed_area
+        {
+            // skip slice with area less than collapsed_area_eps
+            return;
+        }
         result.push(BooleanResultPline::new(pline, subslices));
     };
 
@@ -702,6 +824,16 @@ where
         }
     }
 
+    let mut composite_userdata: Vec<u64> = Vec::new();
+    composite_userdata.extend(source_pline1.get_userdata_values());
+    composite_userdata.extend(source_pline2.get_userdata_values());
+
+    for result_item in result.iter_mut() {
+        result_item
+            .pline
+            .set_userdata_values(composite_userdata.iter().copied());
+    }
+
     result
 }
 
@@ -737,15 +869,12 @@ where
     let boolean_info =
         process_for_boolean(pline1, pline2, pline1_aabb_index, options.pos_equal_eps);
 
-    // helper functions to test if point is inside pline1 and pline2
-    let mut point_in_pline1 = |point: Vector2<T>| pline1.winding_number(point) != 0;
-    let mut point_in_pline2 = |point: Vector2<T>| pline2.winding_number(point) != 0;
-
     // helper functions (assuming no intersects between pline1 and pline2)
-    let is_pline1_in_pline2 = || point_in_pline2(pline1.at(0).pos());
-    let is_pline2_in_pline1 = || point_in_pline1(pline2.at(0).pos());
+    let is_pline1_in_pline2 = || pline2.winding_number(pline1.at(0).pos()) != 0;
+    let is_pline2_in_pline1 = || pline1.winding_number(pline2.at(0).pos()) != 0;
 
     let pos_equal_eps = options.pos_equal_eps;
+    let collapsed_area_eps = options.collapsed_area_eps;
 
     match operation {
         BooleanOp::Or => {
@@ -781,15 +910,8 @@ where
             } else {
                 // keep all slices of pline1 that are not in pline2 and all slices of pline2 that
                 // are not in pline1
-                let pruned_slices = prune_slices(
-                    pline1,
-                    pline2,
-                    &boolean_info,
-                    &mut |pt| !point_in_pline2(pt),
-                    &mut |pt| !point_in_pline1(pt),
-                    false,
-                    pos_equal_eps,
-                );
+                let pruned_slices =
+                    prune_slices(pline1, pline2, &boolean_info, BooleanOp::Or, pos_equal_eps);
 
                 let stitch_selector = OrAndStitchSelector::from_pruned_slices(&pruned_slices);
 
@@ -799,6 +921,7 @@ where
                     pline2,
                     &stitch_selector,
                     pos_equal_eps,
+                    collapsed_area_eps,
                 );
 
                 let mut pos_plines = Vec::new();
@@ -848,15 +971,8 @@ where
             } else {
                 // keep all slices from pline1 that are in pline2 and all slices from pline2 that
                 // are in pline1
-                let pruned_slices = prune_slices(
-                    pline1,
-                    pline2,
-                    &boolean_info,
-                    &mut point_in_pline2,
-                    &mut point_in_pline1,
-                    false,
-                    pos_equal_eps,
-                );
+                let pruned_slices =
+                    prune_slices(pline1, pline2, &boolean_info, BooleanOp::And, pos_equal_eps);
 
                 let stitch_selector = OrAndStitchSelector::from_pruned_slices(&pruned_slices);
                 let pos_plines = stitch_slices_into_closed_polylines(
@@ -865,6 +981,7 @@ where
                     pline2,
                     &stitch_selector,
                     pos_equal_eps,
+                    collapsed_area_eps,
                 );
 
                 BooleanResult::new(pos_plines, Vec::new(), BooleanResultInfo::Intersected)
@@ -896,15 +1013,8 @@ where
             } else {
                 // keep all slices from pline1 that are not in pline2 and all slices on pline2 that
                 // are in pline1
-                let pruned_slices = prune_slices(
-                    pline1,
-                    pline2,
-                    &boolean_info,
-                    &mut |pt| !point_in_pline2(pt),
-                    &mut point_in_pline1,
-                    true,
-                    pos_equal_eps,
-                );
+                let pruned_slices =
+                    prune_slices(pline1, pline2, &boolean_info, BooleanOp::Not, pos_equal_eps);
 
                 let stitch_selector = NotXorStitchSelector::from_pruned_slices(&pruned_slices);
 
@@ -914,6 +1024,7 @@ where
                     pline2,
                     &stitch_selector,
                     pos_equal_eps,
+                    collapsed_area_eps,
                 );
 
                 BooleanResult::new(pos_plines, Vec::new(), BooleanResultInfo::Intersected)
@@ -945,15 +1056,8 @@ where
                 }
             } else {
                 // collect pline1 NOT pline2 results
-                let pruned_slices1 = prune_slices(
-                    pline1,
-                    pline2,
-                    &boolean_info,
-                    &mut |pt| !point_in_pline2(pt),
-                    &mut point_in_pline1,
-                    true,
-                    pos_equal_eps,
-                );
+                let pruned_slices1 =
+                    prune_slices(pline1, pline2, &boolean_info, BooleanOp::Not, pos_equal_eps);
 
                 let stitch_selector1 = NotXorStitchSelector::from_pruned_slices(&pruned_slices1);
                 let mut remaining1 = stitch_slices_into_closed_polylines(
@@ -962,16 +1066,16 @@ where
                     pline2,
                     &stitch_selector1,
                     pos_equal_eps,
+                    collapsed_area_eps,
                 );
 
                 // collect pline2 NOT pline1 results
-                let pruned_slices2 = prune_slices(
+                let pruned_slices2 = prune_slices_impl(
                     pline1,
                     pline2,
                     &boolean_info,
-                    &mut point_in_pline2,
-                    &mut |pt| !point_in_pline1(pt),
-                    true,
+                    BooleanOp::Xor,
+                    true, // XOR second pass for pline2 NOT pline1
                     pos_equal_eps,
                 );
 
@@ -982,6 +1086,7 @@ where
                     pline2,
                     &stitch_selector2,
                     pos_equal_eps,
+                    collapsed_area_eps,
                 );
 
                 remaining1.extend(remaining2);

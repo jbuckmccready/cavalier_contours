@@ -2,6 +2,65 @@
 
 All notable changes to the cavalier_contours crate will be documented in this file.
 
+## Unreleased
+
+### Fixed 🐛
+
+- Improved `parallel_offset` robustness for repeat-position/degenerate input by sanitizing repeat
+  vertices in release builds and guarding offset vector normalization against near-zero vectors.
+
+## 0.7.0 - 2026-01-02
+
+### Added ⭐
+
+- ⚠️ BREAKING: Added collapsed area parameter to pline boolean options to allow for pruning
+  collapsed polylines from results. This is only breaking due to struct initialization, if you use
+  default initialization this defaults to no change in behavior ([#71](https://github.com/jbuckmccready/cavalier_contours/pull/71)).
+- Added `examples` crate to workspace to demonstrate cavalier_contours functionality ([#74](https://github.com/jbuckmccready/cavalier_contours/pull/74)).
+
+### Fixed 🐛
+
+- Fixed bug in pline segment intersection when two arcs only touch at endpoints at one point, have
+  the same arc radius and center, and are in opposite directions. This also fixes some cases for
+  algorithms that depend on finding interescts (boolean, offset, etc.) ([#71](https://github.com/jbuckmccready/cavalier_contours/pull/71)).
+- Fixed offset slice stitching to use consistent epsilon (`join_eps`) when removing repeat vertices,
+  preventing tiny segments at slice boundaries when offsetting polylines with close vertices
+  ([#77](https://github.com/jbuckmccready/cavalier_contours/issues/77)).
+
+## 0.6.0 - 2025-07-08
+
+### Added ⭐
+
+- Added `egui` interactive demo UI crate and auto deployment to GitHub pages for the demo
+  [page is here](https://www.cavaliercontours.dev/).
+- Added `visit_intersects`, `contains`, and `scan_for_self_intersect` to pline traits ([#68](https://github.com/jbuckmccready/cavalier_contours/pull/68)).
+- Added `user_data` to traits for tracking data through operations ([#63](https://github.com/jbuckmccready/cavalier_contours/pull/63)).
+- Added multi polyline offset algorithm to c ffi ([#63](https://github.com/jbuckmccready/cavalier_contours/pull/63)).
+- Added more doc comments/tests for `PlineSource` and `PlineSourceMut`.
+- Added `README.md` file to `cavalier_contours_ffi` crate.
+
+### Changed 🔧
+
+- ⚠️ BREAKING: Updated MSRV to 1.88 and Rust edition 2024.
+  Only breaking if unable to compile with Rust 1.88 or later.
+- Refactored multipolyline offset algorithm to be step-by-step.
+- Simplified `prune_slices` function in pline_boolean.
+- Refactored two-polyline intersection visitation to use visitor pattern and
+  eliminated allocation inside loop ([#68](https://github.com/jbuckmccready/cavalier_contours/pull/68)).
+
+### Fixed 🐛
+
+- ⚠️ BREAKING: Fix memory leak in cavc_plinelist by implementing Drop trait ([#64](https://github.com/jbuckmccready/cavalier_contours/pull/64)).
+  This is not likely breaking for most users but if you are calling `cavc_pline_f` on each pline
+  in a `cavc_plinelist` without removing them from the list then you will get a double free on
+  the plines not removed when the `cavc_plinelist` is freed/dropped.
+- Improved offset slice validation by checking multiple segment midpoints ([#69](https://github.com/jbuckmccready/cavalier_contours/pull/69)). Fixes bug
+  reported in issue [#66](https://github.com/jbuckmccready/cavalier_contours/issues/66).
+
+## 0.5.0 - 2025-07-08
+
+- `cargo release` got so excited it jumped a version! Nothing to see here...
+
 ## 0.4.0 - 2024-02-21
 
 ### Added ⭐
@@ -20,7 +79,7 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   calls `cavc_pline_create_aabbindex` and `cavc_pline_create_approx_aabbindex` also no longer
   return an error code of 2 when polyline has less than 2 vertexes (empty aabb index is returned).
   ([#29](https://github.com/jbuckmccready/cavalier_contours/pull/29))
-- Updated `StaticAABB2DIndex` dependency to version 1.0.
+- Updated `StaticAABB2DIndex` dependency to version 2.0.
 - Bumped rust edition to 2021.
 - Use `with_capacity` instead of `reserve` in some places to avoid over allocation behavior of Vec
   (minor performance improvement).

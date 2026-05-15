@@ -4,7 +4,7 @@ This is the ui app for visualizing, testing, and demonstrating the cavalier_cont
 
 Github CI publishes latest on master branch to github pages.
 
-[👉 Click to run the web demo 👈](https://jbuckmccready.github.io/cavalier_contours/).
+[👉 Click to run the web demo 👈](https://www.cavaliercontours.dev/).
 
 The app is built with:
 - [egui](https://github.com/emilk/egui) (immediate mode GUI library)
@@ -20,7 +20,7 @@ cargo run
 
 ## Run Web Locally
 
-> [!IMPORTANT]  
+> [!IMPORTANT]
 > You need to have trunk installed to run the web ui locally (install docs [here](https://trunkrs.dev/guide/getting-started/installation.html)).
 > Compiling from source:
 > ```sh
@@ -31,6 +31,8 @@ cargo run
 > rustup target add wasm32-unknown-unknown
 > ```
 
-```sh 
+```sh
 trunk serve
 ```
+
+Then go to [http://localhost:8080/#dev](http://localhost:8080/#dev) in your browser (`/#dev` is important to force not loading a stale cached version).

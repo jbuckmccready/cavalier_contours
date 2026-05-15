@@ -5,10 +5,10 @@ use crate::{
         traits::{ControlFlow, Real},
     },
     polyline::{
-        FindIntersectsOptions, PlineBasicIntersect, PlineIntersectVisitor,
-        PlineIntersectsCollection, PlineOverlappingIntersect, PlineSegIntr, PlineSource, PlineView,
-        PlineViewData, pline_seg_intr, seg_fast_approx_bounding_box, seg_split_at_point,
-        seg_tangent_vector,
+        FindIntersectsOptions, PlineBasicIntersect, PlineIntersectVisitContext,
+        PlineIntersectVisitor, PlineIntersectsCollection, PlineOverlappingIntersect, PlineSegIntr,
+        PlineSource, PlineView, PlineViewData, TwoPlinesIntersectVisitor, pline_seg_intr,
+        seg_fast_approx_bounding_box, seg_split_at_point, seg_tangent_vector,
     },
 };
 use static_aabb2d_index as aabb_index;
@@ -290,6 +290,84 @@ where
     visitor.intrs
 }
 
+// Visit all intersections between two polylines.
+pub fn visit_intersects<P, O, T, C, V>(
+    pline1: &P,
+    pline2: &O,
+    visitor: &mut V,
+    options: &FindIntersectsOptions<T>,
+) where
+    P: PlineSource<Num = T> + ?Sized,
+    O: PlineSource<Num = T> + ?Sized,
+    T: Real,
+    V: TwoPlinesIntersectVisitor<T, C>,
+    C: ControlFlow,
+{
+    if pline1.vertex_count() < 2 || pline2.vertex_count() < 2 {
+        return;
+    }
+
+    // extract option parameters
+    let pos_equal_eps = options.pos_equal_eps;
+    let constructed_index1;
+    let pline1_aabb_index = if let Some(x) = options.pline1_aabb_index {
+        x
+    } else {
+        constructed_index1 = pline1.create_approx_aabb_index();
+        &constructed_index1
+    };
+
+    let mut query_stack = Vec::with_capacity(8);
+
+    for (i2, j2) in pline2.iter_segment_indexes() {
+        let pline2_context = PlineIntersectVisitContext::<T> {
+            vertex_index: i2,
+            v1: pline2.at(i2),
+            v2: pline2.at(j2),
+        };
+
+        let mut query_visitor = |i1: usize| {
+            let j1 = pline1.next_wrapping_index(i1);
+
+            let pline1_context = PlineIntersectVisitContext::<T> {
+                vertex_index: i1,
+                v1: pline1.at(i1),
+                v2: pline1.at(j1),
+            };
+
+            if visitor
+                .visit(
+                    pline_seg_intr(
+                        pline1_context.v1,
+                        pline1_context.v2,
+                        pline2_context.v1,
+                        pline2_context.v2,
+                        pos_equal_eps,
+                    ),
+                    &pline1_context,
+                    &pline2_context,
+                )
+                .should_break()
+            {
+                aabb_index::Control::Break(())
+            } else {
+                aabb_index::Control::Continue
+            }
+        };
+
+        let bb = seg_fast_approx_bounding_box(pline2_context.v1, pline2_context.v2);
+
+        pline1_aabb_index.visit_query_with_stack(
+            bb.min_x - pos_equal_eps,
+            bb.min_y - pos_equal_eps,
+            bb.max_x + pos_equal_eps,
+            bb.max_y + pos_equal_eps,
+            &mut query_visitor,
+            &mut query_stack,
+        );
+    }
+}
+
 /// Find all intersects between two polylines.
 ///
 /// In the case of overlapping intersects `point1` is always closest to the start of the second
@@ -319,13 +397,6 @@ where
 
     // extract option parameters
     let pos_equal_eps = options.pos_equal_eps;
-    let constructed_index1;
-    let pline1_aabb_index = if let Some(x) = options.pline1_aabb_index {
-        x
-    } else {
-        constructed_index1 = pline1.create_approx_aabb_index();
-        &constructed_index1
-    };
 
     // hash sets used to keep track of possible duplicate intersects being recorded due to
     // overlapping segments
@@ -337,77 +408,64 @@ where
     let open1_last_idx = pline1.vertex_count() - 2;
     let open2_last_idx = pline2.vertex_count() - 2;
 
-    for (i2, j2) in pline2.iter_segment_indexes() {
-        let p2v1 = pline2.at(i2);
-        let p2v2 = pline2.at(j2);
-        let mut query_visitor = |i1: usize| {
-            let j1 = pline1.next_wrapping_index(i1);
-            let p1v1 = pline1.at(i1);
-            let p1v2 = pline1.at(j1);
+    let mut visitor = |intersect: PlineSegIntr<T>,
+                       pline1_context: &PlineIntersectVisitContext<T>,
+                       pline2_context: &PlineIntersectVisitContext<T>| {
+        let i1 = pline1_context.vertex_index;
+        let i2 = pline2_context.vertex_index;
 
-            let skip_intr_at_end = |intr: Vector2<T>| -> bool {
-                // skip intersect at end point of pline segment since it will be found again by the
-                // segment with it as its start point (unless the polyline is open and we're looking
-                // at the very end point of the polyline, then include the intersect)
-                (p1v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
-                    && (pline1.is_closed() || i1 != open1_last_idx))
-                    || (p2v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
-                        && (pline2.is_closed() || i2 != open2_last_idx))
-            };
-
-            match pline_seg_intr(p1v1, p1v2, p2v1, p2v2, pos_equal_eps) {
-                PlineSegIntr::NoIntersect => {}
-                PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
-                    if !skip_intr_at_end(point) {
-                        result
-                            .basic_intersects
-                            .push(PlineBasicIntersect::new(i1, i2, point));
-                    }
-                }
-                PlineSegIntr::TwoIntersects { point1, point2 } => {
-                    if !skip_intr_at_end(point1) {
-                        result
-                            .basic_intersects
-                            .push(PlineBasicIntersect::new(i1, i2, point1));
-                    }
-                    if !skip_intr_at_end(point2) {
-                        result
-                            .basic_intersects
-                            .push(PlineBasicIntersect::new(i1, i2, point2));
-                    }
-                }
-                PlineSegIntr::OverlappingLines { point1, point2 }
-                | PlineSegIntr::OverlappingArcs { point1, point2 } => {
-                    result
-                        .overlapping_intersects
-                        .push(PlineOverlappingIntersect::new(i1, i2, point1, point2));
-
-                    if p1v2.pos().fuzzy_eq_eps(point1, pos_equal_eps)
-                        || p1v2.pos().fuzzy_eq_eps(point2, pos_equal_eps)
-                    {
-                        possible_duplicates1.insert(pline1.next_wrapping_index(i1));
-                    }
-                    if p2v2.pos().fuzzy_eq_eps(point1, pos_equal_eps)
-                        || p2v2.pos().fuzzy_eq_eps(point2, pos_equal_eps)
-                    {
-                        possible_duplicates2.insert(pline2.next_wrapping_index(i2));
-                    }
-                }
-            }
+        let skip_intr_at_end = |intr: Vector2<T>| -> bool {
+            // skip intersect at end point of pline segment since it will be found again by the
+            // segment with it as its start point (unless the polyline is open and we're looking
+            // at the very end point of the polyline, then include the intersect)
+            (pline1_context.v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
+                && (pline1.is_closed() || i1 != open1_last_idx))
+                || (pline2_context.v2.pos().fuzzy_eq_eps(intr, pos_equal_eps)
+                    && (pline2.is_closed() || i2 != open2_last_idx))
         };
 
-        let bb = seg_fast_approx_bounding_box(p2v1, p2v2);
+        match intersect {
+            PlineSegIntr::NoIntersect => {}
+            PlineSegIntr::TangentIntersect { point } | PlineSegIntr::OneIntersect { point } => {
+                if !skip_intr_at_end(point) {
+                    result
+                        .basic_intersects
+                        .push(PlineBasicIntersect::new(i1, i2, point));
+                }
+            }
+            PlineSegIntr::TwoIntersects { point1, point2 } => {
+                if !skip_intr_at_end(point1) {
+                    result
+                        .basic_intersects
+                        .push(PlineBasicIntersect::new(i1, i2, point1));
+                }
+                if !skip_intr_at_end(point2) {
+                    result
+                        .basic_intersects
+                        .push(PlineBasicIntersect::new(i1, i2, point2));
+                }
+            }
+            PlineSegIntr::OverlappingLines { point1, point2 }
+            | PlineSegIntr::OverlappingArcs { point1, point2 } => {
+                result
+                    .overlapping_intersects
+                    .push(PlineOverlappingIntersect::new(i1, i2, point1, point2));
 
-        let mut query_stack = Vec::with_capacity(8);
-        pline1_aabb_index.visit_query_with_stack(
-            bb.min_x - pos_equal_eps,
-            bb.min_y - pos_equal_eps,
-            bb.max_x + pos_equal_eps,
-            bb.max_y + pos_equal_eps,
-            &mut query_visitor,
-            &mut query_stack,
-        );
-    }
+                if pline1_context.v2.pos().fuzzy_eq_eps(point1, pos_equal_eps)
+                    || pline1_context.v2.pos().fuzzy_eq_eps(point2, pos_equal_eps)
+                {
+                    possible_duplicates1.insert(pline1.next_wrapping_index(i1));
+                }
+                if pline2_context.v2.pos().fuzzy_eq_eps(point1, pos_equal_eps)
+                    || pline2_context.v2.pos().fuzzy_eq_eps(point2, pos_equal_eps)
+                {
+                    possible_duplicates2.insert(pline2.next_wrapping_index(i2));
+                }
+            }
+        }
+    };
+
+    visit_intersects(pline1, pline2, &mut visitor, options);
 
     if possible_duplicates1.is_empty() && possible_duplicates2.is_empty() {
         return result;
@@ -438,6 +496,43 @@ where
 
     result.basic_intersects = final_basic_intrs;
     result
+}
+
+/// Find if two polylines have any intersections.
+///
+/// Any overlapping segments will be treated as an intersection and cause
+/// scan_for_intersect() to return true.
+pub fn scan_for_intersect<P, O, T>(
+    pline1: &P,
+    pline2: &O,
+    options: &FindIntersectsOptions<T>,
+) -> bool
+where
+    P: PlineSource<Num = T> + ?Sized,
+    O: PlineSource<Num = T> + ?Sized,
+    T: Real,
+{
+    let mut found_intersect = false;
+
+    let mut visitor = |intersect: PlineSegIntr<T>,
+                       _: &PlineIntersectVisitContext<T>,
+                       _: &PlineIntersectVisitContext<T>| {
+        match intersect {
+            PlineSegIntr::NoIntersect => aabb_index::Control::Continue,
+            PlineSegIntr::TangentIntersect { .. }
+            | PlineSegIntr::OneIntersect { .. }
+            | PlineSegIntr::TwoIntersects { .. }
+            | PlineSegIntr::OverlappingLines { .. }
+            | PlineSegIntr::OverlappingArcs { .. } => {
+                found_intersect = true;
+                aabb_index::Control::Break(())
+            }
+        }
+    };
+
+    visit_intersects(pline1, pline2, &mut visitor, options);
+
+    found_intersect
 }
 
 /// Represents an open polyline slice where there was overlap between polylines across one or more

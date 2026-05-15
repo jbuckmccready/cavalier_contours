@@ -31,6 +31,16 @@ where
     type OutputPolyline = P::OutputPolyline;
 
     #[inline]
+    fn get_userdata_count(&self) -> usize {
+        self.original.get_userdata_count()
+    }
+
+    #[inline]
+    fn get_userdata_values(&self) -> impl Iterator<Item = u64> + '_ {
+        self.original.get_userdata_values()
+    }
+
+    #[inline]
     fn vertex_count(&self) -> usize {
         self.original.vertex_count()
     }

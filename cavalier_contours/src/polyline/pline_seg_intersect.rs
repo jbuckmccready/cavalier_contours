@@ -465,7 +465,14 @@ where
                 }
                 (false, true) => {
                     // only touch at start of arc2
-                    OneIntersect { point: u1.pos() }
+                    // NOTE: have to check and adjust for the direction flip done above to have
+                    // matching direction
+                    let point = if same_direction_arcs {
+                        u1.pos()
+                    } else {
+                        u2.pos()
+                    };
+                    OneIntersect { point }
                 }
                 (false, false) => {
                     // not just the end points touch, determine how the arcs overlap

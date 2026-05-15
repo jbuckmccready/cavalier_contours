@@ -38,7 +38,7 @@ where
 {
     let process_line_seg = |v1: PlineVertex<T>, v2: PlineVertex<T>| -> RawPlineOffsetSeg<T> {
         let line_v = v2.pos() - v1.pos();
-        let offset_v = line_v.unit_perp().scale(offset);
+        let offset_v = line_v.safe_unit_perp().scale(offset);
         RawPlineOffsetSeg {
             v1: PlineVertex::from_vector2(v1.pos() + offset_v, T::zero()),
             v2: PlineVertex::from_vector2(v2.pos() + offset_v, T::zero()),
@@ -51,8 +51,8 @@ where
         let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
         let offs = if v1.bulge_is_neg() { offset } else { -offset };
         let radius_after_offset = arc_radius + offs;
-        let v1_to_center = (v1.pos() - arc_center).normalize();
-        let v2_to_center = (v2.pos() - arc_center).normalize();
+        let v1_to_center = (v1.pos() - arc_center).safe_normalize();
+        let v2_to_center = (v2.pos() - arc_center).safe_normalize();
 
         let (new_v1_bulge, collapsed_arc) = if radius_after_offset.fuzzy_lt(T::zero()) {
             // collapsed arc, offset arc start and end points towards arc center and turn into line
@@ -882,10 +882,10 @@ where
                 pos_equal_eps,
             );
 
-            if let Some(s) = slice {
-                if slice_is_valid(&s, &mut query_stack) {
-                    result.push(s);
-                }
+            if let Some(s) = slice
+                && slice_is_valid(&s, &mut query_stack)
+            {
+                result.push(s);
             }
         }
 
@@ -909,10 +909,10 @@ where
             pos_equal_eps,
         );
 
-        if let Some(s) = slice {
-            if slice_is_valid(&s, &mut query_stack) {
-                result.push(s);
-            }
+        if let Some(s) = slice
+            && slice_is_valid(&s, &mut query_stack)
+        {
+            result.push(s);
         }
     }
 
@@ -1253,10 +1253,10 @@ where
             pos_equal_eps,
         );
 
-        if let Some(s) = slice {
-            if slice_is_valid(&s, &mut query_stack) {
-                result.push(s);
-            }
+        if let Some(s) = slice
+            && slice_is_valid(&s, &mut query_stack)
+        {
+            result.push(s);
         }
     }
 
@@ -1272,10 +1272,10 @@ where
                 pos_equal_eps,
             );
 
-            if let Some(s) = slice {
-                if slice_is_valid(&s, &mut query_stack) {
-                    result.push(s);
-                }
+            if let Some(s) = slice
+                && slice_is_valid(&s, &mut query_stack)
+            {
+                result.push(s);
             }
         }
 
@@ -1298,10 +1298,10 @@ where
                     raw_offset_polyline.vertex_count() - 1,
                     pos_equal_eps,
                 );
-                if let Some(s) = slice {
-                    if slice_is_valid(&s, &mut query_stack) {
-                        result.push(s);
-                    }
+                if let Some(s) = slice
+                    && slice_is_valid(&s, &mut query_stack)
+                {
+                    result.push(s);
                 }
                 return result;
             };
@@ -1315,10 +1315,10 @@ where
             pos_equal_eps,
         );
 
-        if let Some(s) = slice {
-            if slice_is_valid(&s, &mut query_stack) {
-                result.push(s);
-            }
+        if let Some(s) = slice
+            && slice_is_valid(&s, &mut query_stack)
+        {
+            result.push(s);
         }
     }
 
@@ -1346,8 +1346,9 @@ where
     let pos_equal_eps = options.pos_equal_eps;
 
     if slices.len() == 1 {
-        let mut pline =
-            O::create_from_remove_repeat(&slices[0].view(raw_offset_pline), pos_equal_eps);
+        // Use join_eps for removing repeat vertices to be consistent with how slice connections
+        // are detected (prevents tiny segments at slice boundaries)
+        let mut pline = O::create_from_remove_repeat(&slices[0].view(raw_offset_pline), join_eps);
 
         if is_closed
             && pline
@@ -1402,10 +1403,11 @@ where
             loop_count += 1;
 
             // append current slice to current pline
+            // Use join_eps for removing repeat vertices to be consistent with how slice connections
+            // are detected (prevents tiny segments at slice boundaries)
             let current_slice = &slices[current_index];
 
-            current_pline
-                .extend_remove_repeat(&current_slice.view(raw_offset_pline), pos_equal_eps);
+            current_pline.extend_remove_repeat(&current_slice.view(raw_offset_pline), join_eps);
 
             let current_loop_start_index = current_slice.start_index;
             let current_end_point = current_slice.end_point;
@@ -1453,7 +1455,8 @@ where
                 if current_pline.vertex_count() > 1 {
                     let current_pline_sp = current_pline.at(0).pos();
                     let current_pline_ep = current_pline.last().unwrap().pos();
-                    if is_closed && current_pline_sp.fuzzy_eq_eps(current_pline_ep, pos_equal_eps) {
+                    // Use join_eps for consistency with slice connection detection
+                    if is_closed && current_pline_sp.fuzzy_eq_eps(current_pline_ep, join_eps) {
                         current_pline.remove_last();
                         current_pline.set_is_closed(true);
                     }
@@ -1473,30 +1476,32 @@ where
     result
 }
 
-pub fn parallel_offset<P, T, O>(polyline: &P, offset: T, options: &PlineOffsetOptions<T>) -> Vec<O>
+fn parallel_offset_for_source<P, T, O>(
+    polyline: &P,
+    offset: T,
+    options: &PlineOffsetOptions<T>,
+    allow_external_index: bool,
+) -> Vec<O>
 where
     P: PlineSource<Num = T> + ?Sized,
     T: Real,
     O: PlineCreation<Num = T>,
 {
-    if polyline.vertex_count() < 2 {
-        return Vec::new();
-    }
-    debug_assert!(
-        polyline.remove_repeat_pos(options.pos_equal_eps).is_none(),
-        "bug: input assumed to not have repeat position vertexes"
-    );
-
     let constructed_index;
-    let index = if let Some(x) = options.aabb_index {
-        x
+    let index = if allow_external_index {
+        if let Some(x) = options.aabb_index {
+            x
+        } else {
+            constructed_index = polyline.create_approx_aabb_index();
+            &constructed_index
+        }
     } else {
         constructed_index = polyline.create_approx_aabb_index();
         &constructed_index
     };
 
     let raw_offset: O = create_raw_offset_polyline(polyline, offset, options.pos_equal_eps);
-    let result = if raw_offset.is_empty() {
+    if raw_offset.is_empty() {
         Vec::new()
     } else if polyline.is_closed() && !options.handle_self_intersects {
         let slices = slices_from_raw_offset(polyline, &raw_offset, index, offset, options);
@@ -1525,6 +1530,29 @@ where
             raw_offset.vertex_count(),
             options,
         )
+    }
+}
+
+pub fn parallel_offset<P, T, O>(polyline: &P, offset: T, options: &PlineOffsetOptions<T>) -> Vec<O>
+where
+    P: PlineSource<Num = T> + ?Sized,
+    T: Real,
+    O: PlineCreation<Num = T>,
+{
+    if polyline.vertex_count() < 2 {
+        return Vec::new();
+    }
+
+    // In release builds we still sanitize repeat positions to prevent unstable/degenerate segments.
+    let mut result = if let Some(cleaned) = polyline.remove_repeat_pos(options.pos_equal_eps) {
+        if cleaned.vertex_count() < 2 {
+            Vec::new()
+        } else {
+            // user-provided aabb index is tied to the original polyline, rebuild for cleaned source
+            parallel_offset_for_source(&cleaned, offset, options, false)
+        }
+    } else {
+        parallel_offset_for_source(polyline, offset, options, true)
     };
 
     debug_assert!(
@@ -1533,6 +1561,10 @@ where
             .all(|p: &O| p.remove_repeat_pos(options.pos_equal_eps).is_none()),
         "bug: result should never have repeat position vertexes"
     );
+
+    for cursor in result.iter_mut() {
+        cursor.set_userdata_values(polyline.get_userdata_values());
+    }
 
     result
 }

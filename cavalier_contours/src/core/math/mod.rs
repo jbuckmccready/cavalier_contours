@@ -9,4 +9,4 @@ pub use base_math::*;
 pub use circle_circle_intersect::{CircleCircleIntr, circle_circle_intr};
 pub use line_circle_intersect::{LineCircleIntr, line_circle_intr};
 pub use line_line_intersect::{LineLineIntr, line_line_intr};
-pub use vector2::Vector2;
+pub use vector2::{Vector2, vec2};
