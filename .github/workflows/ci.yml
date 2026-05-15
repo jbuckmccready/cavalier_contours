@@ -22,6 +22,8 @@ jobs:
 
       - name: Rust Cache # cache the rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Build
         run: |
@@ -44,6 +46,8 @@ jobs:
 
       - name: Rust Cache # cache the rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Check formatting
         run: |
