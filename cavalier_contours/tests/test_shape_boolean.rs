@@ -22,29 +22,25 @@ fn assert_extents_fuzzy_eq(
     eps: f64,
 ) {
     let aabb = shape.plines_index.bounds().unwrap();
+    let actual_min_x = aabb.min_x;
+    let actual_min_y = aabb.min_y;
+    let actual_max_x = aabb.max_x;
+    let actual_max_y = aabb.max_y;
     assert!(
-        aabb.min_x.fuzzy_eq_eps(expected_min_x, eps),
-        "min_x => expected: {}, got: {}",
-        expected_min_x,
-        aabb.min_x
+        actual_min_x.fuzzy_eq_eps(expected_min_x, eps),
+        "min_x => expected: {expected_min_x}, got: {actual_min_x}"
     );
     assert!(
-        aabb.min_y.fuzzy_eq_eps(expected_min_y, eps),
-        "min_y => expected: {}, got: {}",
-        expected_min_y,
-        aabb.min_y
+        actual_min_y.fuzzy_eq_eps(expected_min_y, eps),
+        "min_y => expected: {expected_min_y}, got: {actual_min_y}"
     );
     assert!(
-        aabb.max_x.fuzzy_eq_eps(expected_max_x, eps),
-        "max_x => expected: {}, got: {}",
-        expected_max_x,
-        aabb.max_x
+        actual_max_x.fuzzy_eq_eps(expected_max_x, eps),
+        "max_x => expected: {expected_max_x}, got: {actual_max_x}"
     );
     assert!(
-        aabb.max_y.fuzzy_eq_eps(expected_max_y, eps),
-        "max_y => expected: {}, got: {}",
-        expected_max_y,
-        aabb.max_y
+        actual_max_y.fuzzy_eq_eps(expected_max_y, eps),
+        "max_y => expected: {expected_max_y}, got: {actual_max_y}"
     );
 }
 
@@ -199,33 +195,30 @@ fn assert_no_duplicate_loops(shape: &Shape<f64>) {
     let mut loops = shape_signature(shape).loops;
     loops.sort();
     for pair in loops.windows(2) {
+        let signature = shape_signature(shape);
         assert_ne!(
-            pair[0],
-            pair[1],
-            "shape contains duplicate coincident loops: {:?}",
-            shape_signature(shape)
+            pair[0], pair[1],
+            "shape contains duplicate coincident loops: {signature:?}"
         );
     }
 }
 
 fn assert_loop_valid(pline: &Polyline<f64>, expected_orientation: PlineOrientation) {
-    assert!(pline.is_closed(), "shape loops must be closed: {:?}", pline);
+    assert!(pline.is_closed(), "shape loops must be closed: {pline:?}");
     assert_eq!(
         pline.orientation(),
         expected_orientation,
-        "loop orientation is in the wrong shape bin: {:?}",
-        pline
+        "loop orientation is in the wrong shape bin: {pline:?}"
     );
     assert!(
         pline.remove_repeat_pos(SHAPE_TEST_EPS).is_none(),
-        "shape loop has repeat-position vertices: {:?}",
-        pline
+        "shape loop has repeat-position vertices: {pline:?}"
     );
 
     for v in pline.iter_vertexes() {
-        assert!(v.x.is_finite(), "non-finite x coordinate in {:?}", pline);
-        assert!(v.y.is_finite(), "non-finite y coordinate in {:?}", pline);
-        assert!(v.bulge.is_finite(), "non-finite bulge in {:?}", pline);
+        assert!(v.x.is_finite(), "non-finite x coordinate in {pline:?}");
+        assert!(v.y.is_finite(), "non-finite y coordinate in {pline:?}");
+        assert!(v.bulge.is_finite(), "non-finite bulge in {pline:?}");
     }
 }
 
@@ -397,7 +390,9 @@ fn pline_svg_path(pline: &Polyline<f64>) -> Option<String> {
     // Failure SVGs use path commands rather than polygons so arc-heavy regressions preserve the
     // same bulge geometry that the boolean algorithm processed.
     let first = pline.at(0);
-    let mut path = format!("M {} {}", first.x, first.y);
+    let first_x = first.x;
+    let first_y = first.y;
+    let mut path = format!("M {first_x} {first_y}");
     let segment_count = if pline.is_closed() {
         pline.vertex_count()
     } else {
@@ -407,16 +402,17 @@ fn pline_svg_path(pline: &Polyline<f64>) -> Option<String> {
     for i in 0..segment_count {
         let start = pline.at(i);
         let end = pline.at((i + 1) % pline.vertex_count());
+        let end_x = end.x;
+        let end_y = end.y;
         if start.bulge.fuzzy_eq_eps(0.0, SHAPE_TEST_EPS) {
-            path.push_str(&format!(" L {} {}", end.x, end.y));
+            path.push_str(&format!(" L {end_x} {end_y}"));
         } else {
             let (radius, _) = seg_arc_radius_and_center(start, end);
             let sweep_angle = 4.0 * start.bulge.atan();
             let large_arc = i32::from(sweep_angle.abs() > PI);
             let sweep = i32::from(start.bulge > 0.0);
             path.push_str(&format!(
-                " A {radius} {radius} 0 {large_arc} {sweep} {} {}",
-                end.x, end.y
+                " A {radius} {radius} 0 {large_arc} {sweep} {end_x} {end_y}"
             ));
         }
     }
@@ -537,11 +533,11 @@ fn trace_shape_boolean_case(a: &Shape<f64>, b: &Shape<f64>, result: &Shape<f64>,
         return;
     }
 
+    let a_signature = shape_signature(a);
+    let b_signature = shape_signature(b);
+    let result_signature = shape_signature(result);
     eprintln!(
-        "shape boolean trace op={op:?}\na={:#?}\nb={:#?}\nresult={:#?}",
-        shape_signature(a),
-        shape_signature(b),
-        shape_signature(result)
+        "shape boolean trace op={op:?}\na={a_signature:#?}\nb={b_signature:#?}\nresult={result_signature:#?}"
     );
 }
 
@@ -568,11 +564,10 @@ fn assert_boolean_samples(
         if actual != expected {
             dump_shape_boolean_failure(a, b, result, op, (x, y), expected, actual);
         }
+        let result_area = shape_signed_area(result);
         assert_eq!(
-            actual,
-            expected,
-            "sample ({x}, {y}) mismatch for {op:?}: in_a={in_a}, in_b={in_b}, result={actual}, result_area={}",
-            shape_signed_area(result)
+            actual, expected,
+            "sample ({x}, {y}) mismatch for {op:?}: in_a={in_a}, in_b={in_b}, result={actual}, result_area={result_area}"
         );
     }
 }
@@ -589,6 +584,7 @@ fn assert_boolean_result(
     let result = a.boolean(b, op);
     trace_shape_boolean_case(a, b, &result, op);
     assert_shape_valid(&result);
+    let result_area = shape_signed_area(&result);
     assert_eq!(
         result.ccw_plines.len(),
         expected_ccw_count,
@@ -600,9 +596,8 @@ fn assert_boolean_result(
         "unexpected cw loop count for {op:?}"
     );
     assert!(
-        shape_signed_area(&result).fuzzy_eq_eps(expected_area, 1e-5),
-        "unexpected signed area for {op:?}: expected {expected_area}, got {}",
-        shape_signed_area(&result)
+        result_area.fuzzy_eq_eps(expected_area, 1e-5),
+        "unexpected signed area for {op:?}: expected {expected_area}, got {result_area}"
     );
     assert_boolean_samples(a, b, &result, op, samples);
 }
@@ -617,10 +612,10 @@ fn assert_boolean_area_and_samples(
     let result = a.boolean(b, op);
     trace_shape_boolean_case(a, b, &result, op);
     assert_shape_valid(&result);
+    let result_area = shape_signed_area(&result);
     assert!(
-        shape_signed_area(&result).fuzzy_eq_eps(expected_area, 1e-5),
-        "unexpected signed area for {op:?}: expected {expected_area}, got {}",
-        shape_signed_area(&result)
+        result_area.fuzzy_eq_eps(expected_area, 1e-5),
+        "unexpected signed area for {op:?}: expected {expected_area}, got {result_area}"
     );
     assert_boolean_samples(a, b, &result, op, samples);
 }
@@ -636,11 +631,11 @@ fn assert_commutative_samples(
 
     assert_shape_valid(&ab);
     assert_shape_valid(&ba);
+    let ab_area = shape_signed_area(&ab);
+    let ba_area = shape_signed_area(&ba);
     assert!(
-        shape_signed_area(&ab).fuzzy_eq_eps(shape_signed_area(&ba), 1e-5),
-        "commutative area mismatch for {op:?}: ab={}, ba={}",
-        shape_signed_area(&ab),
-        shape_signed_area(&ba)
+        ab_area.fuzzy_eq_eps(ba_area, 1e-5),
+        "commutative area mismatch for {op:?}: ab={ab_area}, ba={ba_area}"
     );
     assert_eq!(
         ab.ccw_plines.len(),
@@ -659,11 +654,11 @@ fn assert_commutative_samples(
 fn assert_shapes_equivalent_by_samples(a: &Shape<f64>, b: &Shape<f64>, samples: &[(f64, f64)]) {
     assert_shape_valid(a);
     assert_shape_valid(b);
+    let a_area = shape_signed_area(a);
+    let b_area = shape_signed_area(b);
     assert!(
-        shape_signed_area(a).fuzzy_eq_eps(shape_signed_area(b), 1e-5),
-        "shape area mismatch: left={}, right={}",
-        shape_signed_area(a),
-        shape_signed_area(b)
+        a_area.fuzzy_eq_eps(b_area, 1e-5),
+        "shape area mismatch: left={a_area}, right={b_area}"
     );
     assert_eq!(
         a.ccw_plines.len(),
@@ -1841,9 +1836,9 @@ fn shape_offset_simple_test() {
     let result = shape.parallel_offset(-2.0, offset_opts);
     assert_eq!(result.ccw_plines.len(), 1);
     let final_bb = result.plines_index.bounds().unwrap();
+    let min_x = final_bb.min_x;
     assert!(
-        final_bb.min_x < -6.95 && final_bb.min_x > -7.05,
-        "expected min_x ~ -7.0, got {}",
-        final_bb.min_x
+        min_x < -6.95 && min_x > -7.05,
+        "expected min_x ~ -7.0, got {min_x}"
     );
 }
