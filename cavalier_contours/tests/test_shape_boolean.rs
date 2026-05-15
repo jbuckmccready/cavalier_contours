@@ -1,3 +1,5 @@
+mod test_utils;
+
 use cavalier_contours::core::{math::Vector2, traits::FuzzyEq};
 use cavalier_contours::polyline::{
     BooleanOp, PlineOrientation, PlineSource, PlineSourceMut, Polyline,
@@ -5,6 +7,8 @@ use cavalier_contours::polyline::{
 use cavalier_contours::shape_algorithms::{Shape, ShapeOffsetOptions};
 use cavalier_contours::{assert_fuzzy_eq, pline_closed, pline_open};
 use std::f64::consts::PI;
+use std::{env, fs, path::Path};
+use test_utils::to_debug_json_str;
 
 const SHAPE_TEST_EPS: f64 = 1e-7;
 
@@ -122,6 +126,88 @@ fn shape_contains(shape: &Shape<f64>, x: f64, y: f64) -> bool {
     shape_winding_number(shape, Vector2::new(x, y)) != 0
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct LoopSignature {
+    orientation: &'static str,
+    vertex_count: usize,
+    area: i64,
+    path_length: i64,
+    extents: Option<(i64, i64, i64, i64)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ShapeSignature {
+    ccw_count: usize,
+    cw_count: usize,
+    signed_area: i64,
+    perimeter_sum: i64,
+    extents: Option<(i64, i64, i64, i64)>,
+    loops: Vec<LoopSignature>,
+}
+
+fn sig_num(value: f64) -> i64 {
+    (value * 1_000_000_000.0).round() as i64
+}
+
+fn extents_signature(
+    extents: Option<static_aabb2d_index::AABB<f64>>,
+) -> Option<(i64, i64, i64, i64)> {
+    extents.map(|e| {
+        (
+            sig_num(e.min_x),
+            sig_num(e.min_y),
+            sig_num(e.max_x),
+            sig_num(e.max_y),
+        )
+    })
+}
+
+fn loop_signature(pline: &Polyline<f64>) -> LoopSignature {
+    LoopSignature {
+        orientation: match pline.orientation() {
+            PlineOrientation::Open => "open",
+            PlineOrientation::CounterClockwise => "ccw",
+            PlineOrientation::Clockwise => "cw",
+        },
+        vertex_count: pline.vertex_count(),
+        area: sig_num(pline.area()),
+        path_length: sig_num(pline.path_length()),
+        extents: extents_signature(pline.extents()),
+    }
+}
+
+fn shape_signature(shape: &Shape<f64>) -> ShapeSignature {
+    let mut loops = shape
+        .ccw_plines
+        .iter()
+        .chain(shape.cw_plines.iter())
+        .map(|ip| loop_signature(&ip.polyline))
+        .collect::<Vec<_>>();
+    loops.sort();
+
+    ShapeSignature {
+        ccw_count: shape.ccw_plines.len(),
+        cw_count: shape.cw_plines.len(),
+        signed_area: sig_num(shape_signed_area(shape)),
+        perimeter_sum: loops.iter().map(|l| l.path_length).sum(),
+        extents: extents_signature(shape.plines_index.bounds()),
+        loops,
+    }
+}
+
+fn assert_no_duplicate_loops(shape: &Shape<f64>) {
+    let mut loops = shape_signature(shape).loops;
+    loops.sort();
+    for pair in loops.windows(2) {
+        assert_ne!(
+            pair[0],
+            pair[1],
+            "shape contains duplicate coincident loops: {:?}",
+            shape_signature(shape)
+        );
+    }
+}
+
 fn assert_loop_valid(pline: &Polyline<f64>, expected_orientation: PlineOrientation) {
     assert!(pline.is_closed(), "shape loops must be closed: {:?}", pline);
     assert_eq!(
@@ -224,6 +310,202 @@ fn assert_shape_valid(shape: &Shape<f64>) {
             && expected.max_y.fuzzy_eq_eps(actual.max_y, SHAPE_TEST_EPS),
         "shape top-level index bounds do not match child loop bounds"
     );
+
+    assert_no_duplicate_loops(shape);
+}
+
+fn push_shape_probe_samples(shape: &Shape<f64>, samples: &mut Vec<(f64, f64)>) {
+    let nudges = [
+        (SHAPE_TEST_EPS * 1000.0, SHAPE_TEST_EPS * 1000.0),
+        (-SHAPE_TEST_EPS * 1000.0, SHAPE_TEST_EPS * 1000.0),
+        (SHAPE_TEST_EPS * 1000.0, -SHAPE_TEST_EPS * 1000.0),
+        (-SHAPE_TEST_EPS * 1000.0, -SHAPE_TEST_EPS * 1000.0),
+    ];
+
+    for pline in shape
+        .ccw_plines
+        .iter()
+        .chain(shape.cw_plines.iter())
+        .map(|ip| &ip.polyline)
+    {
+        for v in pline.iter_vertexes() {
+            for (dx, dy) in nudges {
+                samples.push((v.x + dx, v.y + dy));
+            }
+        }
+
+        for (v1, v2) in pline.iter_segments() {
+            let midpoint = cavalier_contours::polyline::seg_midpoint(v1, v2);
+            for (dx, dy) in nudges {
+                samples.push((midpoint.x + dx, midpoint.y + dy));
+            }
+        }
+    }
+}
+
+fn combined_extents(shapes: &[&Shape<f64>]) -> Option<static_aabb2d_index::AABB<f64>> {
+    shapes
+        .iter()
+        .filter_map(|shape| shape.plines_index.bounds())
+        .fold(None, |acc, bounds| {
+            Some(match acc {
+                None => bounds,
+                Some(curr) => static_aabb2d_index::AABB::new(
+                    curr.min_x.min(bounds.min_x),
+                    curr.min_y.min(bounds.min_y),
+                    curr.max_x.max(bounds.max_x),
+                    curr.max_y.max(bounds.max_y),
+                ),
+            })
+        })
+}
+
+fn semantic_samples(
+    a: &Shape<f64>,
+    b: &Shape<f64>,
+    result: &Shape<f64>,
+    explicit: &[(f64, f64)],
+) -> Vec<(f64, f64)> {
+    let mut samples = explicit.to_vec();
+
+    if let Some(extents) = combined_extents(&[a, b, result]) {
+        let width = (extents.max_x - extents.min_x).max(1.0);
+        let height = (extents.max_y - extents.min_y).max(1.0);
+        // Fractions are intentionally irregular so axis-aligned grid samples are unlikely to land
+        // exactly on rectangle, hole, or result boundaries, where winding-number semantics are
+        // implementation-defined.
+        let fractions = [0.113, 0.271, 0.389, 0.541, 0.673, 0.809, 0.947];
+        for fx in fractions {
+            for fy in fractions {
+                samples.push((extents.min_x + width * fx, extents.min_y + height * fy));
+            }
+        }
+        samples.push((extents.min_x - width * 0.1, extents.min_y - height * 0.1));
+        samples.push((extents.max_x + width * 0.1, extents.max_y + height * 0.1));
+    }
+
+    push_shape_probe_samples(a, &mut samples);
+    push_shape_probe_samples(b, &mut samples);
+    samples
+}
+
+fn write_shape_svg(path: &Path, shapes: &[(&Shape<f64>, &'static str)]) -> std::io::Result<()> {
+    let extents = combined_extents(
+        &shapes
+            .iter()
+            .map(|(shape, _color)| *shape)
+            .collect::<Vec<_>>(),
+    );
+    let (min_x, min_y, width, height) = if let Some(e) = extents {
+        let width = (e.max_x - e.min_x).max(1.0);
+        let height = (e.max_y - e.min_y).max(1.0);
+        (
+            e.min_x - width * 0.05,
+            e.min_y - height * 0.05,
+            width * 1.1,
+            height * 1.1,
+        )
+    } else {
+        (-1.0, -1.0, 2.0, 2.0)
+    };
+
+    let mut svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{min_x} {min_y} {width} {height}">
+<g fill="none" stroke-width="0.05">
+"#
+    );
+
+    for (shape, color) in shapes {
+        for pline in shape
+            .ccw_plines
+            .iter()
+            .chain(shape.cw_plines.iter())
+            .map(|ip| &ip.polyline)
+        {
+            let points = pline
+                .iter_vertexes()
+                .map(|v| format!("{},{}", v.x, v.y))
+                .collect::<Vec<_>>()
+                .join(" ");
+            svg.push_str(&format!(
+                r#"<polygon points="{points}" stroke="{color}" fill="{color}" fill-opacity="0.08" />
+"#
+            ));
+        }
+    }
+
+    svg.push_str("</g>\n</svg>\n");
+    fs::write(path, svg)
+}
+
+fn shape_debug_json(shape: &Shape<f64>) -> String {
+    let mut result = String::new();
+    result.push_str("{\n  \"ccw\": [\n");
+    for (i, ip) in shape.ccw_plines.iter().enumerate() {
+        if i > 0 {
+            result.push_str(",\n");
+        }
+        result.push_str(&to_debug_json_str(&ip.polyline));
+    }
+    result.push_str("\n  ],\n  \"cw\": [\n");
+    for (i, ip) in shape.cw_plines.iter().enumerate() {
+        if i > 0 {
+            result.push_str(",\n");
+        }
+        result.push_str(&to_debug_json_str(&ip.polyline));
+    }
+    result.push_str("\n  ]\n}\n");
+    result
+}
+
+fn dump_shape_boolean_failure(
+    a: &Shape<f64>,
+    b: &Shape<f64>,
+    result: &Shape<f64>,
+    op: BooleanOp,
+    sample: (f64, f64),
+    expected: bool,
+    actual: bool,
+) {
+    let Ok(dir) = env::var("CAVC_DUMP_FAILURE") else {
+        return;
+    };
+
+    let dir = Path::new(&dir);
+    let _ = fs::create_dir_all(dir);
+    let _ = write_shape_svg(&dir.join("input_a.svg"), &[(a, "blue")]);
+    let _ = write_shape_svg(&dir.join("input_b.svg"), &[(b, "red")]);
+    let _ = write_shape_svg(&dir.join("result.svg"), &[(result, "green")]);
+    let _ = write_shape_svg(
+        &dir.join("overlay.svg"),
+        &[(a, "blue"), (b, "red"), (result, "green")],
+    );
+    let _ = fs::write(
+        dir.join("case.rs"),
+        format!(
+            "// op: {op:?}\n// sample: {:?}\n// expected: {expected}\n// actual: {actual}\n// a: {:?}\n// b: {:?}\n// result: {:?}\n",
+            sample,
+            shape_signature(a),
+            shape_signature(b),
+            shape_signature(result)
+        ),
+    );
+    let _ = fs::write(dir.join("input_a.json"), shape_debug_json(a));
+    let _ = fs::write(dir.join("input_b.json"), shape_debug_json(b));
+    let _ = fs::write(dir.join("result.json"), shape_debug_json(result));
+}
+
+fn trace_shape_boolean_case(a: &Shape<f64>, b: &Shape<f64>, result: &Shape<f64>, op: BooleanOp) {
+    if env::var_os("CAVC_TRACE_SHAPE_BOOLEAN").is_none() {
+        return;
+    }
+
+    eprintln!(
+        "shape boolean trace op={op:?}\na={:#?}\nb={:#?}\nresult={:#?}",
+        shape_signature(a),
+        shape_signature(b),
+        shape_signature(result)
+    );
 }
 
 fn assert_boolean_samples(
@@ -233,9 +515,10 @@ fn assert_boolean_samples(
     op: BooleanOp,
     samples: &[(f64, f64)],
 ) {
+    trace_shape_boolean_case(a, b, result, op);
     // Sampled membership is the semantic oracle: exact loop topology may vary, but each point
     // must obey the set operation computed from the original input shapes.
-    for &(x, y) in samples {
+    for (x, y) in semantic_samples(a, b, result, samples) {
         let in_a = shape_contains(a, x, y);
         let in_b = shape_contains(b, x, y);
         let expected = match op {
@@ -245,6 +528,9 @@ fn assert_boolean_samples(
             BooleanOp::Xor => in_a != in_b,
         };
         let actual = shape_contains(result, x, y);
+        if actual != expected {
+            dump_shape_boolean_failure(a, b, result, op, (x, y), expected, actual);
+        }
         assert_eq!(
             actual,
             expected,
@@ -264,6 +550,7 @@ fn assert_boolean_result(
     samples: &[(f64, f64)],
 ) {
     let result = a.boolean(b, op);
+    trace_shape_boolean_case(a, b, &result, op);
     assert_shape_valid(&result);
     assert_eq!(
         result.ccw_plines.len(),
@@ -291,6 +578,7 @@ fn assert_boolean_area_and_samples(
     samples: &[(f64, f64)],
 ) {
     let result = a.boolean(b, op);
+    trace_shape_boolean_case(a, b, &result, op);
     assert_shape_valid(&result);
     assert!(
         shape_signed_area(&result).fuzzy_eq_eps(expected_area, 1e-5),
@@ -429,6 +717,20 @@ fn shape_boolean_identical_rectangle_all_ops() {
     assert_boolean_result(&rect, &rect, BooleanOp::And, 100.0, 1, 0, &samples);
     assert_boolean_result(&rect, &rect, BooleanOp::Not, 0.0, 0, 0, &samples);
     assert_boolean_result(&rect, &rect, BooleanOp::Xor, 0.0, 0, 0, &samples);
+}
+
+#[test]
+fn shape_boolean_identical_donut_all_ops() {
+    // Equal shapes with holes are an identity case for every boolean operator. This specifically
+    // protects against treating matching CW holes as positive material during shape-level union.
+    let donut = create_donut((0.0, 0.0, 12.0, 12.0), &[(2.0, 2.0, 10.0, 10.0)]);
+    let same_donut = donut.clone();
+    let samples = [(1.0, 1.0), (6.0, 6.0), (11.0, 11.0), (13.0, 13.0)];
+
+    assert_boolean_result(&donut, &same_donut, BooleanOp::Or, 80.0, 1, 1, &samples);
+    assert_boolean_result(&donut, &same_donut, BooleanOp::And, 80.0, 1, 1, &samples);
+    assert_boolean_result(&donut, &same_donut, BooleanOp::Not, 0.0, 0, 0, &samples);
+    assert_boolean_result(&donut, &same_donut, BooleanOp::Xor, 0.0, 0, 0, &samples);
 }
 
 #[test]
@@ -624,6 +926,221 @@ fn shape_boolean_hole_boundary_cutter_xor() {
     assert_boolean_area_and_samples(&ring, &cutter, BooleanOp::Xor, 112.0, &samples);
 }
 
+#[test]
+fn shape_boolean_point_touching_rectangles_do_not_create_intersection_area() {
+    let lower_left = create_shape_rects(&[(0.0, 0.0, 10.0, 10.0)]);
+    let upper_right = create_shape_rects(&[(10.0, 10.0, 20.0, 20.0)]);
+    let samples = [(5.0, 5.0), (15.0, 15.0), (10.001, 10.001), (9.999, 9.999)];
+
+    assert_boolean_area_and_samples(&lower_left, &upper_right, BooleanOp::Or, 200.0, &samples);
+    assert_boolean_result(
+        &lower_left,
+        &upper_right,
+        BooleanOp::And,
+        0.0,
+        0,
+        0,
+        &samples,
+    );
+    assert_boolean_area_and_samples(&lower_left, &upper_right, BooleanOp::Xor, 200.0, &samples);
+}
+
+#[test]
+fn shape_boolean_partially_shared_edge_is_regularized() {
+    let bottom = create_shape_rects(&[(0.0, 0.0, 10.0, 10.0)]);
+    let top = create_shape_rects(&[(5.0, 10.0, 15.0, 20.0)]);
+    let samples = [(2.0, 2.0), (7.5, 9.999), (7.5, 10.001), (12.0, 12.0)];
+
+    assert_boolean_area_and_samples(&bottom, &top, BooleanOp::Or, 200.0, &samples);
+    assert_boolean_result(&bottom, &top, BooleanOp::And, 0.0, 0, 0, &samples);
+    assert_boolean_area_and_samples(&bottom, &top, BooleanOp::Not, 100.0, &samples);
+}
+
+#[test]
+fn shape_boolean_thin_sliver_overlap_keeps_area_identities() {
+    let a = create_shape_rects(&[(0.0, 0.0, 10.0, 10.0)]);
+    let b = create_shape_rects(&[(9.999, 0.0, 20.0, 10.0)]);
+    let samples = [(5.0, 5.0), (9.9995, 5.0), (10.0005, 5.0), (15.0, 5.0)];
+
+    assert_boolean_area_and_samples(&a, &b, BooleanOp::Or, 200.0, &samples);
+    assert_boolean_area_and_samples(&a, &b, BooleanOp::And, 0.01, &samples);
+    assert_boolean_area_and_samples(&a, &b, BooleanOp::Not, 99.99, &samples);
+    // The current lower-level boolean regularizes this tiny overlap on the XOR path; keep the
+    // semantic samples active while accepting the current stable area.
+    assert_boolean_area_and_samples(&a, &b, BooleanOp::Xor, 199.99, &samples);
+}
+
+#[test]
+fn shape_boolean_circle_disjoint_tangent_and_identical_cases() {
+    let c1_pline = create_approx_circle(0.0, 0.0, 2.0);
+    let c2_pline = create_approx_circle(6.0, 0.0, 2.0);
+    let tangent_pline = create_approx_circle(4.0, 0.0, 2.0);
+    let c1_area = c1_pline.area();
+
+    let c1 = Shape::from_plines(vec![c1_pline.clone()]);
+    let c2 = Shape::from_plines(vec![c2_pline]);
+    let tangent = Shape::from_plines(vec![tangent_pline]);
+    let c1_again = Shape::from_plines(vec![c1_pline]);
+
+    let disjoint_samples = [(0.0, 0.0), (6.0, 0.0), (3.0, 0.0), (10.0, 0.0)];
+    assert_boolean_area_and_samples(&c1, &c2, BooleanOp::Or, c1_area * 2.0, &disjoint_samples);
+    assert_boolean_result(&c1, &c2, BooleanOp::And, 0.0, 0, 0, &disjoint_samples);
+    assert_boolean_area_and_samples(&c1, &c2, BooleanOp::Xor, c1_area * 2.0, &disjoint_samples);
+
+    let tangent_samples = [(0.0, 0.0), (4.0, 0.0), (2.0001, 0.0), (8.0, 0.0)];
+    assert_boolean_area_and_samples(
+        &c1,
+        &tangent,
+        BooleanOp::Or,
+        c1_area * 2.0,
+        &tangent_samples,
+    );
+    assert_boolean_result(&c1, &tangent, BooleanOp::And, 0.0, 0, 0, &tangent_samples);
+
+    let identical_samples = [(0.0, 0.0), (1.0, 0.0), (2.1, 0.0), (-2.1, 0.0)];
+    assert_boolean_result(
+        &c1,
+        &c1_again,
+        BooleanOp::Or,
+        c1_area,
+        1,
+        0,
+        &identical_samples,
+    );
+    assert_boolean_result(
+        &c1,
+        &c1_again,
+        BooleanOp::And,
+        c1_area,
+        1,
+        0,
+        &identical_samples,
+    );
+    assert_boolean_result(
+        &c1,
+        &c1_again,
+        BooleanOp::Not,
+        0.0,
+        0,
+        0,
+        &identical_samples,
+    );
+}
+
+#[test]
+fn shape_boolean_donut_square_outside_and_hole_boundary_cases() {
+    let donut = create_donut((0.0, 0.0, 10.0, 10.0), &[(3.0, 3.0, 7.0, 7.0)]);
+    let outside_square = create_shape_rects(&[(20.0, 20.0, 22.0, 22.0)]);
+
+    let outside_samples = [(1.0, 1.0), (5.0, 5.0), (21.0, 21.0), (15.0, 15.0)];
+    assert_boolean_result(
+        &donut,
+        &outside_square,
+        BooleanOp::Or,
+        88.0,
+        2,
+        1,
+        &outside_samples,
+    );
+    assert_boolean_result(
+        &donut,
+        &outside_square,
+        BooleanOp::And,
+        0.0,
+        0,
+        0,
+        &outside_samples,
+    );
+    assert_boolean_result(
+        &donut,
+        &outside_square,
+        BooleanOp::Not,
+        84.0,
+        1,
+        1,
+        &outside_samples,
+    );
+    assert_boolean_area_and_samples(
+        &donut,
+        &outside_square,
+        BooleanOp::Xor,
+        88.0,
+        &outside_samples,
+    );
+}
+
+#[test]
+#[ignore = "documents current hole-boundary union area inflation"]
+fn reported_shape_boolean_hole_boundary_union_area_inflation_1() {
+    let donut = create_donut((0.0, 0.0, 10.0, 10.0), &[(3.0, 3.0, 7.0, 7.0)]);
+    let hole_boundary_square = create_shape_rects(&[(2.0, 2.0, 5.0, 5.0)]);
+
+    let boundary_samples = [(2.5, 2.5), (4.5, 4.5), (1.0, 1.0), (8.0, 8.0), (11.0, 11.0)];
+    assert_boolean_area_and_samples(
+        &donut,
+        &hole_boundary_square,
+        BooleanOp::Or,
+        88.0,
+        &boundary_samples,
+    );
+    assert_boolean_area_and_samples(
+        &donut,
+        &hole_boundary_square,
+        BooleanOp::And,
+        5.0,
+        &boundary_samples,
+    );
+    assert_boolean_area_and_samples(
+        &donut,
+        &hole_boundary_square,
+        BooleanOp::Not,
+        79.0,
+        &boundary_samples,
+    );
+    assert_boolean_area_and_samples(
+        &donut,
+        &hole_boundary_square,
+        BooleanOp::Xor,
+        83.0,
+        &boundary_samples,
+    );
+}
+
+#[test]
+fn shape_boolean_two_disjoint_donuts_and_nested_ring() {
+    let donut_a = create_donut((0.0, 0.0, 10.0, 10.0), &[(3.0, 3.0, 7.0, 7.0)]);
+    let donut_b = create_donut((20.0, 0.0, 30.0, 10.0), &[(23.0, 3.0, 27.0, 7.0)]);
+    let samples = [
+        (1.0, 1.0),
+        (5.0, 5.0),
+        (21.0, 1.0),
+        (25.0, 5.0),
+        (15.0, 5.0),
+    ];
+
+    assert_boolean_result(&donut_a, &donut_b, BooleanOp::Or, 168.0, 2, 2, &samples);
+    assert_boolean_result(&donut_a, &donut_b, BooleanOp::And, 0.0, 0, 0, &samples);
+    assert_boolean_result(&donut_a, &donut_b, BooleanOp::Not, 84.0, 1, 1, &samples);
+    assert_boolean_area_and_samples(&donut_a, &donut_b, BooleanOp::Xor, 168.0, &samples);
+
+    let nested = Shape::from_plines(vec![
+        create_rectangle(0.0, 0.0, 10.0, 10.0),
+        create_cw_rectangle(2.0, 2.0, 8.0, 8.0),
+        create_rectangle(4.0, 4.0, 6.0, 6.0),
+    ]);
+    assert_shape_valid(&nested);
+    assert!(shape_signed_area(&nested).fuzzy_eq_eps(68.0, 1e-5));
+    assert_boolean_result(
+        &nested,
+        &Shape::<f64>::empty(),
+        BooleanOp::Or,
+        68.0,
+        2,
+        1,
+        &[(1.0, 1.0), (3.0, 3.0), (5.0, 5.0), (11.0, 11.0)],
+    );
+}
+
 #[cfg(test)]
 mod shape_boolean_proptests {
     use super::*;
@@ -685,6 +1202,30 @@ mod shape_boolean_proptests {
                 (a, b)
             },
         )
+    }
+
+    fn donut_rect_strategy() -> impl Strategy<Value = RectPair> {
+        (-50i32..50, -50i32..50, 16i32..60, 16i32..60).prop_map(|(x, y, w, h)| {
+            let margin_x = (w / 4).max(3);
+            let margin_y = (h / 4).max(3);
+            let outer = (
+                f64::from(x),
+                f64::from(y),
+                f64::from(x + w),
+                f64::from(y + h),
+            );
+            let inner = (
+                f64::from(x + margin_x),
+                f64::from(y + margin_y),
+                f64::from(x + w - margin_x),
+                f64::from(y + h - margin_y),
+            );
+            (outer, inner)
+        })
+    }
+
+    fn translate_rect(rect: Rect, dx: f64, dy: f64) -> Rect {
+        (rect.0 + dx, rect.1 + dy, rect.2 + dx, rect.3 + dy)
     }
 
     proptest! {
@@ -786,6 +1327,107 @@ mod shape_boolean_proptests {
                 &samples,
             );
             assert_boolean_area_and_samples(&a_shape, &b_shape, BooleanOp::Xor, xor_area, &samples);
+        }
+
+        #[test]
+        fn donut_empty_and_self_identities_hold((outer, inner) in donut_rect_strategy()) {
+            let donut = create_donut(outer, &[inner]);
+            let same_donut = donut.clone();
+            let empty = Shape::<f64>::empty();
+            let area = rect_area(outer) - rect_area(inner);
+            let samples = [rect_center(outer), rect_center(inner), outside_sample(outer)];
+
+            assert_boolean_area_and_samples(&donut, &empty, BooleanOp::Or, area, &samples);
+            assert_boolean_result(&donut, &empty, BooleanOp::And, 0.0, 0, 0, &samples);
+            assert_boolean_area_and_samples(&donut, &empty, BooleanOp::Not, area, &samples);
+            assert_boolean_area_and_samples(&donut, &same_donut, BooleanOp::Or, area, &samples);
+            assert_boolean_area_and_samples(&donut, &same_donut, BooleanOp::And, area, &samples);
+            assert_boolean_result(&donut, &same_donut, BooleanOp::Not, 0.0, 0, 0, &samples);
+            assert_boolean_result(&donut, &same_donut, BooleanOp::Xor, 0.0, 0, 0, &samples);
+        }
+
+        #[test]
+        fn rectangle_difference_decomposes_into_difference_and_intersection(
+            (a, b) in overlapping_rect_pair_strategy(),
+        ) {
+            let a_shape = create_shape_rects(&[a]);
+            let b_shape = create_shape_rects(&[b]);
+            let diff = a_shape.boolean(&b_shape, BooleanOp::Not);
+            let intersection = a_shape.boolean(&b_shape, BooleanOp::And);
+            let recomposed = diff.boolean(&intersection, BooleanOp::Or);
+            let samples = [
+                rect_center(a),
+                rect_center(b),
+                ((a.0.max(b.0) + a.2.min(b.2)) * 0.5, (a.1.max(b.1) + a.3.min(b.3)) * 0.5),
+                outside_sample(b),
+            ];
+
+            assert_shapes_equivalent_by_samples(&a_shape, &recomposed, &samples);
+        }
+
+        #[test]
+        fn translated_overlapping_rectangles_preserve_boolean_results(
+            (a, b) in overlapping_rect_pair_strategy(),
+            dx in -200i32..200,
+            dy in -200i32..200,
+        ) {
+            let a_shape = create_shape_rects(&[a]);
+            let b_shape = create_shape_rects(&[b]);
+            let dx = f64::from(dx);
+            let dy = f64::from(dy);
+            let translated_a = create_shape_rects(&[translate_rect(a, dx, dy)]);
+            let translated_b = create_shape_rects(&[translate_rect(b, dx, dy)]);
+            let samples = [
+                rect_center(a),
+                rect_center(b),
+                outside_sample(b),
+                ((a.0.max(b.0) + a.2.min(b.2)) * 0.5, (a.1.max(b.1) + a.3.min(b.3)) * 0.5),
+            ];
+
+            for op in [BooleanOp::Or, BooleanOp::And, BooleanOp::Not, BooleanOp::Xor] {
+                let base = a_shape.boolean(&b_shape, op);
+                let translated = translated_a.boolean(&translated_b, op);
+                assert_shape_valid(&base);
+                assert_shape_valid(&translated);
+                assert!(
+                    shape_signed_area(&base).fuzzy_eq_eps(shape_signed_area(&translated), 1e-5),
+                    "translation changed area for {op:?}"
+                );
+
+                for (x, y) in samples {
+                    assert_eq!(
+                        shape_contains(&base, x, y),
+                        shape_contains(&translated, x + dx, y + dy),
+                        "translation changed sampled membership for {op:?}"
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn scaled_overlapping_rectangles_scale_result_area(
+            (a, b) in overlapping_rect_pair_strategy(),
+            scale in 2i32..8,
+        ) {
+            let a_shape = create_shape_rects(&[a]);
+            let b_shape = create_shape_rects(&[b]);
+            let scale = f64::from(scale);
+            let mut scaled_a = a_shape.clone();
+            let mut scaled_b = b_shape.clone();
+            scaled_a.scale_mut(scale);
+            scaled_b.scale_mut(scale);
+
+            for op in [BooleanOp::Or, BooleanOp::And, BooleanOp::Not, BooleanOp::Xor] {
+                let base = a_shape.boolean(&b_shape, op);
+                let scaled = scaled_a.boolean(&scaled_b, op);
+                assert_shape_valid(&base);
+                assert_shape_valid(&scaled);
+                assert!(
+                    (shape_signed_area(&base) * scale * scale)
+                        .fuzzy_eq_eps(shape_signed_area(&scaled), 1e-4),
+                    "uniform scaling changed area incorrectly for {op:?}"
+                );
+            }
         }
     }
 }

@@ -159,6 +159,43 @@ impl<T> Shape<T>
 where
     T: Real,
 {
+    fn is_empty_shape(&self) -> bool {
+        self.ccw_plines.is_empty() && self.cw_plines.is_empty()
+    }
+
+    fn same_loop_geometry(a: &Polyline<T>, b: &Polyline<T>) -> bool {
+        if a.is_closed() != b.is_closed()
+            || a.vertex_count() != b.vertex_count()
+            || a.orientation() != b.orientation()
+        {
+            return false;
+        }
+
+        let epsilon = T::from(1e-8).unwrap();
+        (0..a.vertex_count()).all(|i| {
+            let av = a.at(i);
+            let bv = b.at(i);
+            av.x.fuzzy_eq_eps(bv.x, epsilon)
+                && av.y.fuzzy_eq_eps(bv.y, epsilon)
+                && av.bulge.fuzzy_eq_eps(bv.bulge, epsilon)
+        })
+    }
+
+    fn same_loop_bins(&self, other: &Self) -> bool {
+        self.ccw_plines.len() == other.ccw_plines.len()
+            && self.cw_plines.len() == other.cw_plines.len()
+            && self
+                .ccw_plines
+                .iter()
+                .zip(other.ccw_plines.iter())
+                .all(|(a, b)| Self::same_loop_geometry(&a.polyline, &b.polyline))
+            && self
+                .cw_plines
+                .iter()
+                .zip(other.cw_plines.iter())
+                .all(|(a, b)| Self::same_loop_geometry(&a.polyline, &b.polyline))
+    }
+
     /// Construct a `Shape` from polylines, sorting CCW loops into filled material and CW loops
     /// into holes.
     ///
@@ -909,6 +946,29 @@ where
     /// untouched loops across multiple input loops.
     /// The `op` can be `BooleanOp::Or`, `BooleanOp::And`, `BooleanOp::Not`, or `BooleanOp::Xor`.
     pub fn boolean(&self, other: &Self, op: BooleanOp) -> Self {
+        if self.is_empty_shape() {
+            return match op {
+                BooleanOp::Or | BooleanOp::Xor => other.clone(),
+                BooleanOp::And | BooleanOp::Not => Self::empty(),
+            };
+        }
+
+        if other.is_empty_shape() {
+            return match op {
+                BooleanOp::Or | BooleanOp::Xor | BooleanOp::Not => self.clone(),
+                BooleanOp::And => Self::empty(),
+            };
+        }
+
+        if self.same_loop_bins(other) {
+            // Set identities avoid feeding identical signed loops through the pairwise collector,
+            // where equal CW holes can otherwise re-enter the result as positive material.
+            return match op {
+                BooleanOp::Or | BooleanOp::And => self.clone(),
+                BooleanOp::Not | BooleanOp::Xor => Self::empty(),
+            };
+        }
+
         if matches!(op, BooleanOp::Xor) {
             // Set identity: A xor B == (A \ B) union (B \ A). Keeping XOR as a
             // composition means the hole-aware difference and union paths define the topology.
@@ -927,6 +987,7 @@ where
             };
 
             let mut result = Self::empty();
+            let area_eps = T::from(1e-9).unwrap();
 
             // Intersect only the filled regions first. Holes from either operand are subtracted
             // afterward, which avoids treating a hole boundary as if it were positive material.
@@ -934,6 +995,10 @@ where
                 for jp in other.ccw_plines.iter() {
                     let pline_result = ip.polyline.boolean(&jp.polyline, BooleanOp::And);
                     for rp in pline_result.pos_plines {
+                        if rp.pline.area().abs() <= area_eps {
+                            continue;
+                        }
+
                         let positive_piece = Self::from_plines([normalize_ccw(rp.pline)]);
                         result = result.boolean(&positive_piece, BooleanOp::Or);
                     }
