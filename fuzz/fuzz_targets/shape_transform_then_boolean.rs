@@ -4,6 +4,8 @@ use libfuzzer_sys::fuzz_target;
 
 mod support;
 
+// Transforming before booleaning checks that translated, scaled, and rotated shapes keep their
+// loop indexes and sampled set semantics coherent.
 fuzz_target!(|data: &[u8]| {
     let mut reader = support::ByteReader::new(data);
     let mut a = support::rectangle_shape(&mut reader, 3);

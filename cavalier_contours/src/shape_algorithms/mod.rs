@@ -202,6 +202,11 @@ where
         })
     }
 
+    /// Compare signed-loop bins geometrically instead of by storage order.
+    ///
+    /// Shape boolean has identity fast paths for equal operands. Loop order and closed-loop start
+    /// vertex are not semantic, so this comparison deliberately accepts reordered and rotated
+    /// loops while still keeping CCW material and CW holes in separate bins.
     fn same_loop_set(a: &[IndexedPolyline<T>], b: &[IndexedPolyline<T>]) -> bool {
         if a.len() != b.len() {
             return false;
@@ -223,16 +228,23 @@ where
         true
     }
 
+    /// Return true when both shapes contain the same CCW material loops and CW hole loops.
     fn same_loop_bins(&self, other: &Self) -> bool {
         Self::same_loop_set(&self.ccw_plines, &other.ccw_plines)
             && Self::same_loop_set(&self.cw_plines, &other.cw_plines)
     }
 
+    /// Area tolerance used only while assembling shape boolean results.
+    ///
+    /// Lower-level polyline booleans can emit near-zero slivers around tangencies and shared
+    /// boundaries. Keeping this threshold centralized prevents the four signed-loop pairings from
+    /// drifting apart as the shape-level assembly evolves.
     #[inline]
     fn shape_boolean_area_epsilon() -> T {
         T::from(SHAPE_BOOLEAN_AREA_EPS).unwrap()
     }
 
+    /// Normalize a result loop into the positive-material orientation expected by `ccw_plines`.
     fn normalize_ccw(pline: Polyline<T>) -> Polyline<T> {
         if pline.orientation() == PlineOrientation::Clockwise {
             Polyline::create_from(&PlineInversionView::new(&pline))
@@ -241,6 +253,7 @@ where
         }
     }
 
+    /// Normalize a result loop into the subtractive-hole orientation expected by `cw_plines`.
     fn normalize_cw(pline: Polyline<T>) -> Polyline<T> {
         if pline.orientation() == PlineOrientation::CounterClockwise {
             Polyline::create_from(&PlineInversionView::new(&pline))
@@ -249,6 +262,11 @@ where
         }
     }
 
+    /// Build a shape from already classified signed loops.
+    ///
+    /// All shape boolean exits go through this helper so orientation normalization, tiny-area
+    /// filtering, child indexes, and the top-level shape index stay consistent. Reusing this path
+    /// also keeps docs.rs output stable by avoiding duplicate private assembly variants.
     fn build_from_signed_plines(ccw_plines: Vec<Polyline<T>>, cw_plines: Vec<Polyline<T>>) -> Self {
         let area_eps = Self::shape_boolean_area_epsilon();
         let final_ccw_result = ccw_plines
@@ -285,6 +303,11 @@ where
         }
     }
 
+    /// Merge positive material loops using the existing polyline union implementation.
+    ///
+    /// Shape booleans may accumulate many pairwise pieces for one final island. This helper keeps
+    /// that consolidation local while preserving the lower-level regularization rules for
+    /// edge-touching loops.
     fn merge_ccw_plines(plines: Vec<Polyline<T>>) -> Vec<Polyline<T>> {
         let area_eps = Self::shape_boolean_area_epsilon();
         let mut merged: Vec<Polyline<T>> = Vec::new();
@@ -339,6 +362,11 @@ where
         merged
     }
 
+    /// Visit only loop indexes whose shape-level bounds overlap the query bounds.
+    ///
+    /// The top-level index stores CCW loops first and CW loops second. This helper hides that
+    /// layout from the boolean pair collectors while preserving the same signed-bin semantics as a
+    /// direct nested loop scan.
     #[inline]
     fn visit_loop_candidates(
         shape: &Shape<T>,
@@ -1226,6 +1254,9 @@ where
                 != 0
         };
 
+        // Probe several interior candidates when resolving containment-style lower-level results.
+        // A single vertex is unreliable for edge-sharing and hole-boundary cases because it can
+        // lie exactly on a boundary where winding-number membership is intentionally ambiguous.
         let shape_overlaps_pline_area = |shape: &Self, pline: &Polyline<T>| {
             shape_contains_point(shape, loop_center(pline))
                 || pline
@@ -1258,7 +1289,8 @@ where
                     .all(|(v1, v2)| container.winding_number(seg_midpoint(v1, v2)) != 0)
         }
 
-        // Bookkeeping: track which polylines from self/other participated
+        // Track which input loops participated in a non-disjoint lower-level result. Unused-loop
+        // retention is what keeps distant islands and untouched holes in union/difference output.
         let mut self_used_ccw = vec![false; self.ccw_plines.len()];
         let mut self_used_cw = vec![false; self.cw_plines.len()];
         let mut othr_used_ccw = vec![false; other.ccw_plines.len()];
@@ -1455,7 +1487,8 @@ where
         };
 
         for boolean_result in all_results {
-            // each BooleanResult can have pos_plines or neg_plines
+            // Each lower-level result can contain positive material or negative holes; normalize
+            // them back into shape bins before retaining untouched input loops.
             for rp in boolean_result.pos_plines {
                 add_ccw(rp.pline, &mut final_ccw);
             }

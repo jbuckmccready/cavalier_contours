@@ -4,6 +4,8 @@ use libfuzzer_sys::fuzz_target;
 
 mod support;
 
+// Donut cases focus the corpus on signed-loop binning: positive outer loops, inverted CW holes,
+// and interactions between holes and ordinary material.
 fuzz_target!(|data: &[u8]| {
     let mut reader = support::ByteReader::new(data);
     let a = support::donut_shape(&mut reader);

@@ -1,3 +1,11 @@
+//! Shape-level boolean regression, property, diagnostic, and manual differential tests.
+//!
+//! The shape boolean layer delegates clipping to the polyline boolean algorithm, then rebuilds
+//! signed `Shape` bins from pairwise CCW/CW loop results. These tests therefore assert both
+//! geometry semantics and assembly invariants: valid signed loop orientation, fresh spatial
+//! indexes, no duplicate loops, set-operation membership at sampled points, and debuggable failure
+//! artifacts for cases where exact topology is not stable enough to be the only oracle.
+
 mod test_utils;
 
 use cavalier_contours::core::{math::Vector2, traits::FuzzyEq};
@@ -11,6 +19,10 @@ use std::f64::consts::PI;
 use std::{env, fmt::Write as _, fs, path::Path};
 use test_utils::to_debug_json_str;
 
+/// Test-side tolerance for validating reconstructed shape loops and indexes.
+///
+/// This is intentionally a little larger than exact floating-point noise because these assertions
+/// probe results after arc conversion, pairwise clipping, loop merging, and index rebuilds.
 const SHAPE_TEST_EPS: f64 = 1e-7;
 
 /// A small helper to verify bounding boxes.
@@ -70,6 +82,10 @@ fn create_cw_rectangle(xmin: f64, ymin: f64, xmax: f64, ymax: f64) -> Polyline<f
     pl
 }
 
+/// Build a multi-island shape from axis-aligned rectangles.
+///
+/// Rectangles keep expected areas easy to compute, which makes them useful for deterministic
+/// algebraic identities and property tests.
 fn create_shape_rects(rects: &[(f64, f64, f64, f64)]) -> Shape<f64> {
     Shape::from_plines(
         rects
@@ -78,6 +94,10 @@ fn create_shape_rects(rects: &[(f64, f64, f64, f64)]) -> Shape<f64> {
     )
 }
 
+/// Build a rectangular donut whose outer loop is material and whose inner loops are holes.
+///
+/// Hole-heavy cases are the main stressor for shape boolean because CW loops are inverted before
+/// they are passed to the lower-level positive-area polyline boolean.
 fn create_donut(outer: (f64, f64, f64, f64), holes: &[(f64, f64, f64, f64)]) -> Shape<f64> {
     let mut plines = vec![create_rectangle(outer.0, outer.1, outer.2, outer.3)];
     plines.extend(
@@ -88,12 +108,17 @@ fn create_donut(outer: (f64, f64, f64, f64), holes: &[(f64, f64, f64, f64)]) -> 
     Shape::from_plines(plines)
 }
 
+/// Rotate a closed loop's start vertex without changing its geometry.
+///
+/// This catches accidental dependence on storage order in shape identity checks and pairwise
+/// bookkeeping.
 fn rotate_pline_start(pline: &Polyline<f64>, start_index: usize) -> Polyline<f64> {
     pline
         .rotate_start(start_index, pline.at(start_index).pos(), SHAPE_TEST_EPS)
         .expect("expected valid closed polyline rotation")
 }
 
+/// Sum shape area using the same signed-loop convention as `Shape`.
 fn shape_signed_area(shape: &Shape<f64>) -> f64 {
     // Shape uses signed loop bins: CCW contributes positive area, CW contributes negative holes.
     shape
@@ -104,6 +129,7 @@ fn shape_signed_area(shape: &Shape<f64>) -> f64 {
         .sum()
 }
 
+/// Compute non-zero winding membership across every signed loop in a shape.
 fn shape_winding_number(shape: &Shape<f64>, point: Vector2<f64>) -> i32 {
     // Match Shape::boolean's non-zero winding semantics by summing every signed loop.
     shape
@@ -119,10 +145,12 @@ fn shape_winding_number(shape: &Shape<f64>, point: Vector2<f64>) -> i32 {
         .sum()
 }
 
+/// Test membership helper used by sampled boolean oracles.
 fn shape_contains(shape: &Shape<f64>, x: f64, y: f64) -> bool {
     shape_winding_number(shape, Vector2::new(x, y)) != 0
 }
 
+/// Quantized per-loop summary used in diagnostics and duplicate-loop checks.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct LoopSignature {
     orientation: &'static str,
@@ -132,6 +160,7 @@ struct LoopSignature {
     extents: Option<(i64, i64, i64, i64)>,
 }
 
+/// Quantized shape summary that is stable enough to print in failure dumps.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ShapeSignature {
     ccw_count: usize,
@@ -142,10 +171,12 @@ struct ShapeSignature {
     loops: Vec<LoopSignature>,
 }
 
+/// Quantize floating-point diagnostics without requiring exact vertex identity.
 fn sig_num(value: f64) -> i64 {
     (value * 1_000_000_000.0).round() as i64
 }
 
+/// Convert extents into the same quantized representation used by shape signatures.
 fn extents_signature(
     extents: Option<static_aabb2d_index::AABB<f64>>,
 ) -> Option<(i64, i64, i64, i64)> {
@@ -159,6 +190,7 @@ fn extents_signature(
     })
 }
 
+/// Capture the loop-level fields that matter when debugging shape assembly.
 fn loop_signature(pline: &Polyline<f64>) -> LoopSignature {
     LoopSignature {
         orientation: match pline.orientation() {
@@ -173,6 +205,7 @@ fn loop_signature(pline: &Polyline<f64>) -> LoopSignature {
     }
 }
 
+/// Build a deterministic diagnostic signature independent of loop storage order.
 fn shape_signature(shape: &Shape<f64>) -> ShapeSignature {
     let mut loops = shape
         .ccw_plines
@@ -192,6 +225,7 @@ fn shape_signature(shape: &Shape<f64>) -> ShapeSignature {
     }
 }
 
+/// Reject duplicate coincident loops, which often indicate pairwise result over-retention.
 fn assert_no_duplicate_loops(shape: &Shape<f64>) {
     let mut loops = shape_signature(shape).loops;
     loops.sort();
@@ -204,6 +238,7 @@ fn assert_no_duplicate_loops(shape: &Shape<f64>) {
     }
 }
 
+/// Validate one output loop before it can be reused as a shape input.
 fn assert_loop_valid(pline: &Polyline<f64>, expected_orientation: PlineOrientation) {
     assert!(pline.is_closed(), "shape loops must be closed: {pline:?}");
     assert_eq!(
@@ -223,6 +258,10 @@ fn assert_loop_valid(pline: &Polyline<f64>, expected_orientation: PlineOrientati
     }
 }
 
+/// Validate shape invariants that boolean output must preserve.
+///
+/// The checks go beyond sampled membership because stale indexes, wrong signed bins, and duplicate
+/// loops can pass point samples while still breaking later shape operations.
 fn assert_shape_valid(shape: &Shape<f64>) {
     // Every boolean result should be immediately reusable as a Shape input, so verify the
     // orientation bins and spatial indexes instead of checking only area or membership.
@@ -308,6 +347,10 @@ fn assert_shape_valid(shape: &Shape<f64>) {
     assert_no_duplicate_loops(shape);
 }
 
+/// Add samples near vertices and segment midpoints.
+///
+/// Boolean bugs often hide near cut points, tangencies, and hole boundaries, so the semantic
+/// oracle deliberately samples around geometry features instead of only using a coarse grid.
 fn push_shape_probe_samples(shape: &Shape<f64>, samples: &mut Vec<(f64, f64)>) {
     let nudges = [
         (SHAPE_TEST_EPS * 1000.0, SHAPE_TEST_EPS * 1000.0),
@@ -337,6 +380,7 @@ fn push_shape_probe_samples(shape: &Shape<f64>, samples: &mut Vec<(f64, f64)>) {
     }
 }
 
+/// Compute bounds for a group of shapes so grid samples cover all inputs and the result.
 fn combined_extents(shapes: &[&Shape<f64>]) -> Option<static_aabb2d_index::AABB<f64>> {
     shapes
         .iter()
@@ -354,6 +398,10 @@ fn combined_extents(shapes: &[&Shape<f64>]) -> Option<static_aabb2d_index::AABB<
         })
 }
 
+/// Build the deterministic point set used by the membership oracle.
+///
+/// Exact output topology can legitimately vary after regularization, but points away from
+/// boundaries must obey the requested set operation.
 fn semantic_samples(
     a: &Shape<f64>,
     b: &Shape<f64>,
@@ -383,6 +431,7 @@ fn semantic_samples(
     samples
 }
 
+/// Convert a polyline to an SVG path while preserving arc segments.
 fn pline_svg_path(pline: &Polyline<f64>) -> Option<String> {
     if pline.vertex_count() == 0 {
         return None;
@@ -425,10 +474,12 @@ fn pline_svg_path(pline: &Polyline<f64>) -> Option<String> {
     Some(path)
 }
 
+/// Write an SVG overlay for failure inspection.
 fn write_shape_svg(path: &Path, shapes: &[(&Shape<f64>, &'static str)]) -> std::io::Result<()> {
     write_shape_svg_with_sample(path, shapes, None)
 }
 
+/// Write an SVG overlay and optionally mark the sampled point that failed membership.
 fn write_shape_svg_with_sample(
     path: &Path,
     shapes: &[(&Shape<f64>, &'static str)],
@@ -501,6 +552,7 @@ fn write_shape_svg_with_sample(
     fs::write(path, svg)
 }
 
+/// Serialize the input and output loops in the same debug JSON style as existing tests.
 fn shape_debug_json(shape: &Shape<f64>) -> String {
     let mut result = String::new();
     result.push_str("{\n  \"ccw\": [\n");
@@ -521,10 +573,12 @@ fn shape_debug_json(shape: &Shape<f64>) -> String {
     result
 }
 
+/// Mirror the shape-level broad-phase overlap predicate used by the implementation.
 fn aabb_overlap(a: static_aabb2d_index::AABB<f64>, b: static_aabb2d_index::AABB<f64>) -> bool {
     a.min_x <= b.max_x && a.max_x >= b.min_x && a.min_y <= b.max_y && a.max_y >= b.min_y
 }
 
+/// Append one pairwise lower-level boolean row to a trace dump.
 fn write_pair_trace(
     trace: &mut String,
     label: &str,
@@ -543,6 +597,11 @@ fn write_pair_trace(
     }
 }
 
+/// Reconstruct the pairwise decisions in a human-readable trace.
+///
+/// This is test-side instrumentation rather than production logging so a failing case can show
+/// which signed-loop pairs were broad-phase candidates, what the lower-level polyline boolean
+/// returned, and which loops would be considered used.
 fn shape_pairwise_trace(a: &Shape<f64>, b: &Shape<f64>, op: BooleanOp) -> String {
     let mut trace = String::new();
     let _ = writeln!(trace, "pairwise lower-level trace for {op:?}");
@@ -688,6 +747,10 @@ fn shape_pairwise_trace(a: &Shape<f64>, b: &Shape<f64>, op: BooleanOp) -> String
     trace
 }
 
+/// Emit copy-pasteable and visual artifacts when sampled membership fails.
+///
+/// The environment gate keeps normal CI quiet while making local reduction work much faster for
+/// fuzz and proptest failures.
 fn dump_shape_boolean_failure(
     a: &Shape<f64>,
     b: &Shape<f64>,
@@ -731,6 +794,7 @@ fn dump_shape_boolean_failure(
     let _ = fs::write(dir.join("trace.txt"), shape_pairwise_trace(a, b, op));
 }
 
+/// Print shape summaries and pairwise traces when explicit tracing is enabled.
 fn trace_shape_boolean_case(a: &Shape<f64>, b: &Shape<f64>, result: &Shape<f64>, op: BooleanOp) {
     if env::var_os("CAVC_TRACE_SHAPE_BOOLEAN").is_none() {
         return;
@@ -745,6 +809,10 @@ fn trace_shape_boolean_case(a: &Shape<f64>, b: &Shape<f64>, result: &Shape<f64>,
     );
 }
 
+/// Assert that sampled points match the set operation over the original inputs.
+///
+/// This is the primary semantic oracle for shape booleans because exact contour decomposition can
+/// differ while still representing the same regularized area.
 fn assert_boolean_samples(
     a: &Shape<f64>,
     b: &Shape<f64>,
@@ -776,6 +844,7 @@ fn assert_boolean_samples(
     }
 }
 
+/// Assert shape validity, loop counts, signed area, and sampled semantics for stable cases.
 fn assert_boolean_result(
     a: &Shape<f64>,
     b: &Shape<f64>,
@@ -806,6 +875,8 @@ fn assert_boolean_result(
     assert_boolean_samples(a, b, &result, op, samples);
 }
 
+/// Assert shape validity, signed area, and sampled semantics when topology is not stable enough
+/// for exact loop-count assertions.
 fn assert_boolean_area_and_samples(
     a: &Shape<f64>,
     b: &Shape<f64>,
@@ -824,6 +895,7 @@ fn assert_boolean_area_and_samples(
     assert_boolean_samples(a, b, &result, op, samples);
 }
 
+/// Check commutative operators in both operand orders and validate each result by samples.
 fn assert_commutative_samples(
     a: &Shape<f64>,
     b: &Shape<f64>,
@@ -855,6 +927,7 @@ fn assert_commutative_samples(
     assert_boolean_samples(b, a, &ba, op, samples);
 }
 
+/// Compare two result shapes by stable invariants and sample membership.
 fn assert_shapes_equivalent_by_samples(a: &Shape<f64>, b: &Shape<f64>, samples: &[(f64, f64)]) {
     assert_shape_valid(a);
     assert_shape_valid(b);
@@ -904,6 +977,8 @@ fn shape_boolean_empty_identities_are_valid() {
 
 #[test]
 fn shape_boolean_rectangle_containment_all_ops() {
+    // Containment exercises lower-level "inside" result_info paths and the shape-level decision
+    // about whether a contained loop becomes material, a hole, or disappears.
     let outer = Shape::from_plines(vec![create_rectangle(0.0, 0.0, 10.0, 10.0)]);
     let inner = Shape::from_plines(vec![create_rectangle(2.0, 2.0, 4.0, 4.0)]);
     let samples = [(1.0, 1.0), (3.0, 3.0), (8.0, 8.0), (12.0, 12.0)];
@@ -916,6 +991,8 @@ fn shape_boolean_rectangle_containment_all_ops() {
 
 #[test]
 fn shape_boolean_edge_touching_rectangles_do_not_create_area() {
+    // Shared boundaries are regularized as zero area. These cases guard against emitting tiny
+    // slivers or duplicate loops when pairwise booleans return boundary-only relationships.
     let left = Shape::from_plines(vec![create_rectangle(0.0, 0.0, 10.0, 10.0)]);
     let right = Shape::from_plines(vec![create_rectangle(10.0, 0.0, 20.0, 10.0)]);
     let samples = [(5.0, 5.0), (15.0, 5.0), (10.5, 5.0), (-1.0, 5.0)];
@@ -946,6 +1023,7 @@ fn shape_boolean_square_inside_hole_respects_empty_space() {
 
 #[test]
 fn shape_boolean_identical_rectangle_all_ops() {
+    // Identical simple loops should take the same identity fast path as more complex equal shapes.
     let rect = create_shape_rects(&[(0.0, 0.0, 10.0, 10.0)]);
     let samples = [(1.0, 1.0), (5.0, 5.0), (11.0, 11.0)];
 
@@ -999,6 +1077,8 @@ fn shape_boolean_same_shape_identity_ignores_loop_order_and_start_index() {
 
 #[test]
 fn shape_boolean_commutative_overlapping_rectangles() {
+    // Union, intersection, and XOR must not depend on operand order even though the implementation
+    // tracks used loops separately for the left and right shapes.
     let a = create_shape_rects(&[(0.0, 0.0, 10.0, 10.0)]);
     let b = create_shape_rects(&[(5.0, 5.0, 15.0, 15.0)]);
     let samples = [(2.0, 2.0), (7.5, 7.5), (12.0, 12.0), (16.0, 16.0)];
@@ -1010,6 +1090,8 @@ fn shape_boolean_commutative_overlapping_rectangles() {
 
 #[test]
 fn shape_boolean_multi_island_disjoint_identities() {
+    // Disjoint multi-island inputs verify that broad-phase pair filtering still preserves
+    // untouched loops through the unused-loop retention path.
     let a = create_shape_rects(&[(0.0, 0.0, 10.0, 10.0), (20.0, 0.0, 30.0, 10.0)]);
     let b = create_shape_rects(&[(100.0, 0.0, 110.0, 10.0)]);
     let samples = [(5.0, 5.0), (25.0, 5.0), (105.0, 5.0), (50.0, 5.0)];
@@ -1192,6 +1274,8 @@ fn shape_boolean_hole_boundary_cutter_xor() {
 
 #[test]
 fn shape_boolean_point_touching_rectangles_do_not_create_intersection_area() {
+    // Point contacts are another zero-area regularization case; they should not produce filled
+    // intersection loops or corrupt difference/union area.
     let lower_left = create_shape_rects(&[(0.0, 0.0, 10.0, 10.0)]);
     let upper_right = create_shape_rects(&[(10.0, 10.0, 20.0, 20.0)]);
     let samples = [(5.0, 5.0), (15.0, 15.0), (10.001, 10.001), (9.999, 9.999)];
@@ -1211,6 +1295,7 @@ fn shape_boolean_point_touching_rectangles_do_not_create_intersection_area() {
 
 #[test]
 fn shape_boolean_partially_shared_edge_is_regularized() {
+    // Partial edge overlap combines clipping and boundary-only contact in one case.
     let bottom = create_shape_rects(&[(0.0, 0.0, 10.0, 10.0)]);
     let top = create_shape_rects(&[(5.0, 10.0, 15.0, 20.0)]);
     let samples = [(2.0, 2.0), (7.5, 9.999), (7.5, 10.001), (12.0, 12.0)];
@@ -1236,6 +1321,8 @@ fn shape_boolean_thin_sliver_overlap_keeps_area_identities() {
 
 #[test]
 fn shape_boolean_circle_disjoint_tangent_and_identical_cases() {
+    // Two-bulge circles keep true arc geometry in play while covering disjoint, tangent, and equal
+    // result_info paths.
     let c1_pline = create_approx_circle(0.0, 0.0, 2.0);
     let c2_pline = create_approx_circle(6.0, 0.0, 2.0);
     let tangent_pline = create_approx_circle(4.0, 0.0, 2.0);
@@ -1293,6 +1380,7 @@ fn shape_boolean_circle_disjoint_tangent_and_identical_cases() {
 
 #[test]
 fn shape_boolean_donut_square_outside_and_hole_boundary_cases() {
+    // A disjoint square should survive union/XOR but leave the donut's existing hole untouched.
     let donut = create_donut((0.0, 0.0, 10.0, 10.0), &[(3.0, 3.0, 7.0, 7.0)]);
     let outside_square = create_shape_rects(&[(20.0, 20.0, 22.0, 22.0)]);
 
@@ -1336,6 +1424,8 @@ fn shape_boolean_donut_square_outside_and_hole_boundary_cases() {
 #[test]
 #[ignore = "documents current hole-boundary union area inflation"]
 fn reported_shape_boolean_hole_boundary_union_area_inflation_1() {
+    // Kept ignored as a named regression document: the sampled semantics are useful for future
+    // reduction even while the exact union area is not yet accepted as a normal CI assertion.
     let donut = create_donut((0.0, 0.0, 10.0, 10.0), &[(3.0, 3.0, 7.0, 7.0)]);
     let hole_boundary_square = create_shape_rects(&[(2.0, 2.0, 5.0, 5.0)]);
 
@@ -1372,6 +1462,8 @@ fn reported_shape_boolean_hole_boundary_union_area_inflation_1() {
 
 #[test]
 fn shape_boolean_two_disjoint_donuts_and_nested_ring() {
+    // Combines multiple hole-bearing components with a nested island to keep signed-loop binning
+    // honest across disjoint and contained material.
     let donut_a = create_donut((0.0, 0.0, 10.0, 10.0), &[(3.0, 3.0, 7.0, 7.0)]);
     let donut_b = create_donut((20.0, 0.0, 30.0, 10.0), &[(23.0, 3.0, 27.0, 7.0)]);
     let samples = [
@@ -1407,6 +1499,12 @@ fn shape_boolean_two_disjoint_donuts_and_nested_ring() {
 
 #[cfg(test)]
 mod shape_boolean_proptests {
+    //! Property tests focused on algebraic laws rather than exact output topology.
+    //!
+    //! The generators start with rectangles and rectangular donuts because they shrink well and
+    //! have exact expected areas, which makes failures easier to reduce before adding more
+    //! free-form polygon or arc cases.
+
     use super::*;
     use proptest::prelude::*;
 
@@ -1698,8 +1796,14 @@ mod shape_boolean_proptests {
 
 #[cfg(test)]
 mod shape_boolean_differential_tests {
+    //! Manual differential tests that avoid using `Shape` winding numbers as the expected oracle.
+    //!
+    //! These are ignored by default because they are intended for local confidence checks and
+    //! future oracle expansion, not normal CI runtime.
+
     use super::*;
 
+    /// Independent axis-aligned rectangle used by the manual point-membership oracle.
     #[derive(Clone, Copy)]
     struct OracleRect {
         xmin: f64,
@@ -1709,19 +1813,23 @@ mod shape_boolean_differential_tests {
     }
 
     impl OracleRect {
+        /// Use strict interior membership to avoid treating boundary samples as oracle failures.
         fn contains(self, x: f64, y: f64) -> bool {
             x > self.xmin && x < self.xmax && y > self.ymin && y < self.ymax
         }
 
+        /// Convert to the rectangle tuple accepted by the normal shape test constructors.
         fn tuple(self) -> (f64, f64, f64, f64) {
             (self.xmin, self.ymin, self.xmax, self.ymax)
         }
     }
 
+    /// Evaluate membership in a union of independent oracle rectangles.
     fn oracle_contains(rects: &[OracleRect], x: f64, y: f64) -> bool {
         rects.iter().any(|rect| rect.contains(x, y))
     }
 
+    /// Apply the requested boolean operation to independent membership bits.
     fn oracle_boolean(in_a: bool, in_b: bool, op: BooleanOp) -> bool {
         match op {
             BooleanOp::Or => in_a || in_b,
