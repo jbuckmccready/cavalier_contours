@@ -65,9 +65,6 @@ mod serde_impl {
         }
     }
 }
-#[cfg(feature = "serde")]
-pub use serde_impl::*;
-
 impl<T> PlineVertex<T>
 where
     T: Real,

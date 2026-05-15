@@ -144,9 +144,6 @@ mod serde_impl {
         }
     }
 }
-#[cfg(feature = "serde")]
-pub use serde_impl::*;
-
 #[inline(always)]
 pub fn vec2<T>(x: T, y: T) -> Vector2<T>
 where
