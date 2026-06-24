@@ -1,6 +1,7 @@
 use cavalier_contours::polyline::{PlineSource, PlineSourceMut, PlineVertex, Polyline};
 use eframe::egui::{ScrollArea, TextEdit, Ui, Vec2, Window};
 
+/// Reusable editor widgets.
 pub mod components;
 
 const DEFAULT_VERTEX_X: f64 = 0.0;
@@ -11,17 +12,25 @@ const DEFAULT_ACCORDION_OPEN_COUNT: usize = 3;
 /// Represents the active tab in the polyline editor window
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum EditorTab {
+    /// Vertex table editor.
     #[default]
     Table,
+    /// JSON import/export editor.
     Json,
 }
 
+/// Configuration for a polyline editor window.
 #[derive(Clone)]
 pub struct PolylineEditorConfig {
+    /// Window title.
     pub window_title: String,
+    /// Initial window width in logical pixels.
     pub default_width: f32,
+    /// Initial window height in logical pixels.
     pub default_height: f32,
+    /// Table layout used for editing vertexes.
     pub table_layout: TableLayout,
+    /// JSON serialization format used by the editor.
     pub json_format: JsonFormat,
 }
 
@@ -43,7 +52,9 @@ pub enum JsonFormat {
     Single,
     /// Two polylines in a combined object with custom keys
     Combined {
+        /// JSON object key for the first polyline.
         pline1_key: String,
+        /// JSON object key for the second polyline.
         pline2_key: String,
     },
     /// Multiple polylines in an array under "polylines" key
@@ -216,14 +227,17 @@ impl PolylineEditor {
         }
     }
 
+    /// Open the editor window on the next UI frame.
     pub fn show_window(&mut self) {
         self.show_window = true;
     }
 
+    /// Return whether the editor window is currently open.
     pub fn is_window_open(&self) -> bool {
         self.show_window
     }
 
+    /// Replace the editor's pending state with `polylines`.
     pub fn initialize_with_polylines(&mut self, polylines: Vec<Polyline>) {
         self.pending_state = polylines;
         self.current_json = self.serialize_polylines(&self.pending_state);
@@ -231,6 +245,7 @@ impl PolylineEditor {
         self.json_error = None;
     }
 
+    /// Render the editor window and apply edits to `polylines` when requested.
     pub fn ui_show(
         &mut self,
         ctx: &egui::Context,

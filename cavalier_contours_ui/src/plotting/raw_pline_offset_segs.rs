@@ -15,14 +15,19 @@ use lyon::{
 
 use super::{VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point, plot_bounds_valid};
 
+/// Plot item for visualizing raw offset segments before stitching.
 pub struct RawPlineOffsetSegsPlotItem<'a> {
+    /// Raw offset segments to draw.
     pub segs: &'a [RawPlineOffsetSeg<f64>],
+    /// Color for normal offset segments.
     pub color: epaint::Color32,
+    /// Color for offset segments collapsed from arcs.
     pub collapsed_color: epaint::Color32,
     base: egui_plot::PlotItemBase,
 }
 
 impl<'a> RawPlineOffsetSegsPlotItem<'a> {
+    /// Create a raw-offset-segment plot item.
     pub fn new(segs: &'a [RawPlineOffsetSeg<f64>]) -> Self {
         Self {
             segs,
@@ -32,11 +37,13 @@ impl<'a> RawPlineOffsetSegsPlotItem<'a> {
         }
     }
 
+    /// Set the color for normal offset segments.
     pub fn color(mut self, color: epaint::Color32) -> Self {
         self.color = color;
         self
     }
 
+    /// Set the color for collapsed offset segments.
     pub fn collapsed_color(mut self, color: epaint::Color32) -> Self {
         self.collapsed_color = color;
         self

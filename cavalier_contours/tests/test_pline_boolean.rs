@@ -39,7 +39,8 @@ fn run_same_boolean_test(
                 &result.pos_plines[0].pline,
                 self2_state.inverted_direction,
             );
-            passed = property_sets_match(&[result_properties], &[input_properties.clone()]);
+            passed =
+                property_sets_match(&[result_properties], std::slice::from_ref(input_properties));
         }
 
         assert!(
@@ -98,7 +99,7 @@ fn run_same_boolean_test(
     // disjoint NOT
     {
         let op = Not;
-        let expected = &[disjoint1_properties.clone()];
+        let expected = std::slice::from_ref(&disjoint1_properties);
         let result = disjoint1.boolean(self2, op);
         assert!(matches!(result.result_info, BooleanResultInfo::Disjoint));
         let result_properties = create_boolean_property_set(&result.pos_plines);
@@ -134,7 +135,7 @@ fn run_same_boolean_test(
     // enclosed OR
     {
         let op = Or;
-        let expected = &[input_properties.clone()];
+        let expected = std::slice::from_ref(input_properties);
         let result = self2.boolean(&self1_inward_offset, op);
         assert!(matches!(
             result.result_info,
@@ -170,7 +171,7 @@ fn run_same_boolean_test(
     // enclosed self2 NOT self1_offset
     {
         let op = Not;
-        let pos_expected = &[input_properties.clone()];
+        let pos_expected = std::slice::from_ref(input_properties);
         let neg_expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
         assert!(matches!(
@@ -205,7 +206,7 @@ fn run_same_boolean_test(
     // enclosed XOR
     {
         let op = Xor;
-        let pos_expected = &[input_properties.clone()];
+        let pos_expected = std::slice::from_ref(input_properties);
         let neg_expected = offset_properties;
         let result = self2.boolean(&self1_inward_offset, op);
         assert!(matches!(

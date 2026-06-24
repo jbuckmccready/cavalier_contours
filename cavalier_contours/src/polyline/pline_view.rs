@@ -606,6 +606,12 @@ where
 
     /// Epsilon value to be used by [PlineViewData::validate_for_source].
     const VALIDATION_EPS: f64 = 1e-5;
+    /// Epsilon for deciding whether a view endpoint is exactly on the final source vertex.
+    ///
+    /// Boolean callers may intentionally use a positional epsilon smaller than `1e-5` to preserve
+    /// sub-micron sliver intersections. Treating every point within the broader validation epsilon
+    /// as coincident with a vertex makes those valid slices fail debug validation.
+    const VALIDATION_VERTEX_EPS: f64 = 1e-9;
 
     /// Epsilon value to be used by [PlineViewData::validate_for_source] when testing if positions
     /// are fuzzy equal.
@@ -657,9 +663,10 @@ where
         }
 
         // end point should never lie directly on top of end index segment start
+        let vertex_eps = T::from(Self::VALIDATION_VERTEX_EPS).unwrap();
         if self
             .end_point
-            .fuzzy_eq_eps(source.at(end_index).pos(), validation_eps)
+            .fuzzy_eq_eps(source.at(end_index).pos(), vertex_eps)
         {
             return ViewDataValidation::EndPointOnFinalOffsetVertex {
                 end_point: self.end_point,
@@ -688,24 +695,39 @@ where
 /// Enum used for view data validation debugging and asserting.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ViewDataValidation<T> {
+    /// Source polyline has no valid segments.
     SourceHasNoSegments,
+    /// A slice offset references a segment outside the source polyline.
     OffsetOutOfRange {
+        /// Requested offset.
         offset: usize,
+        /// Number of vertexes in the source polyline.
         source_length: usize,
     },
+    /// The updated start point is not on the expected source segment.
     UpdatedStartNotOnSegment {
+        /// Updated start point that failed validation.
         start_point: Vector2<T>,
     },
+    /// The end point is not on the expected source segment.
     EndPointNotOnSegment {
+        /// End point that failed validation.
         end_point: Vector2<T>,
     },
+    /// The end point coincides with the final offset vertex, making the slice ambiguous.
     EndPointOnFinalOffsetVertex {
+        /// End point that failed validation.
         end_point: Vector2<T>,
+        /// Final offset vertex of the source slice.
         final_offset_vertex: PlineVertex<T>,
     },
+    /// The updated end bulge does not match the source geometry.
     UpdatedBulgeDoesNotMatch {
+        /// Bulge value stored on the view data.
         updated_bulge: T,
+        /// Expected bulge value for the source slice.
         expected: T,
     },
+    /// The view data is valid for the source polyline.
     IsValid,
 }

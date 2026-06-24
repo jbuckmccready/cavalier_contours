@@ -1,15 +1,20 @@
 use egui::Color32;
 use serde::{Deserialize, Serialize};
 
+/// Theme selection for the demo UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub enum Theme {
+    /// Force light theme.
     Light,
+    /// Force dark theme.
     Dark,
+    /// Follow the operating system theme when available.
     #[default]
     System,
 }
 
 impl Theme {
+    /// Human-readable theme label for controls.
     pub fn label(&self) -> &'static str {
         match self {
             Theme::Light => "☀ Light",
@@ -27,6 +32,7 @@ impl Theme {
         }
     }
 
+    /// Convert this theme choice to egui visuals.
     pub fn to_egui_visuals(&self, ctx: &egui::Context) -> egui::Visuals {
         match self {
             Theme::Light => egui::Visuals::light(),
@@ -41,6 +47,7 @@ impl Theme {
         }
     }
 
+    /// Return the semantic color palette for this theme choice.
     pub fn colors(&self, ctx: &egui::Context) -> ThemeColors {
         match self {
             Theme::Light => ThemeColors::light(),

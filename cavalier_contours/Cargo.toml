@@ -19,7 +19,18 @@ serde = ["dep:serde"]
 # Enable unsafe optimizations in the static_aabb2d_index dependency
 unsafe_optimizations = ["static_aabb2d_index/unsafe_optimizations"]
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 num-traits = "0.2"
 serde = {version = "1.0", optional = true, features = ["derive"]}
 static_aabb2d_index = "2.0"
+
+[dev-dependencies]
+geo = "0.32"
+proptest = "1"
+
+[[bench]]
+name = "shape_borrowed_api"
+harness = false

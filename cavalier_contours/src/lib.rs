@@ -9,4 +9,5 @@ mod macros;
 #[macro_use]
 pub mod core;
 pub mod polyline;
+/// Shape-level offset, transform, and boolean operations built on top of polylines.
 pub mod shape_algorithms;

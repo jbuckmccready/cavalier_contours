@@ -20,9 +20,10 @@ pub struct Polyline<T = f64> {
     pub vertex_data: Vec<PlineVertex<T>>,
     /// Bool to indicate whether the polyline is closed or open.
     pub is_closed: bool,
-    // Vec of user-provided u64 values. Preserved across offset calls. Note that a Polyline that was
-    // composed out of multiple slices of other Polylines will have userdata values from each source
-    // polyline, and as such userdata values may appear repeatedly.
+    /// User-provided values preserved across operations that copy or stitch polyline slices.
+    ///
+    /// A polyline composed from multiple source polylines may contain values from each source, so
+    /// repeated values are valid and are not deduplicated.
     #[cfg_attr(
         feature = "serde",
         serde(default, skip_serializing_if = "Vec::is_empty")
@@ -64,22 +65,26 @@ where
         }
     }
 
+    /// Return the number of user data values attached to this polyline.
     #[inline]
     pub fn get_userdata_count(&self) -> usize {
         self.userdata.len()
     }
 
+    /// Iterate over user data values attached to this polyline.
     #[inline]
     pub fn get_userdata_values(&self) -> impl Iterator<Item = u64> + '_ {
         self.userdata.iter().copied()
     }
 
+    /// Replace the current user data values with `values`.
     #[inline]
     pub fn set_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
         self.userdata.clear();
         self.userdata.extend(values);
     }
 
+    /// Append additional user data values to this polyline.
     #[inline]
     pub fn add_userdata_values(&mut self, values: impl IntoIterator<Item = u64>) {
         self.userdata.extend(values);
