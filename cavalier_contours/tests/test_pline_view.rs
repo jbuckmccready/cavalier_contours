@@ -191,6 +191,26 @@ fn from_slice_points_single_seg() {
 }
 
 #[test]
+fn from_slice_points_collapsed_across_near_vertex() {
+    let pline = pline_open![
+        (0.0, 0.0, 0.0),
+        (0.0, POS_EQ_EPS * 1.1, 0.0),
+        (0.0, -1.0, 0.0)
+    ];
+
+    let slice = PlineViewData::from_slice_points(
+        &pline,
+        Vector2::new(0.0, 0.0),
+        0,
+        Vector2::new(0.0, POS_EQ_EPS * 0.55),
+        1,
+        POS_EQ_EPS,
+    );
+
+    assert!(slice.is_none());
+}
+
+#[test]
 fn from_slice_points_multi_seg() {
     let pline = pline_closed![(0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0)];
     // complete polyline

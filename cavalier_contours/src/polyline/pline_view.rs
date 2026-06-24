@@ -586,6 +586,11 @@ where
                 end_point,
                 pos_equal_eps,
             )
+        } else if traverse_count == 1
+            && end_point.fuzzy_eq_eps(source.at(end_index).pos(), pos_equal_eps)
+            && updated_start.pos().fuzzy_eq_eps(end_point, pos_equal_eps)
+        {
+            None
         } else {
             Some(Self::create(
                 source,
