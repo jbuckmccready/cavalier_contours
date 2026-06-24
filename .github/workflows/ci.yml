@@ -1,0 +1,52 @@
+name: CI
+
+on: [push, pull_request]
+
+env:
+  RUSTDOCFLAGS: -D warnings
+  RUSTFLAGS: -D warnings
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Build
+        run: |
+          cargo build --workspace --verbose
+
+      - name: Run tests
+        run: |
+          cargo test --workspace --verbose
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: 1.85.0
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: |
+          cargo fmt --all --check
+
+      - name: Clippy lint
+        run: |
+          cargo clippy --all-targets -- -D warnings
+
+      - name: Check doc
+        run: |
+          cargo doc --workspace --no-deps
