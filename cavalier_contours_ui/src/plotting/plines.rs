@@ -295,7 +295,7 @@ where
 
     fn initialize(&mut self, _x_range: std::ops::RangeInclusive<f64>) {}
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Polylines"
     }
 
