@@ -89,8 +89,6 @@ fn segment_intersections() {
 }
 
 fn segment_closest_points() {
-    println!("Testing segment closest point calculations...");
-
     fn test_closest_point(
         seg: (PlineVertex<f64>, PlineVertex<f64>),
         point: Vector2<f64>,
@@ -102,6 +100,8 @@ fn segment_closest_points() {
         print_point("Closest point", closest);
         println!("  Distance: {:.2}", (closest - point).length());
     }
+
+    println!("Testing segment closest point calculations...");
 
     let line_seg = (
         PlineVertex::new(0.0, 0.0, 0.0),
@@ -167,8 +167,6 @@ fn arc_segments() {
 }
 
 fn segment_utilities() {
-    println!("Testing segment utilities...");
-
     fn print_split_result(result: &cavalier_contours::polyline::SplitResult<f64>, desc: &str) {
         println!("\n{desc}");
         println!(
@@ -180,6 +178,8 @@ fn segment_utilities() {
             result.split_vertex.x, result.split_vertex.y, result.split_vertex.bulge
         );
     }
+
+    println!("Testing segment utilities...");
 
     // Segment splitting examples
     let line_seg = (
