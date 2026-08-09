@@ -12,7 +12,7 @@ fn create_pline(vertexes: &[(f64, f64, f64)], is_closed: bool) -> *mut cavc_plin
     let err = unsafe {
         cavc_pline_create(
             buffer.as_ptr(),
-            buffer.len() as u32,
+            buffer.len(),
             u8::from(is_closed),
             &raw mut result,
         )
@@ -58,7 +58,7 @@ fn pline_data_manipulation() {
         ];
 
         assert_eq!(
-            cavc_pline_set_vertex_data(pline, vertex_data.as_ptr(), vertex_data.len() as u32),
+            cavc_pline_set_vertex_data(pline, vertex_data.as_ptr(), vertex_data.len()),
             0
         );
 
@@ -85,7 +85,7 @@ fn pline_data_manipulation() {
 
         // clear vertexes
         assert_eq!(cavc_pline_clear(pline), 0);
-        let mut count: u32 = 0;
+        let mut count: usize = 0;
         assert_eq!(cavc_pline_get_vertex_count(pline, &raw mut count), 0);
         assert_eq!(count, 0);
 
@@ -95,7 +95,7 @@ fn pline_data_manipulation() {
         assert_eq!(cavc_pline_add(pline, 3.0, 4.0, 1.0), 0);
 
         // get vertex count
-        let mut count: u32 = 0;
+        let mut count: usize = 0;
         assert_eq!(cavc_pline_get_vertex_count(null_ptr, &raw mut count), 1);
         assert_eq!(cavc_pline_get_vertex_count(pline, &raw mut count), 0);
         assert_eq!(count, 2);
@@ -135,7 +135,7 @@ fn pline_data_manipulation() {
 
         // remove vertex at position
         assert_eq!(cavc_pline_remove(pline, 0), 0);
-        let mut count: u32 = 0;
+        let mut count: usize = 0;
         assert_eq!(cavc_pline_get_vertex_count(pline, &raw mut count), 0);
         assert_eq!(count, 1);
         let mut v = cavc_vertex::new(0.0, 0.0, 0.0);
@@ -402,7 +402,7 @@ fn pline_eval_parallel_offset() {
                 1
             );
 
-            let mut results_count = u32::MAX;
+            let mut results_count = usize::MAX;
             assert_eq!(cavc_plinelist_get_count(results, &raw mut results_count), 0);
             assert_eq!(results_count, 1);
 
@@ -470,7 +470,7 @@ fn pline_eval_parallel_offset() {
                 1
             );
 
-            let mut results_count = u32::MAX;
+            let mut results_count = usize::MAX;
             assert_eq!(cavc_plinelist_get_count(results, &raw mut results_count), 0);
             assert_eq!(results_count, 1);
 
@@ -565,14 +565,14 @@ fn pline_eval_boolean() {
                 1
             );
 
-            let mut pos_plines_count = u32::MAX;
+            let mut pos_plines_count = usize::MAX;
             assert_eq!(
                 cavc_plinelist_get_count(pos_plines, &raw mut pos_plines_count),
                 0
             );
             assert_eq!(pos_plines_count, 1);
 
-            let mut neg_plines_count = u32::MAX;
+            let mut neg_plines_count = usize::MAX;
             assert_eq!(
                 cavc_plinelist_get_count(neg_plines, &raw mut neg_plines_count),
                 0
@@ -615,7 +615,7 @@ fn pline_eval_boolean() {
             let mut area = 0.0;
             assert_eq!(cavc_pline_eval_area(output_pline, &raw mut area), 0);
             assert_fuzzy_eq!(area, std::f64::consts::PI);
-            let mut count = u32::MAX;
+            let mut count = usize::MAX;
             assert_eq!(cavc_plinelist_get_count(neg_plines, &raw mut count), 0);
             assert_eq!(count, 0);
             cavc_pline_f(output_pline.cast_mut());
@@ -633,7 +633,7 @@ fn pline_eval_boolean() {
             );
             assert_eq!(cavc_pline_eval_area(output_pline, &raw mut area), 0);
             assert_fuzzy_eq!(area, 16.0);
-            let mut count = u32::MAX;
+            let mut count = usize::MAX;
             assert_eq!(cavc_plinelist_get_count(pos_plines, &raw mut count), 0);
             assert_eq!(count, 0);
             cavc_pline_f(output_pline.cast_mut());
@@ -700,14 +700,14 @@ fn pline_eval_boolean() {
                 0
             );
 
-            let mut pos_plines_count = u32::MAX;
+            let mut pos_plines_count = usize::MAX;
             assert_eq!(
                 cavc_plinelist_get_count(pos_plines, &raw mut pos_plines_count),
                 0
             );
             assert_eq!(pos_plines_count, 1);
 
-            let mut neg_plines_count = u32::MAX;
+            let mut neg_plines_count = usize::MAX;
             assert_eq!(
                 cavc_plinelist_get_count(neg_plines, &raw mut neg_plines_count),
                 0
@@ -925,7 +925,7 @@ fn shape_eval_ffi() {
             assert_eq!(cavc_pline_set_userdata_values(outer_pline, &117u64, 1), 0);
             assert_eq!(cavc_pline_set_userdata_values(inner_pline, &4u64, 1), 0);
 
-            let mut count: u32 = 0xDEAD;
+            let mut count: usize = 0xDEAD;
             assert_eq!(
                 cavc_pline_get_userdata_count(outer_pline, &raw mut count),
                 0
@@ -968,11 +968,11 @@ fn shape_eval_ffi() {
             assert_eq!(cavc_plinelist_pop(list, ptr::null_mut()), 0);
             cavc_plinelist_f(list);
 
-            let mut ccw_count: u32 = 0xDEAD;
+            let mut ccw_count: usize = 0xDEAD;
             assert_eq!(cavc_shape_get_ccw_count(shape, &raw mut ccw_count), 0);
             assert_eq!(ccw_count, 1);
 
-            let mut cw_count: u32 = 0xDEAD;
+            let mut cw_count: usize = 0xDEAD;
             assert_eq!(cavc_shape_get_cw_count(shape, &raw mut cw_count), 0);
             assert_eq!(cw_count, 1);
 
@@ -997,7 +997,7 @@ fn shape_eval_ffi() {
             assert_eq!(cavc_shape_get_cw_count(result_shape, &raw mut cw_count), 0);
             assert_eq!(cw_count, 0);
 
-            for index in 0..4 {
+            for (index, expected) in expected_65.iter().enumerate() {
                 let mut is_closed: u8 = 0;
                 assert_eq!(
                     cavc_shape_get_ccw_polyline_is_closed(result_shape, index, &raw mut is_closed),
@@ -1005,7 +1005,7 @@ fn shape_eval_ffi() {
                 );
                 assert_ne!(is_closed, 0);
 
-                let mut ccw_vertex_count: u32 = 0;
+                let mut ccw_vertex_count: usize = 0;
                 assert_eq!(
                     cavc_shape_get_ccw_polyline_count(
                         result_shape,
@@ -1028,9 +1028,9 @@ fn shape_eval_ffi() {
                     0
                 );
 
-                compare_vertexes(&vertexes, &(expected_65[index as usize]));
+                compare_vertexes(&vertexes, expected);
 
-                let mut userdata_count: u32 = 0xDEAD;
+                let mut userdata_count: usize = 0xDEAD;
                 assert_eq!(
                     cavc_shape_get_ccw_pline_userdata_count(
                         result_shape,
@@ -1074,11 +1074,11 @@ fn shape_eval_ffi() {
             assert_eq!(cavc_plinelist_pop(list, ptr::null_mut()), 0);
             cavc_plinelist_f(list);
 
-            let mut ccw_count: u32 = 0xDEAD;
+            let mut ccw_count: usize = 0xDEAD;
             assert_eq!(cavc_shape_get_ccw_count(shape, &raw mut ccw_count), 0);
             assert_eq!(ccw_count, 1);
 
-            let mut cw_count: u32 = 0xDEAD;
+            let mut cw_count: usize = 0xDEAD;
             assert_eq!(cavc_shape_get_cw_count(shape, &raw mut cw_count), 0);
             assert_eq!(cw_count, 1);
 
@@ -1109,7 +1109,7 @@ fn shape_eval_ffi() {
             assert_eq!(cavc_shape_get_cw_count(result_shape, &raw mut cw_count), 0);
             assert_eq!(cw_count, 0);
 
-            for index in 0..4 {
+            for (index, expected) in expected_65.iter().enumerate() {
                 let mut is_closed: u8 = 0;
                 assert_eq!(
                     cavc_shape_get_ccw_polyline_is_closed(result_shape, index, &raw mut is_closed),
@@ -1117,7 +1117,7 @@ fn shape_eval_ffi() {
                 );
                 assert_ne!(is_closed, 0);
 
-                let mut ccw_vertex_count: u32 = 0;
+                let mut ccw_vertex_count: usize = 0;
                 assert_eq!(
                     cavc_shape_get_ccw_polyline_count(
                         result_shape,
@@ -1140,9 +1140,9 @@ fn shape_eval_ffi() {
                     0
                 );
 
-                compare_vertexes(&vertexes, &(expected_65[index as usize]));
+                compare_vertexes(&vertexes, expected);
 
-                let mut userdata_count: u32 = 0xDEAD;
+                let mut userdata_count: usize = 0xDEAD;
                 assert_eq!(
                     cavc_shape_get_ccw_pline_userdata_count(
                         result_shape,
@@ -1190,14 +1190,14 @@ fn shape_eval_ffi() {
                 0
             );
 
-            let mut ccw_count: u32 = 0;
+            let mut ccw_count: usize = 0;
             assert_eq!(
                 cavc_shape_get_ccw_count(result_shape, &raw mut ccw_count),
                 0
             );
             assert_eq!(ccw_count, 1);
 
-            let mut cw_count: u32 = 0;
+            let mut cw_count: usize = 0;
             assert_eq!(cavc_shape_get_cw_count(result_shape, &raw mut cw_count), 0);
             assert_eq!(cw_count, 1);
 
@@ -1210,7 +1210,7 @@ fn shape_eval_ffi() {
                 );
                 assert_ne!(is_closed, 0);
 
-                let mut ccw_vertex_count: u32 = 0;
+                let mut ccw_vertex_count: usize = 0;
                 assert_eq!(
                     cavc_shape_get_ccw_polyline_count(result_shape, 0, &raw mut ccw_vertex_count),
                     0
@@ -1227,7 +1227,7 @@ fn shape_eval_ffi() {
 
                 compare_vertexes(&vertexes, &expected_40_ccw);
 
-                let mut userdata_count: u32 = 0xDEAD;
+                let mut userdata_count: usize = 0xDEAD;
                 assert_eq!(
                     cavc_shape_get_ccw_pline_userdata_count(
                         result_shape,
@@ -1255,7 +1255,7 @@ fn shape_eval_ffi() {
                 );
                 assert_ne!(is_closed, 0);
 
-                let mut cw_vertex_count: u32 = 0;
+                let mut cw_vertex_count: usize = 0;
                 assert_eq!(
                     cavc_shape_get_cw_polyline_count(result_shape, 0, &raw mut cw_vertex_count),
                     0
@@ -1272,7 +1272,7 @@ fn shape_eval_ffi() {
 
                 compare_vertexes(&vertexes, &expected_40_cw);
 
-                let mut userdata_count: u32 = 0xDEAD;
+                let mut userdata_count: usize = 0xDEAD;
                 assert_eq!(
                     cavc_shape_get_cw_pline_userdata_count(
                         result_shape,

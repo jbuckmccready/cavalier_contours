@@ -1,10 +1,11 @@
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 
 /**
- * FFI representation of SelfIntersectsInclude enum
+ * FFI representation of `SelfIntersectsInclude` enum
  */
 #define CAVC_SELF_INTERSECTS_INCLUDE_ALL 0
 
@@ -13,7 +14,7 @@
 #define CAVC_SELF_INTERSECTS_INCLUDE_GLOBAL 2
 
 /**
- * FFI Representation of PlineContainsResult enum
+ * FFI Representation of `PlineContainsResult` enum
  */
 #define CAVC_CONTAINS_RESULT_INVALID_INPUT 0
 
@@ -26,7 +27,7 @@
 #define CAVC_CONTAINS_RESULT_INTERSECTED 4
 
 /**
- * Opaque type that wraps a [StaticAABB2DIndex].
+ * Opaque type that wraps a [`StaticAABB2DIndex`].
  *
  * Note the internal member is only public for composing in other Rust libraries wanting to use the
  * FFI opaque type as part of their FFI API.
@@ -42,7 +43,7 @@ typedef struct cavc_aabbindex cavc_aabbindex;
 typedef struct cavc_pline cavc_pline;
 
 /**
- * Opaque type that represents a list of [cavc_pline].
+ * Opaque type that represents a list of [`cavc_pline`].
  *
  * Note the internal member is only public for composing in other Rust libraries wanting to use the
  * FFI opaque type as part of their FFI API.
@@ -58,7 +59,7 @@ typedef struct cavc_plinelist cavc_plinelist;
 typedef struct cavc_shape cavc_shape;
 
 /**
- * FFI representation of [PlineOffsetOptions].
+ * FFI representation of [`PlineOffsetOptions`].
  */
 typedef struct cavc_pline_parallel_offset_o {
   const struct cavc_aabbindex *aabb_index;
@@ -69,15 +70,19 @@ typedef struct cavc_pline_parallel_offset_o {
 } cavc_pline_parallel_offset_o;
 
 /**
- * FFI representation of [PlineBooleanOptions].
+ * FFI representation of [`PlineBooleanOptions`].
  */
 typedef struct cavc_pline_boolean_o {
   const struct cavc_aabbindex *pline1_aabb_index;
   double pos_equal_eps;
+  /**
+   * NOTE: optional parameter, set to NaN for None.
+   */
+  double collapsed_area_eps;
 } cavc_pline_boolean_o;
 
 /**
- * FFI representation of [PlineSelfIntersectOptions].
+ * FFI representation of [`PlineSelfIntersectOptions`].
  */
 typedef struct cavc_pline_self_intersect_o {
   const struct cavc_aabbindex *pline_aabb_index;
@@ -86,7 +91,7 @@ typedef struct cavc_pline_self_intersect_o {
 } cavc_pline_self_intersect_o;
 
 /**
- * FFI representation of [PlineContainsOptions].
+ * FFI representation of [`PlineContainsOptions`].
  */
 typedef struct cavc_pline_contains_o {
   const struct cavc_aabbindex *pline1_aabb_index;
@@ -103,7 +108,7 @@ typedef struct cavc_vertex {
 } cavc_vertex;
 
 /**
- * FFI representation of [ShapeOffsetOptions].
+ * FFI representation of [`ShapeOffsetOptions`].
  */
 typedef struct cavc_shape_offset_o {
   double pos_equal_eps;
@@ -112,7 +117,7 @@ typedef struct cavc_shape_offset_o {
 } cavc_shape_offset_o;
 
 /**
- * Create a new [cavc_pline_parallel_offset_o] object.
+ * Create a new [`cavc_pline_parallel_offset_o`] object.
  *
  * # Safety
  *
@@ -121,22 +126,22 @@ typedef struct cavc_shape_offset_o {
 int32_t cavc_pline_parallel_offset_o_create(struct cavc_pline_parallel_offset_o **options);
 
 /**
- * Free an existing [cavc_pline_parallel_offset_o] object.
+ * Free an existing [`cavc_pline_parallel_offset_o`] object.
  *
  * Nothing happens if `options` is null.
  *
- * Note that this does NOT free the aabb index that the [cavc_pline_parallel_offset_o] points to.
- * You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_parallel_offset_o] object.
+ * Note that this does NOT free the aabb index that the [`cavc_pline_parallel_offset_o`] points to.
+ * You need to do that by calling `cavc_aabbindex_f()` on the index pointer contained in the [`cavc_pline_parallel_offset_o`] object.
  *
  * # Safety
  *
- * `options` must be null or a valid cavc_pline_parallel_offset_o object that was created with [cavc_pline_parallel_offset_o_create] and
+ * `options` must be null or a valid `cavc_pline_parallel_offset_o` object that was created with [`cavc_pline_parallel_offset_o_create`] and
  * has not already been freed.
  */
 void cavc_pline_parallel_offset_o_f(struct cavc_pline_parallel_offset_o *options);
 
 /**
- * Write default option values to a [cavc_pline_parallel_offset_o].
+ * Write default option values to a [`cavc_pline_parallel_offset_o`].
  *
  * ## Specific Error Codes
  * * 1 = `options` is null.
@@ -148,7 +153,7 @@ void cavc_pline_parallel_offset_o_f(struct cavc_pline_parallel_offset_o *options
 int32_t cavc_pline_parallel_offset_o_init(struct cavc_pline_parallel_offset_o *options);
 
 /**
- * Create a new [cavc_pline_boolean_o] object.
+ * Create a new [`cavc_pline_boolean_o`] object.
  *
  * # Safety
  *
@@ -157,22 +162,22 @@ int32_t cavc_pline_parallel_offset_o_init(struct cavc_pline_parallel_offset_o *o
 int32_t cavc_pline_boolean_o_create(struct cavc_pline_boolean_o **options);
 
 /**
- * Free an existing [cavc_pline_boolean_o] object.
+ * Free an existing [`cavc_pline_boolean_o`] object.
  *
  * Nothing happens if `options` is null.
  *
- * Note that this does NOT free the aabb index that the [cavc_pline_boolean_o] points to.
- * You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_boolean_o] object.
+ * Note that this does NOT free the aabb index that the [`cavc_pline_boolean_o`] points to.
+ * You need to do that by calling `cavc_aabbindex_f()` on the index pointer contained in the [`cavc_pline_boolean_o`] object.
  *
  * # Safety
  *
- * `options` must be null or a valid cavc_pline_boolean_o object that was created with [cavc_pline_boolean_o_create] and
+ * `options` must be null or a valid `cavc_pline_boolean_o` object that was created with [`cavc_pline_boolean_o_create`] and
  * has not already been freed.
  */
 void cavc_pline_boolean_o_f(struct cavc_pline_boolean_o *options);
 
 /**
- * Write default option values to a [cavc_pline_boolean_o].
+ * Write default option values to a [`cavc_pline_boolean_o`].
  *
  * ## Specific Error Codes
  * * 1 = `options` is null.
@@ -184,7 +189,7 @@ void cavc_pline_boolean_o_f(struct cavc_pline_boolean_o *options);
 int32_t cavc_pline_boolean_o_init(struct cavc_pline_boolean_o *options);
 
 /**
- * Create a new [cavc_pline_self_intersect_o] object.
+ * Create a new [`cavc_pline_self_intersect_o`] object.
  *
  * # Safety
  *
@@ -193,22 +198,22 @@ int32_t cavc_pline_boolean_o_init(struct cavc_pline_boolean_o *options);
 int32_t cavc_pline_self_intersect_o_create(struct cavc_pline_self_intersect_o **options);
 
 /**
- * Free an existing [cavc_pline_self_intersect_o] object.
+ * Free an existing [`cavc_pline_self_intersect_o`] object.
  *
  * Nothing happens if `options` is null.
  *
- * Note that this does NOT free the aabb index that the [cavc_pline_self_intersect_o] points to.
- * You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_self_intersect_o] object.
+ * Note that this does NOT free the aabb index that the [`cavc_pline_self_intersect_o`] points to.
+ * You need to do that by calling `cavc_aabbindex_f()` on the index pointer contained in the [`cavc_pline_self_intersect_o`] object.
  *
  * # Safety
  *
- * `options` must be null or a valid cavc_pline_self_intersect_o object that was created with [cavc_pline_self_intersect_o_create] and
+ * `options` must be null or a valid `cavc_pline_self_intersect_o` object that was created with [`cavc_pline_self_intersect_o_create`] and
  * has not already been freed.
  */
 void cavc_pline_self_intersect_o_f(struct cavc_pline_self_intersect_o *options);
 
 /**
- * Write default option values to a [cavc_pline_self_intersect_o].
+ * Write default option values to a [`cavc_pline_self_intersect_o`].
  *
  * ## Specific Error Codes
  * * 1 = `options` is null.
@@ -220,7 +225,7 @@ void cavc_pline_self_intersect_o_f(struct cavc_pline_self_intersect_o *options);
 int32_t cavc_pline_self_intersect_o_init(struct cavc_pline_self_intersect_o *options);
 
 /**
- * Create a new [cavc_pline_contains_o] object.
+ * Create a new [`cavc_pline_contains_o`] object.
  *
  * # Safety
  *
@@ -229,22 +234,22 @@ int32_t cavc_pline_self_intersect_o_init(struct cavc_pline_self_intersect_o *opt
 int32_t cavc_pline_contains_o_create(struct cavc_pline_contains_o **options);
 
 /**
- * Free an existing [cavc_pline_contains_o] object.
+ * Free an existing [`cavc_pline_contains_o`] object.
  *
  * Nothing happens if `options` is null.
  *
- * Note that this does NOT free the aabb index that the [cavc_pline_contains_o] points to.
- * You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_contains_o] object.
+ * Note that this does NOT free the aabb index that the [`cavc_pline_contains_o`] points to.
+ * You need to do that by calling `cavc_aabbindex_f()` on the index pointer contained in the [`cavc_pline_contains_o`] object.
  *
  * # Safety
  *
- * `options` must be null or a valid cavc_pline_contains_o object that was created with [cavc_pline_contains_o_create] and
+ * `options` must be null or a valid `cavc_pline_contains_o` object that was created with [`cavc_pline_contains_o_create`] and
  * has not already been freed.
  */
 void cavc_pline_contains_o_f(struct cavc_pline_contains_o *options);
 
 /**
- * Write default option values to a [cavc_pline_contains_o].
+ * Write default option values to a [`cavc_pline_contains_o`].
  *
  * ## Specific Error Codes
  * * 1 = `options` is null.
@@ -258,7 +263,7 @@ int32_t cavc_pline_contains_o_init(struct cavc_pline_contains_o *options);
 /**
  * Create a new polyline object.
  *
- * `vertexes` is an array of [cavc_vertex] to create the polyline with (may be null if `n_vertexes`
+ * `vertexes` is an array of [`cavc_vertex`] to create the polyline with (may be null if `n_vertexes`
  * is 0).
  * `n_vertexes` contains the number of vertexes in the array.
  * `is_closed` sets the polyline to be closed if non-zero.
@@ -267,22 +272,22 @@ int32_t cavc_pline_contains_o_init(struct cavc_pline_contains_o *options);
  * # Safety
  *
  * `vertexes` may be null if `n_vertexes` is 0 or must point to a valid contiguous buffer of
- * [cavc_vertex] with length of at least `n_vertexes`.
+ * [`cavc_vertex`] with length of at least `n_vertexes`.
  * `pline` must point to a valid place in memory to be written.
  */
 int32_t cavc_pline_create(const struct cavc_vertex *vertexes,
-                          uint32_t n_vertexes,
+                          size_t n_vertexes,
                           uint8_t is_closed,
                           const struct cavc_pline **pline);
 
 /**
- * Free an existing [cavc_pline] object.
+ * Free an existing [`cavc_pline`] object.
  *
  * Nothing happens if `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not already been freed.
  */
 void cavc_pline_f(struct cavc_pline *pline);
@@ -290,21 +295,21 @@ void cavc_pline_f(struct cavc_pline *pline);
 /**
  * Set the userdata values of a pline
  *
- * 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
- * 'count' is the number of u64 values to be stored; not the byte size.
+ * `userdata_values` is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+ * `count` is the number of u64 values to be stored; not the byte size.
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `userdata_values` must point to a valid location to read from.
  */
 int32_t cavc_pline_set_userdata_values(struct cavc_pline *pline,
                                        const uint64_t *userdata_values,
-                                       uint32_t count);
+                                       size_t count);
 
 /**
  * Get the userdata value count of a polyline.
@@ -316,23 +321,24 @@ int32_t cavc_pline_set_userdata_values(struct cavc_pline *pline,
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `count` must point to a valid place in memory to be written.
  */
-int32_t cavc_pline_get_userdata_count(const struct cavc_pline *pline, uint32_t *count);
+int32_t cavc_pline_get_userdata_count(const struct cavc_pline *pline,
+                                      size_t *count);
 
 /**
  * Get the userdata values of a pline
  *
- * 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+ * `userdata_values` is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
  * overrun will happen.
@@ -341,19 +347,20 @@ int32_t cavc_pline_get_userdata_values(const struct cavc_pline *pline,
                                        uint64_t *userdata_values);
 
 /**
- * Reserve space for an `additional` number of vertexes in the [cavc_pline].
+ * Reserve space for an `additional` number of vertexes in the [`cavc_pline`].
  *
- * This function is used to avoid allocations when adding vertexes to the [cavc_pline].
+ * This function is used to avoid allocations when adding vertexes to the [`cavc_pline`].
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
-int32_t cavc_pline_reserve(struct cavc_pline *pline, uint32_t additional);
+int32_t cavc_pline_reserve(struct cavc_pline *pline,
+                           size_t additional);
 
 /**
  * Clones the polyline.
@@ -366,11 +373,12 @@ int32_t cavc_pline_reserve(struct cavc_pline *pline, uint32_t additional);
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `cloned` must point to a valid place in memory to be written.
  */
-int32_t cavc_pline_clone(const struct cavc_pline *pline, const struct cavc_pline **cloned);
+int32_t cavc_pline_clone(const struct cavc_pline *pline,
+                         const struct cavc_pline **cloned);
 
 /**
  * Get whether the polyline is closed or not.
@@ -383,11 +391,12 @@ int32_t cavc_pline_clone(const struct cavc_pline *pline, const struct cavc_pline
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `is_closed` must point to a valid place in memory to be written.
  */
-int32_t cavc_pline_get_is_closed(const struct cavc_pline *pline, uint8_t *is_closed);
+int32_t cavc_pline_get_is_closed(const struct cavc_pline *pline,
+                                 uint8_t *is_closed);
 
 /**
  * Set whether the polyline is closed or not.
@@ -399,10 +408,11 @@ int32_t cavc_pline_get_is_closed(const struct cavc_pline *pline, uint8_t *is_clo
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
-int32_t cavc_pline_set_is_closed(struct cavc_pline *pline, uint8_t is_closed);
+int32_t cavc_pline_set_is_closed(struct cavc_pline *pline,
+                                 uint8_t is_closed);
 
 /**
  * Get the vertex count of a polyline.
@@ -414,16 +424,17 @@ int32_t cavc_pline_set_is_closed(struct cavc_pline *pline, uint8_t is_closed);
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `count` must point to a valid place in memory to be written.
  */
-int32_t cavc_pline_get_vertex_count(const struct cavc_pline *pline, uint32_t *count);
+int32_t cavc_pline_get_vertex_count(const struct cavc_pline *pline,
+                                    size_t *count);
 
 /**
  * Fills the buffer given with the vertex data of a polyline.
  *
- * You must use [cavc_pline_get_vertex_count] to ensure the buffer given has adequate length
+ * You must use [`cavc_pline_get_vertex_count`] to ensure the buffer given has adequate length
  * to be filled with all vertexes!
  *
  * `vertex_data` must point to a buffer that can be filled with all `pline` vertexes.
@@ -433,12 +444,13 @@ int32_t cavc_pline_get_vertex_count(const struct cavc_pline *pline, uint32_t *co
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
  * overrun will happen.
  */
-int32_t cavc_pline_get_vertex_data(const struct cavc_pline *pline, struct cavc_vertex *vertex_data);
+int32_t cavc_pline_get_vertex_data(const struct cavc_pline *pline,
+                                   struct cavc_vertex *vertex_data);
 
 /**
  * Sets all of the vertexes of a polyline.
@@ -452,13 +464,13 @@ int32_t cavc_pline_get_vertex_data(const struct cavc_pline *pline, struct cavc_v
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
- * `vertex_data` must be a valid pointer to a buffer of at least `n_vertexes` of [cavc_vertex].
+ * `vertex_data` must be a valid pointer to a buffer of at least `n_vertexes` of [`cavc_vertex`].
  */
 int32_t cavc_pline_set_vertex_data(struct cavc_pline *pline,
                                    const struct cavc_vertex *vertex_data,
-                                   uint32_t n_vertexes);
+                                   size_t n_vertexes);
 
 /**
  * Clears all of the vertexes of a polyline.
@@ -468,7 +480,7 @@ int32_t cavc_pline_set_vertex_data(struct cavc_pline *pline,
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
 int32_t cavc_pline_clear(struct cavc_pline *pline);
@@ -481,10 +493,13 @@ int32_t cavc_pline_clear(struct cavc_pline *pline);
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
-int32_t cavc_pline_add(struct cavc_pline *pline, double x, double y, double bulge);
+int32_t cavc_pline_add(struct cavc_pline *pline,
+                       double x,
+                       double y,
+                       double bulge);
 
 /**
  * Get a polyline vertex at a given index position.
@@ -498,12 +513,12 @@ int32_t cavc_pline_add(struct cavc_pline *pline, double x, double y, double bulg
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `vertex` must point to a valid place in memory to be written.
  */
 int32_t cavc_pline_get_vertex(const struct cavc_pline *pline,
-                              uint32_t position,
+                              size_t position,
                               struct cavc_vertex *vertex);
 
 /**
@@ -518,11 +533,11 @@ int32_t cavc_pline_get_vertex(const struct cavc_pline *pline,
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
 int32_t cavc_pline_set_vertex(struct cavc_pline *pline,
-                              uint32_t position,
+                              size_t position,
                               struct cavc_vertex vertex);
 
 /**
@@ -536,13 +551,14 @@ int32_t cavc_pline_set_vertex(struct cavc_pline *pline,
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
-int32_t cavc_pline_remove(struct cavc_pline *pline, uint32_t position);
+int32_t cavc_pline_remove(struct cavc_pline *pline,
+                          size_t position);
 
 /**
- * Wraps [PlineSource::path_length].
+ * Wraps [`PlineSource::path_length`].
  *
  * `path_length` is used as the out parameter to hold the computed path length.
  *
@@ -551,14 +567,15 @@ int32_t cavc_pline_remove(struct cavc_pline *pline, uint32_t position);
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `path_length` must point to a valid place in memory to be written.
  */
-int32_t cavc_pline_eval_path_length(const struct cavc_pline *pline, double *path_length);
+int32_t cavc_pline_eval_path_length(const struct cavc_pline *pline,
+                                    double *path_length);
 
 /**
- * Wraps [PlineSource::area].
+ * Wraps [`PlineSource::area`].
  *
  * `area` is used as the out parameter to hold the computed area.
  *
@@ -567,14 +584,15 @@ int32_t cavc_pline_eval_path_length(const struct cavc_pline *pline, double *path
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `area` must point to a valid place in memory to be written.
  */
-int32_t cavc_pline_eval_area(const struct cavc_pline *pline, double *area);
+int32_t cavc_pline_eval_area(const struct cavc_pline *pline,
+                             double *area);
 
 /**
- * Wraps [PlineSource::winding_number].
+ * Wraps [`PlineSource::winding_number`].
  *
  * `winding_number` is used as the out parameter to hold the computed winding number.
  *
@@ -583,7 +601,7 @@ int32_t cavc_pline_eval_area(const struct cavc_pline *pline, double *area);
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `winding_number` must point to a valid place in memory to be written.
  */
@@ -593,72 +611,77 @@ int32_t cavc_pline_eval_wn(const struct cavc_pline *pline,
                            int32_t *winding_number);
 
 /**
- * Wraps [PlineSourceMut::invert_direction_mut].
+ * Wraps [`PlineSourceMut::invert_direction_mut`].
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
 int32_t cavc_pline_invert_direction(struct cavc_pline *pline);
 
 /**
- * Wraps [PlineSourceMut::scale_mut].
+ * Wraps [`PlineSourceMut::scale_mut`].
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
-int32_t cavc_pline_scale(struct cavc_pline *pline, double scale_factor);
+int32_t cavc_pline_scale(struct cavc_pline *pline,
+                         double scale_factor);
 
 /**
- * Wraps [PlineSourceMut::translate_mut].
+ * Wraps [`PlineSourceMut::translate_mut`].
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
-int32_t cavc_pline_translate(struct cavc_pline *pline, double x_offset, double y_offset);
+int32_t cavc_pline_translate(struct cavc_pline *pline,
+                             double x_offset,
+                             double y_offset);
 
 /**
- * Wraps [PlineSource::remove_repeat_pos] but modifies in place rather than returning a result.
+ * Wraps [`PlineSource::remove_repeat_pos`] but modifies in place rather than returning a result.
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
-int32_t cavc_pline_remove_repeat_pos(struct cavc_pline *pline, double pos_equal_eps);
+int32_t cavc_pline_remove_repeat_pos(struct cavc_pline *pline,
+                                     double pos_equal_eps);
 
 /**
- * Wraps [PlineSource::remove_redundant] but modifies in place rather than returning a result.
+ * Wraps [`PlineSource::remove_redundant`] but modifies in place rather than returning a result.
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  */
-int32_t cavc_pline_remove_redundant(struct cavc_pline *pline, double pos_equal_eps);
+int32_t cavc_pline_remove_redundant(struct cavc_pline *pline,
+                                    double pos_equal_eps);
 
 /**
- * Wraps [PlineSource::extents].
+ * Wraps [`PlineSource::extents`].
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
@@ -666,7 +689,7 @@ int32_t cavc_pline_remove_redundant(struct cavc_pline *pline, double pos_equal_e
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `min_x`, `min_y`, `max_x`, and `max_y` must all point to a valid places in memory to be written.
  */
@@ -677,7 +700,7 @@ int32_t cavc_pline_eval_extents(const struct cavc_pline *pline,
                                 double *max_y);
 
 /**
- * Wraps [PlineSource::parallel_offset_opt].
+ * Wraps [`PlineSource::parallel_offset_opt`].
  *
  * `options` is allowed to be null (default options will be used).
  *
@@ -686,7 +709,7 @@ int32_t cavc_pline_eval_extents(const struct cavc_pline *pline,
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `result` must point to a valid place in memory to be written.
  */
@@ -696,15 +719,15 @@ int32_t cavc_pline_parallel_offset(const struct cavc_pline *pline,
                                    const struct cavc_plinelist **result);
 
 /**
- * Wraps [PlineSource::boolean_opt].
+ * Wraps [`PlineSource::boolean_opt`].
  *
  * `options` is allowed to be null (default options will be used).
  *
  * Boolean operations are:
- * * 0 = [BooleanOp::Or]
- * * 1 = [BooleanOp::And]
- * * 2 = [BooleanOp::Not]
- * * 3 = [BooleanOp::Xor]
+ * * 0 = [`BooleanOp::Or`]
+ * * 1 = [`BooleanOp::And`]
+ * * 2 = [`BooleanOp::Not`]
+ * * 3 = [`BooleanOp::Xor`]
  *
  * ## Specific Error Codes
  * * 1 = `pline1` and/or `pline2` is null.
@@ -712,8 +735,8 @@ int32_t cavc_pline_parallel_offset(const struct cavc_pline *pline,
  *
  * # Safety
  *
- * `pline1` and `pline2` must each be null or a valid cavc_pline object that was created with
- * [cavc_pline_create] and has not been freed.
+ * `pline1` and `pline2` must each be null or a valid `cavc_pline` object that was created with
+ * [`cavc_pline_create`] and has not been freed.
  * `pos_plines` and `neg_plines` must both point to different valid places in memory to be written.
  */
 int32_t cavc_pline_boolean(const struct cavc_pline *pline1,
@@ -724,7 +747,7 @@ int32_t cavc_pline_boolean(const struct cavc_pline *pline1,
                            const struct cavc_plinelist **neg_plines);
 
 /**
- * Wraps [PlineSource::scan_for_self_intersect_opt].
+ * Wraps [`PlineSource::scan_for_self_intersect_opt`].
  *
  * `options` is allowed to be null (default options will be used).
  *
@@ -734,8 +757,8 @@ int32_t cavc_pline_boolean(const struct cavc_pline *pline1,
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with
- * [cavc_pline_create] and has not been freed.
+ * `pline` must be null or a valid `cavc_pline` object that was created with
+ * [`cavc_pline_create`] and has not been freed.
  * `is_self_intersecting` must point to a valid place in memory to be written.
  */
 int32_t cavc_pline_scan_for_self_intersect(const struct cavc_pline *pline,
@@ -743,29 +766,29 @@ int32_t cavc_pline_scan_for_self_intersect(const struct cavc_pline *pline,
                                            uint8_t *is_self_intersecting);
 
 /**
- * Wraps [PlineSource::contains_opt].
+ * Wraps [`PlineSource::contains_opt`].
  *
  * `options` is allowed to be null (default options will be used).
  *
  * Possible values returned in result:
  *
- * CAVC_CONTAINS_RESULT_INVALID_INPUT: Input was not valid to perform operation.
- * CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2: Pline1 entirely inside of pline2 with no intersects.
- * CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1: Pline2 entirely inside of pline1 with no intersects.
- * CAVC_CONTAINS_RESULT_DISJOINT: Pline1 is disjoint from pline2 (no intersects and neither polyline is inside of the other).
- * CAVC_CONTAINS_RESULT_INTERSECTED: Pline1 intersects with pline2 in at least one place.
+ * `CAVC_CONTAINS_RESULT_INVALID_INPUT`: Input was not valid to perform operation.
+ * `CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2`: Pline1 entirely inside of pline2 with no intersects.
+ * `CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1`: Pline2 entirely inside of pline1 with no intersects.
+ * `CAVC_CONTAINS_RESULT_DISJOINT`: Pline1 is disjoint from pline2 (no intersects and neither polyline is inside of the other).
+ * `CAVC_CONTAINS_RESULT_INTERSECTED`: Pline1 intersects with pline2 in at least one place.
  *
  * ## Specific Error Codes
- * * 1 = `pline1` and/or `pline2` is null. In case of an error, if result is not null it will be set to CAVC_CONTAINS_RESULT_INVALID_INPUT.
+ * * 1 = `pline1` and/or `pline2` is null. In case of an error, if result is not null it will be set to `CAVC_CONTAINS_RESULT_INVALID_INPUT`.
  *
  * Caution: Polylines with self-intersections may generate unexpected results.
- * Use cavc_pline_scan_for_self_intersect() to find and reject self-intersecting polylines
+ * Use `cavc_pline_scan_for_self_intersect()` to find and reject self-intersecting polylines
  * if this is a possibility for your input data.
  *
  * # Safety
  *
- * `pline1` and `pline2` must each be null or a valid cavc_pline object that was created with
- * [cavc_pline_create] and has not been freed.
+ * `pline1` and `pline2` must each be null or a valid `cavc_pline` object that was created with
+ * [`cavc_pline_create`] and has not been freed.
  * `result` must point to a valid place in memory to be written.
  */
 int32_t cavc_pline_contains(const struct cavc_pline *pline1,
@@ -774,14 +797,14 @@ int32_t cavc_pline_contains(const struct cavc_pline *pline1,
                             uint32_t *result);
 
 /**
- * Wraps [PlineSource::create_approx_aabb_index].
+ * Wraps [`PlineSource::create_approx_aabb_index`].
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `aabbindex` must point to a valid place in memory to be written.
  */
@@ -789,14 +812,14 @@ int32_t cavc_pline_create_approx_aabbindex(const struct cavc_pline *pline,
                                            const struct cavc_aabbindex **aabbindex);
 
 /**
- * Wraps [PlineSource::create_aabb_index].
+ * Wraps [`PlineSource::create_aabb_index`].
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
  * has not been freed.
  * `aabbindex` must point to a valid place in memory to be written.
  */
@@ -804,13 +827,13 @@ int32_t cavc_pline_create_aabbindex(const struct cavc_pline *pline,
                                     const struct cavc_aabbindex **aabbindex);
 
 /**
- * Free an existing [cavc_aabbindex] object.
+ * Free an existing [`cavc_aabbindex`] object.
  *
  * Nothing happens if `aabbindex` is null.
  *
  * # Safety
  *
- * `aabbindex` must be null or a valid [cavc_aabbindex] object.
+ * `aabbindex` must be null or a valid [`cavc_aabbindex`] object.
  */
 void cavc_aabbindex_f(struct cavc_aabbindex *aabbindex);
 
@@ -823,7 +846,7 @@ void cavc_aabbindex_f(struct cavc_aabbindex *aabbindex);
  *
  * # Safety
  *
- * `aabbindex` must be null or a valid [cavc_aabbindex] object.
+ * `aabbindex` must be null or a valid [`cavc_aabbindex`] object.
  * `min_x`, `min_y`, `max_x`, and `max_y` must all point to a valid places in memory to be written.
  */
 int32_t cavc_aabbindex_get_extents(const struct cavc_aabbindex *aabbindex,
@@ -833,7 +856,7 @@ int32_t cavc_aabbindex_get_extents(const struct cavc_aabbindex *aabbindex,
                                    double *max_y);
 
 /**
- * Create a new [cavc_plinelist] object.
+ * Create a new [`cavc_plinelist`] object.
  *
  * `capacity` is the number of plines to pre-allocate space for. May be zero.
  * `plinelist` is an out parameter to hold the created shape.
@@ -842,21 +865,21 @@ int32_t cavc_aabbindex_get_extents(const struct cavc_aabbindex *aabbindex,
  *
  * `plinelist` must point to a valid place in memory to be written.
  */
-int32_t cavc_plinelist_create(uintptr_t capacity, struct cavc_plinelist **plinelist);
+int32_t cavc_plinelist_create(size_t capacity, struct cavc_plinelist **plinelist);
 
 /**
- * Free an existing [cavc_plinelist] object and all [cavc_pline] owned by it.
+ * Free an existing [`cavc_plinelist`] object and all [`cavc_pline`] owned by it.
  *
  * Nothing happens if `plinelist` is null.
  *
  * # Safety
  *
- * `plinelist` must be null or a valid [cavc_plinelist] object.
+ * `plinelist` must be null or a valid [`cavc_plinelist`] object.
  */
 void cavc_plinelist_f(struct cavc_plinelist *plinelist);
 
 /**
- * Get the number of polylines inside a [cavc_plinelist].
+ * Get the number of polylines inside a [`cavc_plinelist`].
  *
  * `count` used as out parameter to hold the polyline count.
  *
@@ -865,36 +888,36 @@ void cavc_plinelist_f(struct cavc_plinelist *plinelist);
  *
  * # Safety
  *
- * `plinelist` must be null or a valid [cavc_plinelist] object.
+ * `plinelist` must be null or a valid [`cavc_plinelist`] object.
  * `count` must point to a valid place in memory to be written.
  */
-int32_t cavc_plinelist_get_count(const struct cavc_plinelist *plinelist, uint32_t *count);
+int32_t cavc_plinelist_get_count(const struct cavc_plinelist *plinelist, size_t *count);
 
 /**
- * Get a polyline at the given index position in the [cavc_plinelist].
+ * Get a polyline at the given index position in the [`cavc_plinelist`].
  *
  * `pline` used as out parameter to hold the polyline pointer. NOTE: This does not release
- * ownership of the [cavc_pline] from the [cavc_plinelist], to do that use [cavc_plinelist_pop] or
- * [cavc_plinelist_take].
+ * ownership of the [`cavc_pline`] from the [`cavc_plinelist`], to do that use [`cavc_plinelist_pop`] or
+ * [`cavc_plinelist_take`].
  *
  * ## Specific Error Codes
  * * 1 = `plinelist` is null.
- * * 2 = `position` out of range for the [cavc_plinelist].
+ * * 2 = `position` out of range for the [`cavc_plinelist`].
  *
  * # Safety
  *
- * `plinelist` must be null or a valid [cavc_plinelist] object.
+ * `plinelist` must be null or a valid [`cavc_plinelist`] object.
  * `pline` must point to a valid place in memory to be written.
  */
 int32_t cavc_plinelist_get_pline(const struct cavc_plinelist *plinelist,
-                                 uint32_t position,
+                                 size_t position,
                                  const struct cavc_pline **pline);
 
 /**
- * Append a [cavc_pline] to the end of a [cavc_plinelist].
+ * Append a [`cavc_pline`] to the end of a [`cavc_plinelist`].
  *
- * `plinelist` is the [cavc_plinelist] to append to.
- * `pline` is the [cavc_pline] to be appended.
+ * `plinelist` is the [`cavc_plinelist`] to append to.
+ * `pline` is the [`cavc_pline`] to be appended.
  *
  * ## Specific Error Codes
  * * 1 = `plinelist` is null.
@@ -902,17 +925,17 @@ int32_t cavc_plinelist_get_pline(const struct cavc_plinelist *plinelist,
  *
  * # Safety
  *
- * `plinelist` must be a valid [cavc_plinelist] object.
- * `pline` must be a valid [cavc_pline] object.
+ * `plinelist` must be a valid [`cavc_plinelist`] object.
+ * `pline` must be a valid [`cavc_pline`] object.
  */
 int32_t cavc_plinelist_push(struct cavc_plinelist *plinelist, struct cavc_pline *pline);
 
 /**
- * Efficiently release and return the last [cavc_pline] from a [cavc_plinelist].
+ * Efficiently release and return the last [`cavc_pline`] from a [`cavc_plinelist`].
  *
- * `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
- * NOTE: The caller now must call [cavc_pline_f] at some point to free the released [cavc_pline].
- * If you pass null in `pline` you must already have another pointer to the released [cavc_pline]
+ * `pline` used as out parameter to hold the polyline pointer released from the [`cavc_plinelist`].
+ * NOTE: The caller now must call [`cavc_pline_f`] at some point to free the released [`cavc_pline`].
+ * If you pass null in `pline` you must already have another pointer to the released [`cavc_pline`]
  * in order to free it.
  *
  * ## Specific Error Codes
@@ -921,35 +944,35 @@ int32_t cavc_plinelist_push(struct cavc_plinelist *plinelist, struct cavc_pline 
  *
  * # Safety
  *
- * `plinelist` must be null or a valid [cavc_plinelist] object.
- * `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [cavc_pline].
+ * `plinelist` must be null or a valid [`cavc_plinelist`] object.
+ * `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [`cavc_pline`].
  */
 int32_t cavc_plinelist_pop(struct cavc_plinelist *plinelist,
                            const struct cavc_pline **pline);
 
 /**
- * Release and return a [cavc_pline] from a [cavc_plinelist] at a given index position.
+ * Release and return a [`cavc_pline`] from a [`cavc_plinelist`] at a given index position.
  *
- * `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
- * NOTE: The caller now must call [cavc_pline_f] at some point to free the released [cavc_pline].
- * If you pass null in `pline` you must already have another pointer to the released [cavc_pline]
+ * `pline` used as out parameter to hold the polyline pointer released from the [`cavc_plinelist`].
+ * NOTE: The caller now must call [`cavc_pline_f`] at some point to free the released [`cavc_pline`].
+ * If you pass null in `pline` you must already have another pointer to the released [`cavc_pline`]
  * in order to free it.
  *
  * ## Specific Error Codes
  * * 1 = `plinelist` is null.
- * * 2 = `position` out of range for the [cavc_plinelist].
+ * * 2 = `position` out of range for the [`cavc_plinelist`].
  *
  * # Safety
  *
- * `plinelist` must be null or a valid [cavc_plinelist] object.
- * `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [cavc_pline].
+ * `plinelist` must be null or a valid [`cavc_plinelist`] object.
+ * `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [`cavc_pline`].
  */
 int32_t cavc_plinelist_take(struct cavc_plinelist *plinelist,
-                            uint32_t position,
+                            size_t position,
                             const struct cavc_pline **pline);
 
 /**
- * Write default option values to a [cavc_shape_offset_o].
+ * Write default option values to a [`cavc_shape_offset_o`].
  *
  * ## Specific Error Codes
  * * 1 = `options` is null.
@@ -961,9 +984,9 @@ int32_t cavc_plinelist_take(struct cavc_plinelist *plinelist,
 int32_t cavc_shape_offset_o_init(struct cavc_shape_offset_o *options);
 
 /**
- * Create a new [cavc_shape] object.
+ * Create a new [`cavc_shape`] object.
  *
- * `plinelist` is a [cavc_plinelist] containing the [cavc_pline] paths to create the shape from.
+ * `plinelist` is a [`cavc_plinelist`] containing the [`cavc_pline`] paths to create the shape from.
  * `shape` is an out parameter to hold the created shape.
  *
  * ## Specific Error Codes
@@ -976,19 +999,19 @@ int32_t cavc_shape_offset_o_init(struct cavc_shape_offset_o *options);
 int32_t cavc_shape_create(const struct cavc_plinelist *plinelist, struct cavc_shape **shape);
 
 /**
- * Free an existing [cavc_shape] object.
+ * Free an existing [`cavc_shape`] object.
  *
  * Nothing happens if `shape` is null.
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not already been freed.
  */
 void cavc_shape_f(struct cavc_shape *shape);
 
 /**
- * Wraps [Shape::parallel_offset].
+ * Wraps [`Shape::parallel_offset`].
  *
  * `options` is allowed to be null (default options will be used).
  *
@@ -997,7 +1020,7 @@ void cavc_shape_f(struct cavc_shape *shape);
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `result` must point to a valid place in memory to be written.
  */
@@ -1016,11 +1039,12 @@ int32_t cavc_shape_parallel_offset(const struct cavc_shape *shape,
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `count` must point to a valid place in memory to be written.
  */
-int32_t cavc_shape_get_ccw_count(const struct cavc_shape *shape, uint32_t *count);
+int32_t cavc_shape_get_ccw_count(const struct cavc_shape *shape,
+                                 size_t *count);
 
 /**
  * Get the vertex count of a specific counter-clockwise polyline in a shape.
@@ -1033,13 +1057,13 @@ int32_t cavc_shape_get_ccw_count(const struct cavc_shape *shape, uint32_t *count
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `count` must point to a valid place in memory to be written.
  */
 int32_t cavc_shape_get_ccw_polyline_count(const struct cavc_shape *shape,
-                                          uint32_t polyline_index,
-                                          uint32_t *count);
+                                          size_t polyline_index,
+                                          size_t *count);
 
 /**
  * Get whether a specific counter-clockwise polyline in a shape is closed.
@@ -1053,41 +1077,21 @@ int32_t cavc_shape_get_ccw_polyline_count(const struct cavc_shape *shape,
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `is_closed` must point to a valid place in memory to be written.
  */
 int32_t cavc_shape_get_ccw_polyline_is_closed(const struct cavc_shape *shape,
-                                              uint32_t polyline_index,
+                                              size_t polyline_index,
                                               uint8_t *is_closed);
 
 /**
  * Fills the buffer given with the vertex data of a ccw polyline in a shape.
  *
- * You must use [cavc_shape_get_ccw_polyline_count] to ensure the buffer given has adequate length
+ * You must use [`cavc_shape_get_ccw_polyline_count`] to ensure the buffer given has adequate length
  * to be filled with all vertexes!
  *
- * `vertex_data` must point to a buffer that can be filled with all `pline` vertexes.
- *
- * ## Specific Error Codes
- * * 1 = `pline` is null.
- * * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
- *
- * # Safety
- *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
- * has not been freed.
- * `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
- * overrun will happen.
- */
-int32_t cavc_shape_get_ccw_polyline_vertex_data(const struct cavc_shape *shape,
-                                                uint32_t polyline_index,
-                                                struct cavc_vertex *vertex_data);
-
-/**
- * Set the userdata values of a CCW polyline in a shape
- *
- * 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+ * `vertex_data` must point to a buffer that can be filled with all vertexes in the selected polyline.
  *
  * ## Specific Error Codes
  * * 1 = `shape` is null.
@@ -1095,14 +1099,34 @@ int32_t cavc_shape_get_ccw_polyline_vertex_data(const struct cavc_shape *shape,
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
+ * has not been freed.
+ * `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
+ * overrun will happen.
+ */
+int32_t cavc_shape_get_ccw_polyline_vertex_data(const struct cavc_shape *shape,
+                                                size_t polyline_index,
+                                                struct cavc_vertex *vertex_data);
+
+/**
+ * Set the userdata values of a CCW polyline in a shape
+ *
+ * `userdata_values` is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+ *
+ * ## Specific Error Codes
+ * * 1 = `shape` is null.
+ * * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
+ *
+ * # Safety
+ *
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `userdata_values` must point to a valid location to read from.
  */
 int32_t cavc_shape_set_ccw_pline_userdata_values(struct cavc_shape *shape,
-                                                 uint32_t polyline_index,
+                                                 size_t polyline_index,
                                                  const uint64_t *userdata_values,
-                                                 uint32_t count);
+                                                 size_t count);
 
 /**
  * Get the userdata value count of a CCW polyline in a shape.
@@ -1115,31 +1139,31 @@ int32_t cavc_shape_set_ccw_pline_userdata_values(struct cavc_shape *shape,
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `count` must point to a valid place in memory to be written.
  */
 int32_t cavc_shape_get_ccw_pline_userdata_count(const struct cavc_shape *shape,
-                                                uint32_t polyline_index,
-                                                uint32_t *count);
+                                                size_t polyline_index,
+                                                size_t *count);
 
 /**
  * Get the userdata values of a CCW pline in a shape
  *
- * 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+ * `userdata_values` is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
  *
  * ## Specific Error Codes
- * * 1 = `pline` is null.
+ * * 1 = `shape` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
  * overrun will happen.
  */
 int32_t cavc_shape_get_ccw_pline_userdata_values(const struct cavc_shape *shape,
-                                                 uint32_t polyline_index,
+                                                 size_t polyline_index,
                                                  uint64_t *userdata_values);
 
 /**
@@ -1152,11 +1176,12 @@ int32_t cavc_shape_get_ccw_pline_userdata_values(const struct cavc_shape *shape,
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `count` must point to a valid place in memory to be written.
  */
-int32_t cavc_shape_get_cw_count(const struct cavc_shape *shape, uint32_t *count);
+int32_t cavc_shape_get_cw_count(const struct cavc_shape *shape,
+                                size_t *count);
 
 /**
  * Get the vertex count of a specific clockwise polyline in a shape.
@@ -1169,13 +1194,13 @@ int32_t cavc_shape_get_cw_count(const struct cavc_shape *shape, uint32_t *count)
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `count` must point to a valid place in memory to be written.
  */
 int32_t cavc_shape_get_cw_polyline_count(const struct cavc_shape *shape,
-                                         uint32_t polyline_index,
-                                         uint32_t *count);
+                                         size_t polyline_index,
+                                         size_t *count);
 
 /**
  * Get whether a specific clockwise polyline in a shape is closed.
@@ -1189,41 +1214,21 @@ int32_t cavc_shape_get_cw_polyline_count(const struct cavc_shape *shape,
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `is_closed` must point to a valid place in memory to be written.
  */
 int32_t cavc_shape_get_cw_polyline_is_closed(const struct cavc_shape *shape,
-                                             uint32_t polyline_index,
+                                             size_t polyline_index,
                                              uint8_t *is_closed);
 
 /**
  * Fills the buffer given with the vertex data of a cw polyline in a shape.
  *
- * You must use [cavc_shape_get_cw_polyline_count] to ensure the buffer given has adequate length
+ * You must use [`cavc_shape_get_cw_polyline_count`] to ensure the buffer given has adequate length
  * to be filled with all vertexes!
  *
- * `vertex_data` must point to a buffer that can be filled with all `pline` vertexes.
- *
- * ## Specific Error Codes
- * * 1 = `pline` is null.
- * * 2 = `polyline_index` is beyond the bounds of the count of the shape's cw polylines
- *
- * # Safety
- *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
- * has not been freed.
- * `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
- * overrun will happen.
- */
-int32_t cavc_shape_get_cw_polyline_vertex_data(const struct cavc_shape *shape,
-                                               uint32_t polyline_index,
-                                               struct cavc_vertex *vertex_data);
-
-/**
- * Set the userdata values of a CW polyline in a shape
- *
- * 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+ * `vertex_data` must point to a buffer that can be filled with all vertexes in the selected polyline.
  *
  * ## Specific Error Codes
  * * 1 = `shape` is null.
@@ -1231,14 +1236,34 @@ int32_t cavc_shape_get_cw_polyline_vertex_data(const struct cavc_shape *shape,
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
+ * has not been freed.
+ * `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
+ * overrun will happen.
+ */
+int32_t cavc_shape_get_cw_polyline_vertex_data(const struct cavc_shape *shape,
+                                               size_t polyline_index,
+                                               struct cavc_vertex *vertex_data);
+
+/**
+ * Set the userdata values of a CW polyline in a shape
+ *
+ * `userdata_values` is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+ *
+ * ## Specific Error Codes
+ * * 1 = `shape` is null.
+ * * 2 = `polyline_index` is beyond the bounds of the count of the shape's cw polylines
+ *
+ * # Safety
+ *
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `userdata_values` must point to a valid location to read from.
  */
 int32_t cavc_shape_set_cw_pline_userdata_values(struct cavc_shape *shape,
-                                                uint32_t polyline_index,
+                                                size_t polyline_index,
                                                 const uint64_t *userdata_values,
-                                                uint32_t count);
+                                                size_t count);
 
 /**
  * Get the userdata value count of a CW polyline in a shape.
@@ -1251,29 +1276,29 @@ int32_t cavc_shape_set_cw_pline_userdata_values(struct cavc_shape *shape,
  *
  * # Safety
  *
- * `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `count` must point to a valid place in memory to be written.
  */
 int32_t cavc_shape_get_cw_pline_userdata_count(const struct cavc_shape *shape,
-                                               uint32_t polyline_index,
-                                               uint32_t *count);
+                                               size_t polyline_index,
+                                               size_t *count);
 
 /**
  * Get the userdata values of a CW pline in a shape
  *
- * 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+ * `userdata_values` is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
  *
  * ## Specific Error Codes
- * * 1 = `pline` is null.
+ * * 1 = `shape` is null.
  *
  * # Safety
  *
- * `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+ * `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
  * has not been freed.
  * `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
  * overrun will happen.
  */
 int32_t cavc_shape_get_cw_pline_userdata_values(const struct cavc_shape *shape,
-                                                uint32_t polyline_index,
+                                                size_t polyline_index,
                                                 uint64_t *userdata_values);

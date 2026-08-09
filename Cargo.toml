@@ -21,7 +21,6 @@ resolver = "2"
 
 [workspace.lints.clippy]
 # TODO: Address these remaining Clippy lints.
-cast_possible_truncation = "allow"
 float_cmp = "allow"
 items_after_statements = "allow"
 match_same_arms = "allow"
