@@ -19,7 +19,7 @@ fn create_pline(vertexes: &[(f64, f64, f64)], is_closed: bool) -> *mut cavc_plin
     };
     assert_eq!(err, 0);
 
-    result as *mut _
+    result.cast_mut()
 }
 
 fn compare_vertexes(actual: &[cavc_vertex], expected: &[cavc_vertex]) {
@@ -81,7 +81,7 @@ fn pline_data_manipulation() {
         assert_eq!(v.y, -4.0);
         assert_eq!(v.bulge, -1.0);
         assert_eq!(cavc_pline_clone(null_ptr, &mut cloned), 1);
-        cavc_pline_f(cloned as *mut _);
+        cavc_pline_f(cloned.cast_mut());
 
         // clear vertexes
         assert_eq!(cavc_pline_clear(pline), 0);
@@ -407,7 +407,7 @@ fn pline_eval_parallel_offset() {
             assert_fuzzy_eq!(v.y, 0.0);
             assert_fuzzy_eq!(v.bulge, 1.0);
 
-            cavc_plinelist_f(results as *mut _);
+            cavc_plinelist_f(results.cast_mut());
 
             cavc_pline_f(pline);
         }
@@ -467,9 +467,9 @@ fn pline_eval_parallel_offset() {
             assert_fuzzy_eq!(v.y, 0.0);
             assert_fuzzy_eq!(v.bulge, 1.0);
 
-            cavc_plinelist_f(results as *mut _);
+            cavc_plinelist_f(results.cast_mut());
 
-            cavc_aabbindex_f(aabb_index as *mut _);
+            cavc_aabbindex_f(aabb_index.cast_mut());
 
             cavc_pline_f(pline);
         }
@@ -582,11 +582,11 @@ fn pline_eval_boolean() {
             );
             // index position out of range
             assert_eq!(
-                cavc_plinelist_take(neg_plines as *mut _, 1, &mut output_pline),
+                cavc_plinelist_take(neg_plines.cast_mut(), 1, &mut output_pline),
                 2
             );
             assert_eq!(
-                cavc_plinelist_take(neg_plines as *mut _, 0, &mut output_pline),
+                cavc_plinelist_take(neg_plines.cast_mut(), 0, &mut output_pline),
                 0
             );
 
@@ -596,14 +596,14 @@ fn pline_eval_boolean() {
             let mut count = u32::MAX;
             assert_eq!(cavc_plinelist_get_count(neg_plines, &mut count), 0);
             assert_eq!(count, 0);
-            cavc_pline_f(output_pline as *mut _);
+            cavc_pline_f(output_pline.cast_mut());
 
             // test pop on plinelist
             // null ptr
             assert_eq!(cavc_plinelist_pop(ptr::null_mut(), &mut output_pline), 1);
 
             assert_eq!(
-                cavc_plinelist_pop(pos_plines as *mut _, &mut output_pline),
+                cavc_plinelist_pop(pos_plines.cast_mut(), &mut output_pline),
                 0
             );
             assert_eq!(cavc_pline_eval_area(output_pline, &mut area), 0);
@@ -611,16 +611,16 @@ fn pline_eval_boolean() {
             let mut count = u32::MAX;
             assert_eq!(cavc_plinelist_get_count(pos_plines, &mut count), 0);
             assert_eq!(count, 0);
-            cavc_pline_f(output_pline as *mut _);
+            cavc_pline_f(output_pline.cast_mut());
 
             // empty plinelist
             assert_eq!(
-                cavc_plinelist_pop(pos_plines as *mut _, &mut output_pline),
+                cavc_plinelist_pop(pos_plines.cast_mut(), &mut output_pline),
                 2
             );
 
-            cavc_plinelist_f(pos_plines as *mut _);
-            cavc_plinelist_f(neg_plines as *mut _);
+            cavc_plinelist_f(pos_plines.cast_mut());
+            cavc_plinelist_f(neg_plines.cast_mut());
 
             cavc_pline_f(pline1);
         }
@@ -706,8 +706,8 @@ fn pline_eval_boolean() {
             assert_eq!(cavc_pline_eval_area(output_pline, &mut area), 0);
             assert_fuzzy_eq!(area, std::f64::consts::PI);
 
-            cavc_plinelist_f(pos_plines as *mut _);
-            cavc_plinelist_f(neg_plines as *mut _);
+            cavc_plinelist_f(pos_plines.cast_mut());
+            cavc_plinelist_f(neg_plines.cast_mut());
 
             cavc_pline_f(pline1);
         }
@@ -1319,8 +1319,8 @@ fn self_intersect_scan_ffi() {
         );
         assert_eq!(is_self_intersecting, 0);
 
-        cavc_aabbindex_f(hourglass_index as *mut _);
-        cavc_aabbindex_f(rectangle_index as *mut _);
+        cavc_aabbindex_f(hourglass_index.cast_mut());
+        cavc_aabbindex_f(rectangle_index.cast_mut());
 
         cavc_pline_self_intersect_o_f(hourglass_options);
         cavc_pline_self_intersect_o_f(rectangle_options);
@@ -1418,8 +1418,8 @@ fn pline_contains_ffi() {
         );
         assert_eq!(result, CAVC_CONTAINS_RESULT_DISJOINT);
 
-        cavc_aabbindex_f(rectangle_index as *mut _);
-        cavc_aabbindex_f(circle_index as *mut _);
+        cavc_aabbindex_f(rectangle_index.cast_mut());
+        cavc_aabbindex_f(circle_index.cast_mut());
 
         cavc_pline_contains_o_f(rectangle_options);
         cavc_pline_contains_o_f(circle_options);
