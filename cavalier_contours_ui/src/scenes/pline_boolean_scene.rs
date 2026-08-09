@@ -14,6 +14,7 @@ use egui_plot::{Plot, PlotPoint, PlotPoints};
 
 use crate::editor::PolylineEditor;
 use crate::plotting::{PlinePlotData, PlinesPlotItem};
+use crate::theme::ThemeColors;
 
 use super::{
     super::plotting::PLOT_VERTEX_RADIUS, Scene, controls_side_panel, scene_settings::SceneSettings,
@@ -251,7 +252,7 @@ fn plot_area(
     interaction_state: &mut InteractionState,
     polyline_editor: &mut PolylineEditor,
 ) {
-    let colors = settings.colors(ui.ctx());
+    let colors = ThemeColors::from_context(ui.ctx());
     let InteractionState {
         grabbed_vertex,
         dragging,
@@ -508,7 +509,7 @@ fn plot_area(
     });
 
     // Show dual polyline editor window if requested
-    polyline_editor.ui_show(ui.ctx(), plines, &settings.colors(ui.ctx()));
+    polyline_editor.ui_show(ui.ctx(), plines, &ThemeColors::from_context(ui.ctx()));
 }
 
 fn build_scene_state(

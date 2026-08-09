@@ -36,11 +36,9 @@ impl SceneSettings {
             .show_y(self.show_cursor_pos)
     }
 
-    pub fn colors(&self, ctx: &egui::Context) -> crate::theme::ThemeColors {
-        self.theme.colors(ctx)
-    }
-
     fn ui(&mut self, ui: &mut egui::Ui) {
+        let previous_theme = self.theme;
+
         ui.checkbox(&mut self.show_grid, "Show Grid")
             .on_hover_text("Show grid lines in the canvas");
         ui.checkbox(&mut self.show_axes, "Show Axes")
@@ -67,6 +65,10 @@ impl SceneSettings {
             .clicked()
         {
             *self = Self::default();
+        }
+
+        if self.theme != previous_theme {
+            ui.ctx().set_theme(self.theme);
         }
     }
 }

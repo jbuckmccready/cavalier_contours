@@ -13,6 +13,7 @@ use std::borrow::Cow;
 
 use crate::editor::PolylineEditor;
 use crate::plotting::{PlinePlotData, PlinesPlotItem, RawPlineOffsetSegsPlotItem};
+use crate::theme::ThemeColors;
 
 use super::{
     super::plotting::PLOT_VERTEX_RADIUS, Scene, controls_side_panel, scene_settings::SceneSettings,
@@ -229,7 +230,7 @@ fn plot_area(
     interaction_state: &mut InteractionState,
     polyline_editor: &mut PolylineEditor,
 ) {
-    let colors = settings.colors(ui.ctx());
+    let colors = ThemeColors::from_context(ui.ctx());
     let InteractionState {
         grabbed_vertex,
         dragging,

@@ -8,6 +8,7 @@ use egui_plot::{Plot, PlotPoint, PlotPoints};
 
 use crate::editor::PolylineEditor;
 use crate::plotting::{PlinePlotData, PlinesPlotItem};
+use crate::theme::ThemeColors;
 
 use super::{
     super::plotting::PLOT_VERTEX_RADIUS, Scene, controls_side_panel, scene_settings::SceneSettings,
@@ -141,7 +142,7 @@ impl Scene for MultiPlineOffsetScene {
         interaction_state.zoom_to_fit |= init;
 
         // Show multi-polyline editor window if requested
-        let colors = settings.colors(ui.ctx());
+        let colors = ThemeColors::from_context(ui.ctx());
         polyline_editor.ui_show(ui.ctx(), plines, &colors);
 
         plot_area(
@@ -247,7 +248,7 @@ fn plot_area(
     offset: f64,
     interaction_state: &mut InteractionState,
 ) {
-    let colors = settings.colors(ui.ctx());
+    let colors = ThemeColors::from_context(ui.ctx());
     let InteractionState {
         grabbed_vertex,
         dragging,

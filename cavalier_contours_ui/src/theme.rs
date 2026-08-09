@@ -18,43 +18,14 @@ impl Theme {
             Theme::System => "🖥 System",
         }
     }
+}
 
-    /// Helper method to determine if system theme should use dark mode
-    /// Defaults to dark when system theme detection fails
-    fn system_is_dark(ctx: &egui::Context) -> bool {
-        match ctx.system_theme() {
-            Some(egui::Theme::Light) => false,
-            Some(egui::Theme::Dark) | None => true,
-        }
-    }
-
-    #[must_use]
-    pub fn to_egui_visuals(&self, ctx: &egui::Context) -> egui::Visuals {
-        match self {
-            Theme::Light => egui::Visuals::light(),
-            Theme::Dark => egui::Visuals::dark(),
-            Theme::System => {
-                if Self::system_is_dark(ctx) {
-                    egui::Visuals::dark()
-                } else {
-                    egui::Visuals::light()
-                }
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn colors(&self, ctx: &egui::Context) -> ThemeColors {
-        match self {
-            Theme::Light => ThemeColors::light(),
-            Theme::Dark => ThemeColors::dark(),
-            Theme::System => {
-                if Self::system_is_dark(ctx) {
-                    ThemeColors::dark()
-                } else {
-                    ThemeColors::light()
-                }
-            }
+impl From<Theme> for egui::ThemePreference {
+    fn from(theme: Theme) -> Self {
+        match theme {
+            Theme::Light => Self::Light,
+            Theme::Dark => Self::Dark,
+            Theme::System => Self::System,
         }
     }
 }
@@ -97,6 +68,13 @@ pub struct ThemeColors {
 }
 
 impl ThemeColors {
+    pub(crate) fn from_context(ctx: &egui::Context) -> Self {
+        match ctx.theme() {
+            egui::Theme::Light => Self::light(),
+            egui::Theme::Dark => Self::dark(),
+        }
+    }
+
     fn light() -> Self {
         Self {
             // Primary colors - high contrast on light background

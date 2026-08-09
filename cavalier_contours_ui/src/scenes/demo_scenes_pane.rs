@@ -39,12 +39,7 @@ impl DemoScenes {
             ..
         } = self;
 
-        // Apply theme to the root UI and egui context.
         let ctx = ui.ctx().clone();
-        let visuals = settings.theme.to_egui_visuals(&ctx);
-        ctx.set_visuals(visuals.clone());
-        ui.visuals_mut().clone_from(&visuals);
-
         let selected_before = *selected;
         let mut sel = selected.unwrap_or(0);
         egui::Panel::top("menu_bar").show(ui, |ui| {
