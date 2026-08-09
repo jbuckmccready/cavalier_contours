@@ -162,7 +162,7 @@ impl PolylineEditor {
 
     /// Apply all pending table changes to the provided polylines
     pub fn apply_table_changes(&mut self, polylines: &mut Vec<Polyline>) {
-        *polylines = self.pending_state.clone();
+        polylines.clone_from(&self.pending_state);
         self.current_json = self.serialize_polylines(polylines);
         self.pending_json = self.current_json.clone();
         self.json_error = None;
@@ -246,7 +246,7 @@ impl PolylineEditor {
     ) {
         // Detect first opening and refresh state with passed in (current) state
         if self.show_window && !self.is_initialized {
-            self.pending_state = polylines.clone();
+            self.pending_state.clone_from(polylines);
             self.current_json = self.serialize_polylines(&self.pending_state);
             self.pending_json = self.current_json.clone();
             self.json_error = None;
@@ -601,7 +601,7 @@ impl PolylineEditor {
         match self.parse_polylines_from_json(&self.pending_json) {
             Ok(new_polylines) => {
                 *polylines = new_polylines;
-                self.pending_state = polylines.clone();
+                self.pending_state.clone_from(polylines);
                 self.current_json = self.serialize_polylines(polylines);
                 self.pending_json = self.current_json.clone();
                 self.json_error = None;
