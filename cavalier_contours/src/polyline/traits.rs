@@ -2339,9 +2339,8 @@ where
             if self.pline.is_closed() {
                 self.exhausted = true;
                 return Some((self.pline.at(vc - 1), self.pline.at(0)));
-            } else {
-                return None;
             }
+            return None;
         }
 
         let r = (self.pline.at(self.pos), self.pline.at(self.pos + 1));
