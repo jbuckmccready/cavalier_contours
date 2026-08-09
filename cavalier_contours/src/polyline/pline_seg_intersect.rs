@@ -330,18 +330,15 @@ where
             // helper function to collect end point intersects
             let mut try_add_end_point_intr = |intr: Vector2<T>| {
                 for slot in &mut end_point_intrs {
-                    match slot {
-                        Some(pt) => {
-                            if pt.fuzzy_eq_eps(intr, pos_equal_eps) {
-                                // duplicate point, skip it (end point from both arcs touch)
-                                break;
-                            }
-                        }
-                        None => {
-                            // insert the end point as intersect
-                            *slot = Some(intr);
+                    if let Some(pt) = slot {
+                        if pt.fuzzy_eq_eps(intr, pos_equal_eps) {
+                            // duplicate point, skip it (end point from both arcs touch)
                             break;
                         }
+                    } else {
+                        // insert the end point as intersect
+                        *slot = Some(intr);
+                        break;
                     }
                 }
             };
