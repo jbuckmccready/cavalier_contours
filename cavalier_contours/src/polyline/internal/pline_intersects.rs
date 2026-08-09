@@ -802,15 +802,15 @@ where
     // skip first intr (already processed by setting start_intr)
     for intr in intersects.iter().skip(1) {
         // check if intr start point connects with end_intr end point
-        if !intr.point1.fuzzy_eq_eps(current_end_point, pos_equal_eps) {
+        if intr.point1.fuzzy_eq_eps(current_end_point, pos_equal_eps) {
+            end_intr = Some(intr);
+        } else {
             // intr does not join with previous intr, cap off slice and add to result
             let slice = OverlappingSlice::new(pline1, pline2, start_intr, end_intr, pos_equal_eps);
             result.push(slice);
 
             start_intr = intr;
             end_intr = None;
-        } else {
-            end_intr = Some(intr);
         }
 
         current_end_point = intr.point2;

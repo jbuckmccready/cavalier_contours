@@ -133,13 +133,10 @@ pub fn property_sets_match(
     result_set: &[PlineProperties],
     expected_set: &[PlineProperties],
 ) -> bool {
-    let mut sets_match = true;
-    if result_set.len() != expected_set.len() {
-        sets_match = false;
-    } else {
-        // using simple N^2 comparisons to compare property sets (sets are always relatively small,
-        // e.g. N < 10)
-        for properties_expected in expected_set {
+    // using simple N^2 comparisons to compare property sets (sets are always relatively small,
+    // e.g. N < 10)
+    let sets_match = result_set.len() == expected_set.len()
+        && expected_set.iter().all(|properties_expected| {
             let match_count = result_set
                 .iter()
                 .filter(|properties_result| {
@@ -148,12 +145,8 @@ pub fn property_sets_match(
                 })
                 .count();
 
-            if match_count != 1 {
-                sets_match = false;
-                break;
-            }
-        }
-    }
+            match_count == 1
+        });
 
     if !sets_match {
         eprintln!("result:\n{result_set:?}");
@@ -167,13 +160,10 @@ pub fn property_sets_match_abs_a(
     result_set: &[PlineProperties],
     expected_set: &[PlineProperties],
 ) -> bool {
-    let mut sets_match = true;
-    if result_set.len() != expected_set.len() {
-        sets_match = false;
-    } else {
-        // using simple N^2 comparisons to compare property sets (sets are always relatively small,
-        // e.g. N < 10)
-        for properties_expected in expected_set {
+    // using simple N^2 comparisons to compare property sets (sets are always relatively small,
+    // e.g. N < 10)
+    let sets_match = result_set.len() == expected_set.len()
+        && expected_set.iter().all(|properties_expected| {
             let match_count = result_set
                 .iter()
                 .filter(|properties_result| {
@@ -182,12 +172,8 @@ pub fn property_sets_match_abs_a(
                 })
                 .count();
 
-            if match_count != 1 {
-                sets_match = false;
-                break;
-            }
-        }
-    }
+            match_count == 1
+        });
 
     if !sets_match {
         eprintln!("result:\n{result_set:?}");

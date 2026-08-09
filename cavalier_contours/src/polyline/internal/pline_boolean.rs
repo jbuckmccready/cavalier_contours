@@ -929,13 +929,13 @@ where
 
                 for result_pline in remaining {
                     let orientation = result_pline.pline.orientation();
-                    if orientation != boolean_info.pline2_orientation {
+                    if orientation == boolean_info.pline2_orientation {
+                        // orientation stayed the same, therefore it represents positive space
+                        pos_plines.push(result_pline);
+                    } else {
                         // orientation inverted from original, therefore it represents negative
                         // space
                         neg_plines.push(result_pline);
-                    } else {
-                        // orientation stayed the same, therefore it represents positive space
-                        pos_plines.push(result_pline);
                     }
                 }
 

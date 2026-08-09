@@ -688,10 +688,10 @@ impl PolylineEditor {
     fn serialize_polylines(&self, polylines: &[Polyline]) -> String {
         match &self.config.json_format {
             JsonFormat::Single => {
-                if !polylines.is_empty() {
-                    serde_json::to_string_pretty(&polylines[0]).unwrap_or_default()
-                } else {
+                if polylines.is_empty() {
                     String::new()
+                } else {
+                    serde_json::to_string_pretty(&polylines[0]).unwrap_or_default()
                 }
             }
             JsonFormat::Combined {

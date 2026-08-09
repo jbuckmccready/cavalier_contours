@@ -430,9 +430,7 @@ fn arc_arc_join<T, O>(
     };
 
     let mut process_intersect = |intersect: Vector2<T>, true_intersect: bool| {
-        if !true_intersect {
-            connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
-        } else {
+        if true_intersect {
             let prev_vertex = result.last().unwrap();
 
             if !prev_vertex.bulge_is_zero()
@@ -467,6 +465,8 @@ fn arc_arc_join<T, O>(
             } else {
                 result.add_or_replace(intersect.x, intersect.y, u1.bulge, pos_equal_eps);
             }
+        } else {
+            connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
         }
     };
 
