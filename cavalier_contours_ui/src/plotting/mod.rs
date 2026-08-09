@@ -61,7 +61,7 @@ fn cull_path(path: &Path, bounds: &egui::Rect) -> impl Iterator<Item = PathEvent
 
         let event = path_events.next()?;
         match event {
-            PathEvent::Begin { .. } => Some(event),
+            PathEvent::Begin { .. } | PathEvent::End { .. } => Some(event),
             PathEvent::Line { from, to } => {
                 let line_bounds =
                     egui::Rect::from_two_pos(egui::pos2(from.x, from.y), egui::pos2(to.x, to.y));
@@ -124,7 +124,6 @@ fn cull_path(path: &Path, bounds: &egui::Rect) -> impl Iterator<Item = PathEvent
                 }
                 Some(event)
             }
-            PathEvent::End { .. } => Some(event),
         }
     })
 }

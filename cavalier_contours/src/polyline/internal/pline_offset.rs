@@ -999,7 +999,7 @@ fn visit_circle_intersects<P, T, F>(
                 circle_center,
                 pos_equal_eps,
             ) {
-                CircleCircleIntr::NoIntersect => {}
+                CircleCircleIntr::NoIntersect | CircleCircleIntr::Overlapping => {}
                 CircleCircleIntr::TangentIntersect { point } => {
                     if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, point) {
                         visitor(start_index, point);
@@ -1013,7 +1013,6 @@ fn visit_circle_intersects<P, T, F>(
                         visitor(start_index, point2);
                     }
                 }
-                CircleCircleIntr::Overlapping => {}
             }
         }
     }
