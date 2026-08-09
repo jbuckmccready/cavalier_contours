@@ -74,7 +74,7 @@ where
     // This approach was found to be more numerically stable than solving for t using the quadratic
     // equations.
 
-    use LineCircleIntr::*;
+    use LineCircleIntr::{NoIntersect, TangentIntersect, TwoIntersects};
 
     let dx = p1.x - p0.x;
     let dy = p1.y - p0.y;

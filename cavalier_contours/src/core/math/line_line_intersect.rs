@@ -103,7 +103,7 @@ where
     // http://geomalgorithms.com/a05-_intersect-1.html
     // http://mathworld.wolfram.com/PerpDotProduct.html
 
-    use LineLineIntr::*;
+    use LineLineIntr::{FalseIntersect, NoIntersect, Overlapping, TrueIntersect};
 
     let v = v2 - v1;
     let u = u2 - u1;

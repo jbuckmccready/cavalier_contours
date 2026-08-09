@@ -65,7 +65,9 @@ pub fn pline_seg_intr<T>(
 where
     T: Real,
 {
-    use PlineSegIntr::*;
+    use PlineSegIntr::{
+        NoIntersect, OneIntersect, OverlappingArcs, TangentIntersect, TwoIntersects,
+    };
     let v_is_line = v1.bulge_is_zero();
     let u_is_line = u1.bulge_is_zero();
 

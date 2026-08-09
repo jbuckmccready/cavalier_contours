@@ -638,7 +638,7 @@ pub trait PlineSource {
             .skip(i)
             .take(iter_count)
         {
-            use RemoveRedundantCase::*;
+            use RemoveRedundantCase::{DiscardVertex, IncludeVertex, UpdateV1BulgeForArc};
             let state: RemoveRedundantCase<Self::Num> =
                 if v2.pos().fuzzy_eq_eps(v3.pos(), pos_equal_eps) {
                     // repeat position, just update bulge

@@ -66,7 +66,7 @@ where
     T: Real,
 {
     // Reference algorithm: http://paulbourke.net/geometry/circlesphere/
-    use CircleCircleIntr::*;
+    use CircleCircleIntr::{NoIntersect, Overlapping, TangentIntersect, TwoIntersects};
 
     let cv = center2 - center1;
     let d2 = cv.dot(cv);
