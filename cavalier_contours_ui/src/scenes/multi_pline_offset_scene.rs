@@ -23,7 +23,7 @@ enum Mode {
 }
 
 impl Mode {
-    fn label(&self) -> &'static str {
+    fn label(self) -> &'static str {
         match self {
             Mode::Offset => "Offset",
             Mode::OffsetIntersects => "Offset Intersects",
@@ -149,9 +149,9 @@ impl Scene for MultiPlineOffsetScene {
             ui,
             settings,
             plines,
-            mode,
-            max_offset_count,
-            offset,
+            *mode,
+            *max_offset_count,
+            *offset,
             interaction_state,
         );
     }
@@ -243,9 +243,9 @@ fn plot_area(
     ui: &mut Ui,
     settings: &SceneSettings,
     plines: &mut [Polyline],
-    mode: &Mode,
-    max_offset_count: &usize,
-    offset: &f64,
+    mode: Mode,
+    max_offset_count: usize,
+    offset: f64,
     interaction_state: &mut InteractionState,
 ) {
     let colors = settings.colors(ui.ctx());
@@ -391,32 +391,32 @@ fn plot_area(
 
 fn build_scene_state(
     plines: &[Polyline],
-    offset: &f64,
-    max_offset_count: &usize,
-    mode: &Mode,
+    offset: f64,
+    max_offset_count: usize,
+    mode: Mode,
 ) -> SceneState {
     let shape = Shape::from_plines(plines.iter().cloned());
-    if *mode == Mode::Offset {
+    if mode == Mode::Offset {
         let mut offset_shapes = Vec::new();
-        if *max_offset_count == 0 {
+        if max_offset_count == 0 {
             return SceneState::Offset {
                 shape,
                 offset_shapes,
             };
         }
 
-        let mut curr_offset = shape.parallel_offset(*offset, &ShapeOffsetOptions::default());
+        let mut curr_offset = shape.parallel_offset(offset, &ShapeOffsetOptions::default());
 
         while !curr_offset.ccw_plines.is_empty() || !curr_offset.cw_plines.is_empty() {
             offset_shapes.push(curr_offset);
-            if offset_shapes.len() >= *max_offset_count {
+            if offset_shapes.len() >= max_offset_count {
                 break;
             }
 
             curr_offset = offset_shapes
                 .last()
                 .unwrap()
-                .parallel_offset(*offset, &ShapeOffsetOptions::default());
+                .parallel_offset(offset, &ShapeOffsetOptions::default());
         }
         return SceneState::Offset {
             shape,
@@ -428,7 +428,7 @@ fn build_scene_state(
 
     // Step 1: Create offset loops with spatial index
     let (ccw_offset_loops, cw_offset_loops, offset_loops_index) =
-        shape.create_offset_loops_with_index(*offset, &options);
+        shape.create_offset_loops_with_index(offset, &options);
 
     if ccw_offset_loops.is_empty() && cw_offset_loops.is_empty() {
         return SceneState::NoOp;
@@ -453,7 +453,7 @@ fn build_scene_state(
             .map(|l| l.indexed_pline.polyline.clone()),
     );
 
-    if *mode == Mode::OffsetIntersects {
+    if mode == Mode::OffsetIntersects {
         let intersects = slice_point_sets
             .iter()
             .flat_map(|s| {
@@ -474,7 +474,7 @@ fn build_scene_state(
         &ccw_offset_loops,
         &cw_offset_loops,
         &slice_point_sets,
-        *offset,
+        offset,
         &options,
     );
 

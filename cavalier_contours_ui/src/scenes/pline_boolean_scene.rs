@@ -42,7 +42,7 @@ enum Mode {
 }
 
 impl Mode {
-    fn label(&self) -> &'static str {
+    fn label(self) -> &'static str {
         match self {
             Mode::None => "None",
             Mode::Or => "Or",
@@ -54,11 +54,11 @@ impl Mode {
         }
     }
 
-    fn supports_pruned_slices(&self) -> bool {
+    fn supports_pruned_slices(self) -> bool {
         self.prune_mode().is_some()
     }
 
-    fn prune_mode(&self) -> Option<PruneMode> {
+    fn prune_mode(self) -> Option<PruneMode> {
         match self {
             Mode::Or => Some(PruneMode::Union),
             Mode::And => Some(PruneMode::Intersection),
@@ -169,10 +169,10 @@ impl Scene for PlineBooleanScene {
             ui,
             settings,
             plines,
-            mode,
-            fill,
-            show_vertexes,
-            show_pruned_slices,
+            *mode,
+            *fill,
+            *show_vertexes,
+            *show_pruned_slices,
             interaction_state,
             polyline_editor,
         );
@@ -244,10 +244,10 @@ fn plot_area(
     ui: &mut Ui,
     settings: &SceneSettings,
     plines: &mut Vec<Polyline>,
-    mode: &Mode,
-    fill: &bool,
-    show_vertexes: &bool,
-    show_pruned_slices: &bool,
+    mode: Mode,
+    fill: bool,
+    show_vertexes: bool,
+    show_pruned_slices: bool,
     interaction_state: &mut InteractionState,
     polyline_editor: &mut PolylineEditor,
 ) {
@@ -348,14 +348,14 @@ fn plot_area(
             let mut plot_item1 = PlinesPlotItem::new(PlinePlotData::new(pline1));
             let mut plot_item2 = PlinesPlotItem::new(PlinePlotData::new(pline2));
 
-            if *show_vertexes {
+            if show_vertexes {
                 plot_item1 = plot_item1.vertex_color(fill_color1);
                 plot_item2 = plot_item2.vertex_color(fill_color2);
             }
 
             match scene_state {
                 SceneState::NoOp => {
-                    if *fill {
+                    if fill {
                         plot_ui.add(plot_item1.fill_color(fill_color1));
                         plot_ui.add(plot_item2.fill_color(fill_color2));
                     } else {
@@ -376,7 +376,7 @@ fn plot_area(
                     shape = Shape::from_plines(all_plines);
 
                     let mut plot_item = PlinesPlotItem::new(&shape).stroke_color(color1);
-                    if *fill {
+                    if fill {
                         plot_item = plot_item.fill_color(fill_color1);
                     }
 
@@ -432,7 +432,7 @@ fn plot_area(
                     }
 
                     // Draw original polyline vertexes
-                    if *show_vertexes {
+                    if show_vertexes {
                         plot_ui.add(plot_item1);
                         plot_ui.add(plot_item2);
                     }
@@ -473,7 +473,7 @@ fn plot_area(
                     shape = Shape::from_plines(all_plines.cloned());
 
                     let mut plot_item = PlinesPlotItem::new(&shape).stroke_color(color1);
-                    if *fill {
+                    if fill {
                         plot_item = plot_item.fill_color(fill_color1);
                     }
                     plot_ui.add(plot_item);
@@ -514,8 +514,8 @@ fn plot_area(
 fn build_scene_state(
     pline1: &Polyline,
     pline2: &Polyline,
-    mode: &Mode,
-    show_pruned_slices: &bool,
+    mode: Mode,
+    show_pruned_slices: bool,
 ) -> SceneState {
     if pline1.vertex_count() < 2
         || pline2.vertex_count() < 2
@@ -538,7 +538,7 @@ fn build_scene_state(
                 _ => unreachable!(),
             };
 
-            if *show_pruned_slices && let Some(prune_mode) = mode.prune_mode() {
+            if show_pruned_slices && let Some(prune_mode) = mode.prune_mode() {
                 let result = pline1.boolean(pline2, op);
                 let pline1_aabb_index = pline1.create_approx_aabb_index();
                 let boolean_info =

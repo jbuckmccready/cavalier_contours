@@ -129,7 +129,7 @@ impl Scene for PlineOffsetScene {
             settings,
             pline,
             mode,
-            offset,
+            *offset,
             interaction_state,
             polyline_editor,
         );
@@ -226,7 +226,7 @@ fn plot_area(
     settings: &SceneSettings,
     plines: &mut Vec<Polyline>,
     mode: &Mode,
-    offset: &f64,
+    offset: f64,
     interaction_state: &mut InteractionState,
     polyline_editor: &mut PolylineEditor,
 ) {
@@ -246,7 +246,7 @@ fn plot_area(
         Mode::Offset {
             handle_self_intersects,
             max_offset_count,
-        } => build_offset(pline, offset, handle_self_intersects, max_offset_count),
+        } => build_offset(pline, offset, *handle_self_intersects, *max_offset_count),
         Mode::RawOffset => build_raw_offset(pline, offset),
         Mode::RawOffsetSegments => build_raw_offset_segments(pline, offset),
     };
@@ -354,13 +354,13 @@ fn plot_area(
 
 fn build_offset(
     pline: &Polyline,
-    offset: &f64,
-    handle_self_intersects: &bool,
-    max_offset_count: &usize,
+    offset: f64,
+    handle_self_intersects: bool,
+    max_offset_count: usize,
 ) -> SceneState {
     let mut all_offset_plines = Vec::new();
     let offset_opt = PlineOffsetOptions {
-        handle_self_intersects: *handle_self_intersects,
+        handle_self_intersects,
         ..Default::default()
     };
 
@@ -374,13 +374,13 @@ fn build_offset(
     let orientation = pline.orientation();
 
     // current offset polylines
-    let mut offset_plines = pline.parallel_offset_opt(*offset, &offset_opt);
+    let mut offset_plines = pline.parallel_offset_opt(offset, &offset_opt);
 
     let mut same_orientation = Vec::new();
     let mut diff_orientation = Vec::new();
 
     // repeat offsets until max or collapsed entirely
-    for _ in 1..*max_offset_count {
+    for _ in 1..max_offset_count {
         // split offset plines by orientation
         for pl in offset_plines.drain(..) {
             if pl.orientation() == orientation {
@@ -392,7 +392,7 @@ fn build_offset(
 
         // repeat offset for same orientation ones
         for pl in &same_orientation {
-            offset_plines.extend(pl.parallel_offset_opt(*offset, &offset_opt));
+            offset_plines.extend(pl.parallel_offset_opt(offset, &offset_opt));
         }
 
         // accumulate results
@@ -411,18 +411,18 @@ fn build_offset(
     SceneState::Offset { all_offset_plines }
 }
 
-fn build_raw_offset(pline: &Polyline, offset: &f64) -> SceneState {
+fn build_raw_offset(pline: &Polyline, offset: f64) -> SceneState {
     let offset_opt = PlineOffsetOptions::default();
 
     let raw_offset_pline: Polyline =
-        create_raw_offset_polyline(pline, *offset, offset_opt.pos_equal_eps);
+        create_raw_offset_polyline(pline, offset, offset_opt.pos_equal_eps);
 
     SceneState::RawOffset { raw_offset_pline }
 }
 
-fn build_raw_offset_segments(pline: &Polyline, offset: &f64) -> SceneState {
+fn build_raw_offset_segments(pline: &Polyline, offset: f64) -> SceneState {
     let raw_offset_segs: Vec<RawPlineOffsetSeg<f64>> =
-        create_untrimmed_raw_offset_segs(pline, *offset);
+        create_untrimmed_raw_offset_segs(pline, offset);
 
     SceneState::RawOffsetSegments {
         segments: raw_offset_segs,

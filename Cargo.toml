@@ -22,7 +22,6 @@ resolver = "2"
 [workspace.lints.clippy]
 # TODO: Address these remaining Clippy lints.
 too_many_lines = "allow"
-trivially_copy_pass_by_ref = "allow"
 
 # Overly pedantic, has valid use.
 inline_always = "allow"
