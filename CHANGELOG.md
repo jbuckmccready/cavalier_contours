@@ -8,6 +8,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 - ⚠️ BREAKING: Changed C FFI container counts, lengths, capacities, and indexes from `uint32_t` to
   `size_t` and updated the generated header accordingly.
+- ⚠️ BREAKING: Changed `Shape::parallel_offset` to borrow `ShapeOffsetOptions` instead of taking it
+  by value.
 - Added `#[must_use]` to public functions and types, which may affect users of `-D warnings`.
 
 ### Fixed 🐛

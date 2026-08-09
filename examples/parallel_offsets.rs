@@ -222,7 +222,7 @@ fn shape_offset() {
     // and shrinks holes (increasing net area), while a positive distance shrinks outer boundaries
     // and grows holes (decreasing net area).
     let offset_options = ShapeOffsetOptions::new();
-    let outward_shape = shape.parallel_offset(-2.0, offset_options.clone());
+    let outward_shape = shape.parallel_offset(-2.0, &offset_options);
 
     println!("\nOutward offset by 2.00:");
     println!("  CCW polylines: {}", outward_shape.ccw_plines.len());
@@ -241,7 +241,7 @@ fn shape_offset() {
     println!("  Net area (ccw_plines - cw_plines): {outward_total_area:.2}");
 
     // Inward offset (shrinks CCW islands and grows CW holes)
-    let inward_shape = shape.parallel_offset(1.0, offset_options.clone());
+    let inward_shape = shape.parallel_offset(1.0, &offset_options);
 
     println!("\nInward offset by 1.00:");
     println!("  CCW polylines: {}", inward_shape.ccw_plines.len());
@@ -315,7 +315,7 @@ fn shape_offset() {
             .map(|p| p.polyline.area().abs())
             .sum::<f64>();
 
-    let complex_offset = complex_shape.parallel_offset(1.0, offset_options);
+    let complex_offset = complex_shape.parallel_offset(1.0, &offset_options);
     println!("\nComplex shape offset by 1.00:");
     println!("  CCW polylines: {}", complex_offset.ccw_plines.len());
     println!("  CW polylines: {}", complex_offset.cw_plines.len());

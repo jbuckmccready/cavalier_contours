@@ -203,9 +203,9 @@ where
     }
 
     #[must_use]
-    pub fn parallel_offset(&self, offset: T, options: ShapeOffsetOptions<T>) -> Self {
+    pub fn parallel_offset(&self, offset: T, options: &ShapeOffsetOptions<T>) -> Self {
         let (ccw_offset_loops, cw_offset_loops, offset_loops_index) =
-            self.create_offset_loops_with_index(offset, &options);
+            self.create_offset_loops_with_index(offset, options);
 
         if ccw_offset_loops.is_empty() && cw_offset_loops.is_empty() {
             return Self::empty();
@@ -223,11 +223,11 @@ where
             &cw_offset_loops,
             &slice_point_sets,
             offset,
-            &options,
+            options,
         );
 
         self.stitch_slices_together(
-            slices_data,
+            &slices_data,
             &ccw_offset_loops,
             &cw_offset_loops,
             options.pos_equal_eps,
@@ -730,7 +730,7 @@ where
     ///
     /// # Arguments
     ///
-    /// * `slices_data` - Valid slices from Step 3 (consumed by this method)
+    /// * `slices_data` - Valid slices from Step 3
     /// * `ccw_offset_loops` - Counter-clockwise offset loops of the shape (for slice source lookup)
     /// * `cw_offset_loops` - Clockwise offset loops of the shape (for slice source lookup)
     /// * `pos_equal_eps` - Epsilon for position equality when extending polylines
@@ -747,7 +747,7 @@ where
     #[must_use]
     pub fn stitch_slices_together(
         &self,
-        slices_data: Vec<DissectedSlice<T>>,
+        slices_data: &[DissectedSlice<T>],
         ccw_offset_loops: &[OffsetLoop<T>],
         cw_offset_loops: &[OffsetLoop<T>],
         pos_equal_eps: T,
@@ -762,7 +762,7 @@ where
 
         let slice_starts_aabb_index = {
             let mut builder = StaticAABB2DIndexBuilder::new(slices_data.len());
-            for slice in &slices_data {
+            for slice in slices_data {
                 let start_point = slice.v_data.updated_start.pos();
                 builder.add(
                     start_point.x - slice_join_eps,

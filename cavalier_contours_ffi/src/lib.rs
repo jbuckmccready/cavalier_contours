@@ -2063,9 +2063,11 @@ pub unsafe extern "C" fn cavc_shape_parallel_offset(
         unsafe {
             let results = if options.is_null() {
                 let default_options = ShapeOffsetOptions::new();
-                (*shape).0.parallel_offset(offset, default_options)
+                (*shape).0.parallel_offset(offset, &default_options)
             } else {
-                (*shape).0.parallel_offset(offset, (*options).to_internal())
+                (*shape)
+                    .0
+                    .parallel_offset(offset, &(*options).to_internal())
             };
 
             result.write(Box::into_raw(Box::new(cavc_shape(results))));

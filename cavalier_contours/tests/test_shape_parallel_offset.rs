@@ -13,7 +13,7 @@ where
     I: IntoIterator<Item = Polyline>,
 {
     let s = Shape::from_plines(input);
-    let result = s.parallel_offset(offset, ShapeOffsetOptions::default());
+    let result = s.parallel_offset(offset, &ShapeOffsetOptions::default());
     let plines = result
         .ccw_plines
         .iter()

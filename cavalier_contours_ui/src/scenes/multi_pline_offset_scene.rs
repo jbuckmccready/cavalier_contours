@@ -405,7 +405,7 @@ fn build_scene_state(
             };
         }
 
-        let mut curr_offset = shape.parallel_offset(*offset, ShapeOffsetOptions::default());
+        let mut curr_offset = shape.parallel_offset(*offset, &ShapeOffsetOptions::default());
 
         while !curr_offset.ccw_plines.is_empty() || !curr_offset.cw_plines.is_empty() {
             offset_shapes.push(curr_offset);
@@ -416,7 +416,7 @@ fn build_scene_state(
             curr_offset = offset_shapes
                 .last()
                 .unwrap()
-                .parallel_offset(*offset, ShapeOffsetOptions::default());
+                .parallel_offset(*offset, &ShapeOffsetOptions::default());
         }
         return SceneState::Offset {
             shape,
