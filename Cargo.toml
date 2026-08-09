@@ -27,6 +27,8 @@ many_single_char_names = "allow"
 similar_names = "allow"
 # Digit separators make dense regression fixtures less compact.
 unreadable_literal = "allow"
+# TODO: api refactor all panics to errors (bad inputs and bugs currently can panic)
+missing_panics_doc = "allow"
 pedantic = { level = "warn", priority = -1 }
 
 [profile.web-release]
