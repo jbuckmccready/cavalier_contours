@@ -9,8 +9,8 @@ use crate::core::{math::Vector2, traits::Real};
 /// `tan(arc_sweep_angle / 4)`. Note a polyline arc segment can never have a sweep angle greater
 /// than `PI` (half circle).
 ///
-/// See [angle_from_bulge](crate::core::math::angle_from_bulge) and
-/// [bulge_from_angle](crate::core::math::bulge_from_angle) for functions to convert between bulge
+/// See [`angle_from_bulge`](crate::core::math::angle_from_bulge) and
+/// [`bulge_from_angle`](crate::core::math::bulge_from_angle) for functions to convert between bulge
 /// arc sweep angle.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct PlineVertex<T = f64> {
@@ -137,7 +137,7 @@ where
             && self.bulge.fuzzy_eq_eps(other.bulge, fuzzy_epsilon)
     }
 
-    /// Fuzzy equal comparison with another vertex using T::fuzzy_epsilon().
+    /// Fuzzy equal comparison with another vertex using `T::fuzzy_epsilon()`.
     #[inline]
     pub fn fuzzy_eq(&self, other: Self) -> bool {
         self.fuzzy_eq_eps(other, T::fuzzy_epsilon())

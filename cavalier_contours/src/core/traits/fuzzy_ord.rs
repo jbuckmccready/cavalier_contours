@@ -42,7 +42,7 @@ pub trait FuzzyOrd: FuzzyEq {
 
     /// Test if `self` is in range between `min` and `max` with some epsilon for fuzzy comparing.
     ///
-    /// See [FuzzyOrd::fuzzy_in_range] function to use default fuzzy epsilon.
+    /// See [`FuzzyOrd::fuzzy_in_range`] function to use default fuzzy epsilon.
     ///
     /// # Examples
     ///
@@ -57,10 +57,10 @@ pub trait FuzzyOrd: FuzzyEq {
         self.fuzzy_gt_eps(min, fuzzy_epsilon) && self.fuzzy_lt_eps(max, fuzzy_epsilon)
     }
 
-    /// Same as [FuzzyOrd::fuzzy_in_range_eps] using a default epsilon.
+    /// Same as [`FuzzyOrd::fuzzy_in_range_eps`] using a default epsilon.
     ///
-    /// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
-    /// from [FuzzyEq] trait.
+    /// Default epsilon is [`fuzzy_epsilon`](crate::core::traits::FuzzyEq::fuzzy_epsilon)
+    /// from [`FuzzyEq`] trait.
     #[inline]
     fn fuzzy_in_range(&self, min: Self, max: Self) -> bool {
         self.fuzzy_in_range_eps(min, max, Self::fuzzy_epsilon())

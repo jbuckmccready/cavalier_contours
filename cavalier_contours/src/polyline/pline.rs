@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
 /// Basic polyline data representation that implements the core polyline traits:
-/// [PlineSource], [PlineSourceMut], and [PlineCreation]. See the traits documentation for all
+/// [`PlineSource`], [`PlineSourceMut`], and [`PlineCreation`]. See the traits documentation for all
 /// the polyline methods/operations available.
 #[cfg_attr(
     feature = "serde",

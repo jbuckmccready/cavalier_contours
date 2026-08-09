@@ -1,4 +1,4 @@
-//! This module contains the C foreign function interface for cavalier_contours.
+//! This module contains the C foreign function interface for `cavalier_contours`.
 #![allow(non_camel_case_types)]
 use cavalier_contours::{
     core::math::Vector2,
@@ -24,7 +24,7 @@ macro_rules! ffi_catch_unwind {
     };
 }
 
-/// Opaque type that wraps a [StaticAABB2DIndex].
+/// Opaque type that wraps a [`StaticAABB2DIndex`].
 ///
 /// Note the internal member is only public for composing in other Rust libraries wanting to use the
 /// FFI opaque type as part of their FFI API.
@@ -75,7 +75,7 @@ impl cavc_vertex {
 #[derive(Debug, Clone)]
 pub struct cavc_pline(pub Polyline<f64>);
 
-/// FFI representation of [PlineOffsetOptions].
+/// FFI representation of [`PlineOffsetOptions`].
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_pline_parallel_offset_o {
@@ -91,7 +91,7 @@ impl cavc_pline_parallel_offset_o {
     ///
     /// # Safety
     ///
-    /// `aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
+    /// `aabb_index` field must be null or a valid pointer to a [`cavc_aabbindex`].
     pub unsafe fn to_internal(&self) -> PlineOffsetOptions<'_, f64> {
         let aabb_index = unsafe { self.aabb_index.as_ref().map(|w| &w.0) };
         PlineOffsetOptions {
@@ -117,7 +117,7 @@ impl Default for cavc_pline_parallel_offset_o {
     }
 }
 
-/// Create a new [cavc_pline_parallel_offset_o] object.
+/// Create a new [`cavc_pline_parallel_offset_o`] object.
 ///
 /// # Safety
 ///
@@ -136,16 +136,16 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset_o_create(
     })
 }
 
-/// Free an existing [cavc_pline_parallel_offset_o] object.
+/// Free an existing [`cavc_pline_parallel_offset_o`] object.
 ///
 /// Nothing happens if `options` is null.
 ///
-/// Note that this does NOT free the aabb index that the [cavc_pline_parallel_offset_o] points to.
-/// You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_parallel_offset_o] object.
+/// Note that this does NOT free the aabb index that the [`cavc_pline_parallel_offset_o`] points to.
+/// You need to do that by calling `cavc_aabbindex_f()` on the index pointer contained in the [`cavc_pline_parallel_offset_o`] object.
 ///
 /// # Safety
 ///
-/// `options` must be null or a valid cavc_pline_parallel_offset_o object that was created with [cavc_pline_parallel_offset_o_create] and
+/// `options` must be null or a valid `cavc_pline_parallel_offset_o` object that was created with [`cavc_pline_parallel_offset_o_create`] and
 /// has not already been freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_pline_parallel_offset_o_f(
@@ -158,7 +158,7 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset_o_f(
     }
 }
 
-/// Write default option values to a [cavc_pline_parallel_offset_o].
+/// Write default option values to a [`cavc_pline_parallel_offset_o`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `options` is null.
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset_o_init(
     })
 }
 
-/// FFI representation of [PlineBooleanOptions].
+/// FFI representation of [`PlineBooleanOptions`].
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_pline_boolean_o {
@@ -198,7 +198,7 @@ impl cavc_pline_boolean_o {
     ///
     /// # Safety
     ///
-    /// `pline1_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
+    /// `pline1_aabb_index` field must be null or a valid pointer to a [`cavc_aabbindex`].
     pub unsafe fn to_internal(&self) -> PlineBooleanOptions<'_, f64> {
         let pline1_aabb_index = unsafe { self.pline1_aabb_index.as_ref().map(|w| &w.0) };
         PlineBooleanOptions {
@@ -224,7 +224,7 @@ impl Default for cavc_pline_boolean_o {
     }
 }
 
-/// Create a new [cavc_pline_boolean_o] object.
+/// Create a new [`cavc_pline_boolean_o`] object.
 ///
 /// # Safety
 ///
@@ -243,16 +243,16 @@ pub unsafe extern "C" fn cavc_pline_boolean_o_create(
     })
 }
 
-/// Free an existing [cavc_pline_boolean_o] object.
+/// Free an existing [`cavc_pline_boolean_o`] object.
 ///
 /// Nothing happens if `options` is null.
 ///
-/// Note that this does NOT free the aabb index that the [cavc_pline_boolean_o] points to.
-/// You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_boolean_o] object.
+/// Note that this does NOT free the aabb index that the [`cavc_pline_boolean_o`] points to.
+/// You need to do that by calling `cavc_aabbindex_f()` on the index pointer contained in the [`cavc_pline_boolean_o`] object.
 ///
 /// # Safety
 ///
-/// `options` must be null or a valid cavc_pline_boolean_o object that was created with [cavc_pline_boolean_o_create] and
+/// `options` must be null or a valid `cavc_pline_boolean_o` object that was created with [`cavc_pline_boolean_o_create`] and
 /// has not already been freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_pline_boolean_o_f(options: *mut cavc_pline_boolean_o) {
@@ -263,7 +263,7 @@ pub unsafe extern "C" fn cavc_pline_boolean_o_f(options: *mut cavc_pline_boolean
     }
 }
 
-/// Write default option values to a [cavc_pline_boolean_o].
+/// Write default option values to a [`cavc_pline_boolean_o`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `options` is null.
@@ -300,12 +300,12 @@ fn boolean_op_from_u32(i: u32) -> Option<BooleanOp> {
     }
 }
 
-/// FFI representation of SelfIntersectsInclude enum
+/// FFI representation of `SelfIntersectsInclude` enum
 pub const CAVC_SELF_INTERSECTS_INCLUDE_ALL: u32 = 0;
 pub const CAVC_SELF_INTERSECTS_INCLUDE_LOCAL: u32 = 1;
 pub const CAVC_SELF_INTERSECTS_INCLUDE_GLOBAL: u32 = 2;
 
-/// FFI representation of [PlineSelfIntersectOptions].
+/// FFI representation of [`PlineSelfIntersectOptions`].
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_pline_self_intersect_o {
@@ -319,7 +319,7 @@ impl cavc_pline_self_intersect_o {
     ///
     /// # Safety
     ///
-    /// `pline_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
+    /// `pline_aabb_index` field must be null or a valid pointer to a [`cavc_aabbindex`].
     pub unsafe fn to_internal(&self) -> Option<PlineSelfIntersectOptions<'_, f64>> {
         let pline_aabb_index = unsafe { self.pline_aabb_index.as_ref().map(|w| &w.0) };
         let include_value = match self.include {
@@ -350,7 +350,7 @@ impl Default for cavc_pline_self_intersect_o {
     }
 }
 
-/// Create a new [cavc_pline_self_intersect_o] object.
+/// Create a new [`cavc_pline_self_intersect_o`] object.
 ///
 /// # Safety
 ///
@@ -369,16 +369,16 @@ pub unsafe extern "C" fn cavc_pline_self_intersect_o_create(
     })
 }
 
-/// Free an existing [cavc_pline_self_intersect_o] object.
+/// Free an existing [`cavc_pline_self_intersect_o`] object.
 ///
 /// Nothing happens if `options` is null.
 ///
-/// Note that this does NOT free the aabb index that the [cavc_pline_self_intersect_o] points to.
-/// You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_self_intersect_o] object.
+/// Note that this does NOT free the aabb index that the [`cavc_pline_self_intersect_o`] points to.
+/// You need to do that by calling `cavc_aabbindex_f()` on the index pointer contained in the [`cavc_pline_self_intersect_o`] object.
 ///
 /// # Safety
 ///
-/// `options` must be null or a valid cavc_pline_self_intersect_o object that was created with [cavc_pline_self_intersect_o_create] and
+/// `options` must be null or a valid `cavc_pline_self_intersect_o` object that was created with [`cavc_pline_self_intersect_o_create`] and
 /// has not already been freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_pline_self_intersect_o_f(options: *mut cavc_pline_self_intersect_o) {
@@ -389,7 +389,7 @@ pub unsafe extern "C" fn cavc_pline_self_intersect_o_f(options: *mut cavc_pline_
     }
 }
 
-/// Write default option values to a [cavc_pline_self_intersect_o].
+/// Write default option values to a [`cavc_pline_self_intersect_o`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `options` is null.
@@ -414,7 +414,7 @@ pub unsafe extern "C" fn cavc_pline_self_intersect_o_init(
     })
 }
 
-/// FFI representation of [PlineContainsOptions].
+/// FFI representation of [`PlineContainsOptions`].
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_pline_contains_o {
@@ -427,7 +427,7 @@ impl cavc_pline_contains_o {
     ///
     /// # Safety
     ///
-    /// `pline1_aabb_index` field must be null or a valid pointer to a [cavc_aabbindex].
+    /// `pline1_aabb_index` field must be null or a valid pointer to a [`cavc_aabbindex`].
     pub unsafe fn to_internal(&self) -> PlineContainsOptions<'_, f64> {
         let pline1_aabb_index = unsafe { self.pline1_aabb_index.as_ref().map(|w| &w.0) };
         PlineContainsOptions {
@@ -447,7 +447,7 @@ impl Default for cavc_pline_contains_o {
     }
 }
 
-/// Create a new [cavc_pline_contains_o] object.
+/// Create a new [`cavc_pline_contains_o`] object.
 ///
 /// # Safety
 ///
@@ -466,16 +466,16 @@ pub unsafe extern "C" fn cavc_pline_contains_o_create(
     })
 }
 
-/// Free an existing [cavc_pline_contains_o] object.
+/// Free an existing [`cavc_pline_contains_o`] object.
 ///
 /// Nothing happens if `options` is null.
 ///
-/// Note that this does NOT free the aabb index that the [cavc_pline_contains_o] points to.
-/// You need to do that by calling cavc_aabbindex_f() on the index pointer contained in the [cavc_pline_contains_o] object.
+/// Note that this does NOT free the aabb index that the [`cavc_pline_contains_o`] points to.
+/// You need to do that by calling `cavc_aabbindex_f()` on the index pointer contained in the [`cavc_pline_contains_o`] object.
 ///
 /// # Safety
 ///
-/// `options` must be null or a valid cavc_pline_contains_o object that was created with [cavc_pline_contains_o_create] and
+/// `options` must be null or a valid `cavc_pline_contains_o` object that was created with [`cavc_pline_contains_o_create`] and
 /// has not already been freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_pline_contains_o_f(options: *mut cavc_pline_contains_o) {
@@ -486,7 +486,7 @@ pub unsafe extern "C" fn cavc_pline_contains_o_f(options: *mut cavc_pline_contai
     }
 }
 
-/// Write default option values to a [cavc_pline_contains_o].
+/// Write default option values to a [`cavc_pline_contains_o`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `options` is null.
@@ -509,7 +509,7 @@ pub unsafe extern "C" fn cavc_pline_contains_o_init(options: *mut cavc_pline_con
     })
 }
 
-/// Opaque type that represents a list of [cavc_pline].
+/// Opaque type that represents a list of [`cavc_pline`].
 ///
 /// Note the internal member is only public for composing in other Rust libraries wanting to use the
 /// FFI opaque type as part of their FFI API.
@@ -542,7 +542,7 @@ impl cavc_plinelist {
 
 /// Create a new polyline object.
 ///
-/// `vertexes` is an array of [cavc_vertex] to create the polyline with (may be null if `n_vertexes`
+/// `vertexes` is an array of [`cavc_vertex`] to create the polyline with (may be null if `n_vertexes`
 /// is 0).
 /// `n_vertexes` contains the number of vertexes in the array.
 /// `is_closed` sets the polyline to be closed if non-zero.
@@ -551,7 +551,7 @@ impl cavc_plinelist {
 /// # Safety
 ///
 /// `vertexes` may be null if `n_vertexes` is 0 or must point to a valid contiguous buffer of
-/// [cavc_vertex] with length of at least `n_vertexes`.
+/// [`cavc_vertex`] with length of at least `n_vertexes`.
 /// `pline` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -582,13 +582,13 @@ pub unsafe extern "C" fn cavc_pline_create(
     })
 }
 
-/// Free an existing [cavc_pline] object.
+/// Free an existing [`cavc_pline`] object.
 ///
 /// Nothing happens if `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not already been freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
@@ -601,15 +601,15 @@ pub unsafe extern "C" fn cavc_pline_f(pline: *mut cavc_pline) {
 
 /// Set the userdata values of a pline
 ///
-/// 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
-/// 'count' is the number of u64 values to be stored; not the byte size.
+/// `userdata_values` is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+/// `count` is the number of u64 values to be stored; not the byte size.
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `userdata_values` must point to a valid location to read from.
 #[unsafe(no_mangle)]
@@ -646,7 +646,7 @@ pub unsafe extern "C" fn cavc_pline_set_userdata_values(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -671,14 +671,14 @@ pub unsafe extern "C" fn cavc_pline_get_userdata_count(
 
 /// Get the userdata values of a pline
 ///
-/// 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+/// `userdata_values` is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
 /// overrun will happen.
@@ -704,16 +704,16 @@ pub unsafe extern "C" fn cavc_pline_get_userdata_values(
     })
 }
 
-/// Reserve space for an `additional` number of vertexes in the [cavc_pline].
+/// Reserve space for an `additional` number of vertexes in the [`cavc_pline`].
 ///
-/// This function is used to avoid allocations when adding vertexes to the [cavc_pline].
+/// This function is used to avoid allocations when adding vertexes to the [`cavc_pline`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -740,7 +740,7 @@ pub unsafe extern "C" fn cavc_pline_reserve(pline: *mut cavc_pline, additional: 
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `cloned` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -771,7 +771,7 @@ pub unsafe extern "C" fn cavc_pline_clone(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `is_closed` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -800,7 +800,7 @@ pub unsafe extern "C" fn cavc_pline_get_is_closed(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -825,7 +825,7 @@ pub unsafe extern "C" fn cavc_pline_set_is_closed(pline: *mut cavc_pline, is_clo
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -850,7 +850,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_count(
 
 /// Fills the buffer given with the vertex data of a polyline.
 ///
-/// You must use [cavc_pline_get_vertex_count] to ensure the buffer given has adequate length
+/// You must use [`cavc_pline_get_vertex_count`] to ensure the buffer given has adequate length
 /// to be filled with all vertexes!
 ///
 /// `vertex_data` must point to a buffer that can be filled with all `pline` vertexes.
@@ -860,7 +860,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_count(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
 /// overrun will happen.
@@ -894,9 +894,9 @@ pub unsafe extern "C" fn cavc_pline_get_vertex_data(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
-/// `vertex_data` must be a valid pointer to a buffer of at least `n_vertexes` of [cavc_vertex].
+/// `vertex_data` must be a valid pointer to a buffer of at least `n_vertexes` of [`cavc_vertex`].
 #[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_pline_set_vertex_data(
@@ -929,7 +929,7 @@ pub unsafe extern "C" fn cavc_pline_set_vertex_data(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -953,7 +953,7 @@ pub unsafe extern "C" fn cavc_pline_clear(pline: *mut cavc_pline) -> i32 {
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -981,7 +981,7 @@ pub unsafe extern "C" fn cavc_pline_add(pline: *mut cavc_pline, x: f64, y: f64, 
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `vertex` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -1020,7 +1020,7 @@ pub unsafe extern "C" fn cavc_pline_get_vertex(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1057,7 +1057,7 @@ pub unsafe extern "C" fn cavc_pline_set_vertex(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1079,7 +1079,7 @@ pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32
     })
 }
 
-/// Wraps [PlineSource::path_length].
+/// Wraps [`PlineSource::path_length`].
 ///
 /// `path_length` is used as the out parameter to hold the computed path length.
 ///
@@ -1088,7 +1088,7 @@ pub unsafe extern "C" fn cavc_pline_remove(pline: *mut cavc_pline, position: u32
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `path_length` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -1108,7 +1108,7 @@ pub unsafe extern "C" fn cavc_pline_eval_path_length(
     })
 }
 
-/// Wraps [PlineSource::area].
+/// Wraps [`PlineSource::area`].
 ///
 /// `area` is used as the out parameter to hold the computed area.
 ///
@@ -1117,7 +1117,7 @@ pub unsafe extern "C" fn cavc_pline_eval_path_length(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `area` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -1134,7 +1134,7 @@ pub unsafe extern "C" fn cavc_pline_eval_area(pline: *const cavc_pline, area: *m
     })
 }
 
-/// Wraps [PlineSource::winding_number].
+/// Wraps [`PlineSource::winding_number`].
 ///
 /// `winding_number` is used as the out parameter to hold the computed winding number.
 ///
@@ -1143,7 +1143,7 @@ pub unsafe extern "C" fn cavc_pline_eval_area(pline: *const cavc_pline, area: *m
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `winding_number` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -1165,14 +1165,14 @@ pub unsafe extern "C" fn cavc_pline_eval_wn(
     })
 }
 
-/// Wraps [PlineSourceMut::invert_direction_mut].
+/// Wraps [`PlineSourceMut::invert_direction_mut`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1188,14 +1188,14 @@ pub unsafe extern "C" fn cavc_pline_invert_direction(pline: *mut cavc_pline) -> 
     })
 }
 
-/// Wraps [PlineSourceMut::scale_mut].
+/// Wraps [`PlineSourceMut::scale_mut`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1211,14 +1211,14 @@ pub unsafe extern "C" fn cavc_pline_scale(pline: *mut cavc_pline, scale_factor: 
     })
 }
 
-/// Wraps [PlineSourceMut::translate_mut].
+/// Wraps [`PlineSourceMut::translate_mut`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1238,14 +1238,14 @@ pub unsafe extern "C" fn cavc_pline_translate(
     })
 }
 
-/// Wraps [PlineSource::remove_repeat_pos] but modifies in place rather than returning a result.
+/// Wraps [`PlineSource::remove_repeat_pos`] but modifies in place rather than returning a result.
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1274,14 +1274,14 @@ pub unsafe extern "C" fn cavc_pline_remove_repeat_pos(
     })
 }
 
-/// Wraps [PlineSource::remove_redundant] but modifies in place rather than returning a result.
+/// Wraps [`PlineSource::remove_redundant`] but modifies in place rather than returning a result.
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1310,7 +1310,7 @@ pub unsafe extern "C" fn cavc_pline_remove_redundant(
     })
 }
 
-/// Wraps [PlineSource::extents].
+/// Wraps [`PlineSource::extents`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
@@ -1318,7 +1318,7 @@ pub unsafe extern "C" fn cavc_pline_remove_redundant(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `min_x`, `min_y`, `max_x`, and `max_y` must all point to a valid places in memory to be written.
 #[unsafe(no_mangle)]
@@ -1351,7 +1351,7 @@ pub unsafe extern "C" fn cavc_pline_eval_extents(
     })
 }
 
-/// Wraps [PlineSource::parallel_offset_opt].
+/// Wraps [`PlineSource::parallel_offset_opt`].
 ///
 /// `options` is allowed to be null (default options will be used).
 ///
@@ -1360,7 +1360,7 @@ pub unsafe extern "C" fn cavc_pline_eval_extents(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `result` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -1392,15 +1392,15 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset(
     })
 }
 
-/// Wraps [PlineSource::boolean_opt].
+/// Wraps [`PlineSource::boolean_opt`].
 ///
 /// `options` is allowed to be null (default options will be used).
 ///
 /// Boolean operations are:
-/// * 0 = [BooleanOp::Or]
-/// * 1 = [BooleanOp::And]
-/// * 2 = [BooleanOp::Not]
-/// * 3 = [BooleanOp::Xor]
+/// * 0 = [`BooleanOp::Or`]
+/// * 1 = [`BooleanOp::And`]
+/// * 2 = [`BooleanOp::Not`]
+/// * 3 = [`BooleanOp::Xor`]
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline1` and/or `pline2` is null.
@@ -1408,8 +1408,8 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset(
 ///
 /// # Safety
 ///
-/// `pline1` and `pline2` must each be null or a valid cavc_pline object that was created with
-/// [cavc_pline_create] and has not been freed.
+/// `pline1` and `pline2` must each be null or a valid `cavc_pline` object that was created with
+/// [`cavc_pline_create`] and has not been freed.
 /// `pos_plines` and `neg_plines` must both point to different valid places in memory to be written.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1457,7 +1457,7 @@ pub unsafe extern "C" fn cavc_pline_boolean(
     })
 }
 
-/// Wraps [PlineSource::scan_for_self_intersect_opt].
+/// Wraps [`PlineSource::scan_for_self_intersect_opt`].
 ///
 /// `options` is allowed to be null (default options will be used).
 ///
@@ -1467,8 +1467,8 @@ pub unsafe extern "C" fn cavc_pline_boolean(
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with
-/// [cavc_pline_create] and has not been freed.
+/// `pline` must be null or a valid `cavc_pline` object that was created with
+/// [`cavc_pline_create`] and has not been freed.
 /// `is_self_intersecting` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1505,36 +1505,36 @@ pub unsafe extern "C" fn cavc_pline_scan_for_self_intersect(
     })
 }
 
-/// FFI Representation of PlineContainsResult enum
+/// FFI Representation of `PlineContainsResult` enum
 pub const CAVC_CONTAINS_RESULT_INVALID_INPUT: u32 = 0;
 pub const CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2: u32 = 1;
 pub const CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1: u32 = 2;
 pub const CAVC_CONTAINS_RESULT_DISJOINT: u32 = 3;
 pub const CAVC_CONTAINS_RESULT_INTERSECTED: u32 = 4;
 
-/// Wraps [PlineSource::contains_opt].
+/// Wraps [`PlineSource::contains_opt`].
 ///
 /// `options` is allowed to be null (default options will be used).
 ///
 /// Possible values returned in result:
 ///
-/// CAVC_CONTAINS_RESULT_INVALID_INPUT: Input was not valid to perform operation.
-/// CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2: Pline1 entirely inside of pline2 with no intersects.
-/// CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1: Pline2 entirely inside of pline1 with no intersects.
-/// CAVC_CONTAINS_RESULT_DISJOINT: Pline1 is disjoint from pline2 (no intersects and neither polyline is inside of the other).
-/// CAVC_CONTAINS_RESULT_INTERSECTED: Pline1 intersects with pline2 in at least one place.
+/// `CAVC_CONTAINS_RESULT_INVALID_INPUT`: Input was not valid to perform operation.
+/// `CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2`: Pline1 entirely inside of pline2 with no intersects.
+/// `CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1`: Pline2 entirely inside of pline1 with no intersects.
+/// `CAVC_CONTAINS_RESULT_DISJOINT`: Pline1 is disjoint from pline2 (no intersects and neither polyline is inside of the other).
+/// `CAVC_CONTAINS_RESULT_INTERSECTED`: Pline1 intersects with pline2 in at least one place.
 ///
 /// ## Specific Error Codes
-/// * 1 = `pline1` and/or `pline2` is null. In case of an error, if result is not null it will be set to CAVC_CONTAINS_RESULT_INVALID_INPUT.
+/// * 1 = `pline1` and/or `pline2` is null. In case of an error, if result is not null it will be set to `CAVC_CONTAINS_RESULT_INVALID_INPUT`.
 ///
 /// Caution: Polylines with self-intersections may generate unexpected results.
-/// Use cavc_pline_scan_for_self_intersect() to find and reject self-intersecting polylines
+/// Use `cavc_pline_scan_for_self_intersect()` to find and reject self-intersecting polylines
 /// if this is a possibility for your input data.
 ///
 /// # Safety
 ///
-/// `pline1` and `pline2` must each be null or a valid cavc_pline object that was created with
-/// [cavc_pline_create] and has not been freed.
+/// `pline1` and `pline2` must each be null or a valid `cavc_pline` object that was created with
+/// [`cavc_pline_create`] and has not been freed.
 /// `result` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1570,14 +1570,14 @@ pub unsafe extern "C" fn cavc_pline_contains(
     })
 }
 
-/// Wraps [PlineSource::create_approx_aabb_index].
+/// Wraps [`PlineSource::create_approx_aabb_index`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `aabbindex` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -1601,14 +1601,14 @@ pub unsafe extern "C" fn cavc_pline_create_approx_aabbindex(
     })
 }
 
-/// Wraps [PlineSource::create_aabb_index].
+/// Wraps [`PlineSource::create_aabb_index`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `pline` must be null or a valid `cavc_pline` object that was created with [`cavc_pline_create`] and
 /// has not been freed.
 /// `aabbindex` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -1632,13 +1632,13 @@ pub unsafe extern "C" fn cavc_pline_create_aabbindex(
     })
 }
 
-/// Free an existing [cavc_aabbindex] object.
+/// Free an existing [`cavc_aabbindex`] object.
 ///
 /// Nothing happens if `aabbindex` is null.
 ///
 /// # Safety
 ///
-/// `aabbindex` must be null or a valid [cavc_aabbindex] object.
+/// `aabbindex` must be null or a valid [`cavc_aabbindex`] object.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_aabbindex_f(aabbindex: *mut cavc_aabbindex) {
     if !aabbindex.is_null() {
@@ -1654,7 +1654,7 @@ pub unsafe extern "C" fn cavc_aabbindex_f(aabbindex: *mut cavc_aabbindex) {
 ///
 /// # Safety
 ///
-/// `aabbindex` must be null or a valid [cavc_aabbindex] object.
+/// `aabbindex` must be null or a valid [`cavc_aabbindex`] object.
 /// `min_x`, `min_y`, `max_x`, and `max_y` must all point to a valid places in memory to be written.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1691,7 +1691,7 @@ pub unsafe extern "C" fn cavc_aabbindex_get_extents(
     })
 }
 
-/// Create a new [cavc_plinelist] object.
+/// Create a new [`cavc_plinelist`] object.
 ///
 /// `capacity` is the number of plines to pre-allocate space for. May be zero.
 /// `plinelist` is an out parameter to hold the created shape.
@@ -1715,13 +1715,13 @@ pub unsafe extern "C" fn cavc_plinelist_create(
     })
 }
 
-/// Free an existing [cavc_plinelist] object and all [cavc_pline] owned by it.
+/// Free an existing [`cavc_plinelist`] object and all [`cavc_pline`] owned by it.
 ///
 /// Nothing happens if `plinelist` is null.
 ///
 /// # Safety
 ///
-/// `plinelist` must be null or a valid [cavc_plinelist] object.
+/// `plinelist` must be null or a valid [`cavc_plinelist`] object.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_plinelist_f(plinelist: *mut cavc_plinelist) {
     if !plinelist.is_null() {
@@ -1729,7 +1729,7 @@ pub unsafe extern "C" fn cavc_plinelist_f(plinelist: *mut cavc_plinelist) {
     }
 }
 
-/// Get the number of polylines inside a [cavc_plinelist].
+/// Get the number of polylines inside a [`cavc_plinelist`].
 ///
 /// `count` used as out parameter to hold the polyline count.
 ///
@@ -1738,7 +1738,7 @@ pub unsafe extern "C" fn cavc_plinelist_f(plinelist: *mut cavc_plinelist) {
 ///
 /// # Safety
 ///
-/// `plinelist` must be null or a valid [cavc_plinelist] object.
+/// `plinelist` must be null or a valid [`cavc_plinelist`] object.
 /// `count` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1760,19 +1760,19 @@ pub unsafe extern "C" fn cavc_plinelist_get_count(
     })
 }
 
-/// Get a polyline at the given index position in the [cavc_plinelist].
+/// Get a polyline at the given index position in the [`cavc_plinelist`].
 ///
 /// `pline` used as out parameter to hold the polyline pointer. NOTE: This does not release
-/// ownership of the [cavc_pline] from the [cavc_plinelist], to do that use [cavc_plinelist_pop] or
-/// [cavc_plinelist_take].
+/// ownership of the [`cavc_pline`] from the [`cavc_plinelist`], to do that use [`cavc_plinelist_pop`] or
+/// [`cavc_plinelist_take`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `plinelist` is null.
-/// * 2 = `position` out of range for the [cavc_plinelist].
+/// * 2 = `position` out of range for the [`cavc_plinelist`].
 ///
 /// # Safety
 ///
-/// `plinelist` must be null or a valid [cavc_plinelist] object.
+/// `plinelist` must be null or a valid [`cavc_plinelist`] object.
 /// `pline` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
 #[must_use]
@@ -1802,10 +1802,10 @@ pub unsafe extern "C" fn cavc_plinelist_get_pline(
     })
 }
 
-/// Append a [cavc_pline] to the end of a [cavc_plinelist].
+/// Append a [`cavc_pline`] to the end of a [`cavc_plinelist`].
 ///
-/// `plinelist` is the [cavc_plinelist] to append to.
-/// `pline` is the [cavc_pline] to be appended.
+/// `plinelist` is the [`cavc_plinelist`] to append to.
+/// `pline` is the [`cavc_pline`] to be appended.
 ///
 /// ## Specific Error Codes
 /// * 1 = `plinelist` is null.
@@ -1813,8 +1813,8 @@ pub unsafe extern "C" fn cavc_plinelist_get_pline(
 ///
 /// # Safety
 ///
-/// `plinelist` must be a valid [cavc_plinelist] object.
-/// `pline` must be a valid [cavc_pline] object.
+/// `plinelist` must be a valid [`cavc_plinelist`] object.
+/// `pline` must be a valid [`cavc_pline`] object.
 #[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_push(
@@ -1836,11 +1836,11 @@ pub unsafe extern "C" fn cavc_plinelist_push(
     })
 }
 
-/// Efficiently release and return the last [cavc_pline] from a [cavc_plinelist].
+/// Efficiently release and return the last [`cavc_pline`] from a [`cavc_plinelist`].
 ///
-/// `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
-/// NOTE: The caller now must call [cavc_pline_f] at some point to free the released [cavc_pline].
-/// If you pass null in `pline` you must already have another pointer to the released [cavc_pline]
+/// `pline` used as out parameter to hold the polyline pointer released from the [`cavc_plinelist`].
+/// NOTE: The caller now must call [`cavc_pline_f`] at some point to free the released [`cavc_pline`].
+/// If you pass null in `pline` you must already have another pointer to the released [`cavc_pline`]
 /// in order to free it.
 ///
 /// ## Specific Error Codes
@@ -1849,8 +1849,8 @@ pub unsafe extern "C" fn cavc_plinelist_push(
 ///
 /// # Safety
 ///
-/// `plinelist` must be null or a valid [cavc_plinelist] object.
-/// `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [cavc_pline].
+/// `plinelist` must be null or a valid [`cavc_plinelist`] object.
+/// `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [`cavc_pline`].
 #[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_pop(
@@ -1878,21 +1878,21 @@ pub unsafe extern "C" fn cavc_plinelist_pop(
     })
 }
 
-/// Release and return a [cavc_pline] from a [cavc_plinelist] at a given index position.
+/// Release and return a [`cavc_pline`] from a [`cavc_plinelist`] at a given index position.
 ///
-/// `pline` used as out parameter to hold the polyline pointer released from the [cavc_plinelist].
-/// NOTE: The caller now must call [cavc_pline_f] at some point to free the released [cavc_pline].
-/// If you pass null in `pline` you must already have another pointer to the released [cavc_pline]
+/// `pline` used as out parameter to hold the polyline pointer released from the [`cavc_plinelist`].
+/// NOTE: The caller now must call [`cavc_pline_f`] at some point to free the released [`cavc_pline`].
+/// If you pass null in `pline` you must already have another pointer to the released [`cavc_pline`]
 /// in order to free it.
 ///
 /// ## Specific Error Codes
 /// * 1 = `plinelist` is null.
-/// * 2 = `position` out of range for the [cavc_plinelist].
+/// * 2 = `position` out of range for the [`cavc_plinelist`].
 ///
 /// # Safety
 ///
-/// `plinelist` must be null or a valid [cavc_plinelist] object.
-/// `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [cavc_pline].
+/// `plinelist` must be null or a valid [`cavc_plinelist`] object.
+/// `pline` must point to a valid place in memory to be written, or null if you don't need the pointer to the [`cavc_pline`].
 #[unsafe(no_mangle)]
 #[must_use]
 pub unsafe extern "C" fn cavc_plinelist_take(
@@ -1923,7 +1923,7 @@ pub unsafe extern "C" fn cavc_plinelist_take(
     })
 }
 
-/// FFI representation of [ShapeOffsetOptions].
+/// FFI representation of [`ShapeOffsetOptions`].
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_shape_offset_o {
@@ -1954,7 +1954,7 @@ impl Default for cavc_shape_offset_o {
     }
 }
 
-/// Write default option values to a [cavc_shape_offset_o].
+/// Write default option values to a [`cavc_shape_offset_o`].
 ///
 /// ## Specific Error Codes
 /// * 1 = `options` is null.
@@ -1984,9 +1984,9 @@ pub unsafe extern "C" fn cavc_shape_offset_o_init(options: *mut cavc_shape_offse
 #[derive(Debug, Clone)]
 pub struct cavc_shape(pub Shape<f64>);
 
-/// Create a new [cavc_shape] object.
+/// Create a new [`cavc_shape`] object.
 ///
-/// `plinelist` is a [cavc_plinelist] containing the [cavc_pline] paths to create the shape from.
+/// `plinelist` is a [`cavc_plinelist`] containing the [`cavc_pline`] paths to create the shape from.
 /// `shape` is an out parameter to hold the created shape.
 ///
 /// ## Specific Error Codes
@@ -2022,13 +2022,13 @@ pub unsafe extern "C" fn cavc_shape_create(
     })
 }
 
-/// Free an existing [cavc_shape] object.
+/// Free an existing [`cavc_shape`] object.
 ///
 /// Nothing happens if `shape` is null.
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not already been freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cavc_shape_f(shape: *mut cavc_shape) {
@@ -2037,7 +2037,7 @@ pub unsafe extern "C" fn cavc_shape_f(shape: *mut cavc_shape) {
     }
 }
 
-/// Wraps [Shape::parallel_offset].
+/// Wraps [`Shape::parallel_offset`].
 ///
 /// `options` is allowed to be null (default options will be used).
 ///
@@ -2046,7 +2046,7 @@ pub unsafe extern "C" fn cavc_shape_f(shape: *mut cavc_shape) {
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `result` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -2085,7 +2085,7 @@ pub unsafe extern "C" fn cavc_shape_parallel_offset(
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -2118,7 +2118,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_count(
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -2159,7 +2159,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_count(
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `is_closed` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -2189,18 +2189,18 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_is_closed(
 
 /// Fills the buffer given with the vertex data of a ccw polyline in a shape.
 ///
-/// You must use [cavc_shape_get_ccw_polyline_count] to ensure the buffer given has adequate length
+/// You must use [`cavc_shape_get_ccw_polyline_count`] to ensure the buffer given has adequate length
 /// to be filled with all vertexes!
 ///
-/// `vertex_data` must point to a buffer that can be filled with all `pline` vertexes.
+/// `vertex_data` must point to a buffer that can be filled with all vertexes in the selected polyline.
 ///
 /// ## Specific Error Codes
-/// * 1 = `pline` is null.
+/// * 1 = `shape` is null.
 /// * 2 = `polyline_index` is beyond the bounds of the count of the shape's ccw polylines
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
 /// overrun will happen.
@@ -2235,7 +2235,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_vertex_data(
 
 /// Set the userdata values of a CCW polyline in a shape
 ///
-/// 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+/// `userdata_values` is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
 ///
 /// ## Specific Error Codes
 /// * 1 = `shape` is null.
@@ -2243,7 +2243,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_polyline_vertex_data(
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `userdata_values` must point to a valid location to read from.
 #[unsafe(no_mangle)]
@@ -2288,7 +2288,7 @@ pub unsafe extern "C" fn cavc_shape_set_ccw_pline_userdata_values(
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -2321,14 +2321,14 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_count(
 
 /// Get the userdata values of a CCW pline in a shape
 ///
-/// 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+/// `userdata_values` is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
 ///
 /// ## Specific Error Codes
-/// * 1 = `pline` is null.
+/// * 1 = `shape` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
 /// overrun will happen.
@@ -2367,7 +2367,7 @@ pub unsafe extern "C" fn cavc_shape_get_ccw_pline_userdata_values(
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -2397,7 +2397,7 @@ pub unsafe extern "C" fn cavc_shape_get_cw_count(shape: *const cavc_shape, count
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -2438,7 +2438,7 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_count(
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `is_closed` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -2469,18 +2469,18 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_is_closed(
 
 /// Fills the buffer given with the vertex data of a cw polyline in a shape.
 ///
-/// You must use [cavc_shape_get_cw_polyline_count] to ensure the buffer given has adequate length
+/// You must use [`cavc_shape_get_cw_polyline_count`] to ensure the buffer given has adequate length
 /// to be filled with all vertexes!
 ///
-/// `vertex_data` must point to a buffer that can be filled with all `pline` vertexes.
+/// `vertex_data` must point to a buffer that can be filled with all vertexes in the selected polyline.
 ///
 /// ## Specific Error Codes
-/// * 1 = `pline` is null.
+/// * 1 = `shape` is null.
 /// * 2 = `polyline_index` is beyond the bounds of the count of the shape's cw polylines
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `vertex_data` must point to a buffer that is large enough to hold all the vertexes or a buffer
 /// overrun will happen.
@@ -2515,7 +2515,7 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_vertex_data(
 
 /// Set the userdata values of a CW polyline in a shape
 ///
-/// 'userdata_values' is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
+/// `userdata_values` is a user-provided array of u64 that is stored with a pline and preserved across offset calls.
 ///
 /// ## Specific Error Codes
 /// * 1 = `shape` is null.
@@ -2523,7 +2523,7 @@ pub unsafe extern "C" fn cavc_shape_get_cw_polyline_vertex_data(
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `userdata_values` must point to a valid location to read from.
 #[unsafe(no_mangle)]
@@ -2568,7 +2568,7 @@ pub unsafe extern "C" fn cavc_shape_set_cw_pline_userdata_values(
 ///
 /// # Safety
 ///
-/// `shape` must be null or a valid cavc_shape object that was created with [cavc_shape_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `count` must point to a valid place in memory to be written.
 #[unsafe(no_mangle)]
@@ -2601,14 +2601,14 @@ pub unsafe extern "C" fn cavc_shape_get_cw_pline_userdata_count(
 
 /// Get the userdata values of a CW pline in a shape
 ///
-/// 'userdata_values' is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
+/// `userdata_values` is a user-provided C array of u64 that is stored with a pline and preserved across offset calls.
 ///
 /// ## Specific Error Codes
-/// * 1 = `pline` is null.
+/// * 1 = `shape` is null.
 ///
 /// # Safety
 ///
-/// `pline` must be null or a valid cavc_pline object that was created with [cavc_pline_create] and
+/// `shape` must be null or a valid `cavc_shape` object that was created with [`cavc_shape_create`] and
 /// has not been freed.
 /// `userdata_values` must point to a buffer that is large enough to hold all the userdata values or a buffer
 /// overrun will happen.

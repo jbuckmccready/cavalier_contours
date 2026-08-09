@@ -56,7 +56,7 @@ where
     (radius, center)
 }
 
-/// Result from splitting a segment using [seg_split_at_point].
+/// Result from splitting a segment using [`seg_split_at_point`].
 #[derive(Debug, Copy, Clone)]
 pub struct SplitResult<T = f64>
 where
@@ -261,7 +261,7 @@ where
 /// Computes a fast approximate axis aligned bounding box of a polyline segment defined by `v1` to `v2`.
 ///
 /// The bounding box may be larger than the true bounding box for the segment (but is never smaller).
-/// For the true axis aligned bounding box use [seg_bounding_box] but this function is faster for arc
+/// For the true axis aligned bounding box use [`seg_bounding_box`] but this function is faster for arc
 /// segments.
 pub fn seg_fast_approx_bounding_box<T>(v1: PlineVertex<T>, v2: PlineVertex<T>) -> AABB<T>
 where
@@ -346,7 +346,7 @@ where
 
 /// Computes the axis aligned bounding box of a polyline segment defined by `v1` to `v2`.
 ///
-/// This function is quite a bit slower than [seg_fast_approx_bounding_box] when given an arc.
+/// This function is quite a bit slower than [`seg_fast_approx_bounding_box`] when given an arc.
 pub fn seg_bounding_box<T>(v1: PlineVertex<T>, v2: PlineVertex<T>) -> AABB<T>
 where
     T: Real,

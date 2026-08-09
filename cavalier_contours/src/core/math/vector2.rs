@@ -111,7 +111,7 @@ where
         self.x.fuzzy_eq_eps(other.x, fuzzy_epsilon) && self.y.fuzzy_eq_eps(other.y, fuzzy_epsilon)
     }
 
-    /// Fuzzy equal comparison with another vector using T::fuzzy_epsilon().
+    /// Fuzzy equal comparison with another vector using `T::fuzzy_epsilon()`.
     #[inline]
     pub fn fuzzy_eq(&self, other: Self) -> bool {
         self.fuzzy_eq_eps(other, T::fuzzy_epsilon())

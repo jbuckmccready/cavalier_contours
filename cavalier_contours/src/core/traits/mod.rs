@@ -1,4 +1,4 @@
-//! Core/common traits for use in cavalier_contours.
+//! Core/common traits for use in `cavalier_contours`.
 mod control_flow;
 mod fuzzy_eq;
 mod fuzzy_ord;

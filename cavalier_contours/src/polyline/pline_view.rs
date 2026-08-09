@@ -11,10 +11,10 @@ use super::{PlineSource, PlineVertex, Polyline, seg_closest_point};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// A [PlineView] represents a partial selection or subpart of a source polyline without copying.
+/// A [`PlineView`] represents a partial selection or subpart of a source polyline without copying.
 /// This structure borrows a source polyline to access vertex data for iteration and operations.
 ///
-/// See [PlineViewData] for how to create different types of views/selections.
+/// See [`PlineViewData`] for how to create different types of views/selections.
 #[derive(Debug, Clone, Copy)]
 pub struct PlineView<'a, P>
 where
@@ -89,12 +89,12 @@ where
     serde(rename_all = "camelCase")
 )]
 /// Structure to hold the minimum data required to create view as a partial selection over a source
-/// polyline. This structure is detached from the source polyline unlike [PlineView].
+/// polyline. This structure is detached from the source polyline unlike [`PlineView`].
 ///
-/// A [PlineViewData] has all the information required to construct a complete polyline that
+/// A [`PlineViewData`] has all the information required to construct a complete polyline that
 /// represents the contiguous subpart of a source polyline (which optionally may be inverted).
 ///
-/// [PlineViewData::view] is called to form an active view (using a reference to the source polyline
+/// [`PlineViewData::view`] is called to form an active view (using a reference to the source polyline
 /// to then iterate over or perform operations on).
 ///
 /// # Examples
@@ -153,7 +153,7 @@ pub struct PlineViewData<T = f64> {
     /// First vertex of the view (positioned somewhere along the `start_index` segment with bulge
     /// and position updated).
     pub updated_start: PlineVertex<T>,
-    /// Updated bulge value to be used in the end_index segment.
+    /// Updated bulge value to be used in the `end_index` segment.
     pub updated_end_bulge: T,
     /// Final end point of the view.
     pub end_point: Vector2<T>,
@@ -166,7 +166,7 @@ impl<T> PlineViewData<T>
 where
     T: Real,
 {
-    /// Create a [PlineView] by giving a reference to be borrowed as the source polyline.
+    /// Create a [`PlineView`] by giving a reference to be borrowed as the source polyline.
     #[inline]
     pub fn view<'a, P>(&self, source: &'a P) -> PlineView<'a, P>
     where
@@ -189,7 +189,7 @@ where
     }
 
     /// Get vertex at given `index` position based on this view data and a `source`. Note this
-    /// method is private since [PlineViewData::view] should be called to get a [PlineView] to
+    /// method is private since [`PlineViewData::view`] should be called to get a [`PlineView`] to
     /// access the underlying data through the view.
     fn get_vertex<P>(&self, source: &P, index: usize) -> Option<PlineVertex<T>>
     where
@@ -300,7 +300,7 @@ where
     /// # Panics
     ///
     /// This function panics if `traverse_count == 0` or indexes out of range for `source`. Use
-    /// [PlineViewData::create_on_single_segment] if view selects over only a single segment.
+    /// [`PlineViewData::create_on_single_segment`] if view selects over only a single segment.
     pub fn create<P>(
         source: &P,
         start_index: usize,
@@ -604,10 +604,10 @@ where
         }
     }
 
-    /// Epsilon value to be used by [PlineViewData::validate_for_source].
+    /// Epsilon value to be used by [`PlineViewData::validate_for_source`].
     const VALIDATION_EPS: f64 = 1e-5;
 
-    /// Epsilon value to be used by [PlineViewData::validate_for_source] when testing if positions
+    /// Epsilon value to be used by [`PlineViewData::validate_for_source`] when testing if positions
     /// are fuzzy equal.
     const VALIDATION_POINT_ON_SEG_EPS: f64 = 1e-3;
 

@@ -44,7 +44,7 @@ use num_traits::cast::NumCast;
 /// A polyline is a sequence of vertexes and a bool indicating whether the polyline is closed (last
 /// vertex forms segment with first vertex) or open (no segment between last and first vertex).
 /// Polylines can represent complex 2D shapes including straight line segments and circular arc
-/// segments defined by bulge values. For related traits see [PlineSourceMut] and [PlineCreation].
+/// segments defined by bulge values. For related traits see [`PlineSourceMut`] and [`PlineCreation`].
 ///
 /// Each vertex has a 2d xy position and bulge value. The bulge value determines the curvature of
 /// the segment from this vertex to the next:
@@ -53,7 +53,7 @@ use num_traits::cast::NumCast;
 /// - A negative bulge creates a clockwise arc
 /// - The magnitude of the bulge determines the arc's curvature
 ///
-/// See [PlineVertex] for more information about vertex structure and bulge calculations.
+/// See [`PlineVertex`] for more information about vertex structure and bulge calculations.
 pub trait PlineSource {
     /// Numeric type used for the polyline.
     type Num: Real;
@@ -82,7 +82,7 @@ pub trait PlineSource {
     /// Get the vertex at given `index` position. Returns `None` if `index` out of bounds.
     fn get(&self, index: usize) -> Option<PlineVertex<Self::Num>>;
 
-    /// Same as [PlineSource::get] but panics if `index` is out of bounds.
+    /// Same as [`PlineSource::get`] but panics if `index` is out of bounds.
     ///
     /// # Panics
     ///
@@ -122,7 +122,7 @@ pub trait PlineSource {
                 .all(|(v1, v2)| v1.fuzzy_eq_eps(v2, eps))
     }
 
-    /// Same as [PlineSource::fuzzy_eq_eps] but uses default `Self::Num::fuzzy_epsilon()`.
+    /// Same as [`PlineSource::fuzzy_eq_eps`] but uses default `Self::Num::fuzzy_epsilon()`.
     #[inline]
     fn fuzzy_eq<P>(&self, other: &P) -> bool
     where
@@ -345,7 +345,7 @@ pub trait PlineSource {
 
     /// Compute the closed signed area of the polyline.
     ///
-    /// If [PlineSource::is_closed] is false (open polyline) then 0.0 is always returned.
+    /// If [`PlineSource::is_closed`] is false (open polyline) then 0.0 is always returned.
     /// The area is signed such that if the polyline direction is counter clockwise
     /// then the area is positive, otherwise it is negative.
     ///
@@ -410,7 +410,7 @@ pub trait PlineSource {
 
     /// Returns the orientation of the polyline.
     ///
-    /// This method just uses the [PlineSource::area] function to determine directionality of a closed
+    /// This method just uses the [`PlineSource::area`] function to determine directionality of a closed
     /// polyline which may not yield a useful result if the polyline has self intersects.
     ///
     /// # Examples
@@ -931,7 +931,7 @@ pub trait PlineSource {
     /// The starting vertex index position is used as the key to the segment bounding box in the
     /// `StaticAABB2DIndex`. The bounding boxes are guaranteed to be no smaller than the actual
     /// bounding box of the segment but may be larger, this is done for performance. If you want the
-    /// actual bounding box index use [PlineSource::create_aabb_index] instead.
+    /// actual bounding box index use [`PlineSource::create_aabb_index`] instead.
     ///
     /// # Panics
     ///
@@ -963,7 +963,7 @@ pub trait PlineSource {
     ///
     /// The starting vertex index position is used as the key to the segment bounding box in the
     /// `StaticAABB2DIndex`. The bounding boxes are the actual bounding box of the segment, for
-    /// performance reasons you may want to use [PlineSource::create_approx_aabb_index].
+    /// performance reasons you may want to use [`PlineSource::create_approx_aabb_index`].
     ///
     /// # Panics
     ///
@@ -1067,11 +1067,11 @@ pub trait PlineSource {
     /// greater than 1 (if the polyline winds around the point more than once in the clockwise
     /// direction).
     ///
-    /// This function always returns 0 if polyline [PlineSource::is_closed] is false.
+    /// This function always returns 0 if polyline [`PlineSource::is_closed`] is false.
     ///
     /// If the point lies directly on top of one of the polyline segments the result is not defined
     /// (it may return any integer). To handle the case of the point lying directly on the polyline
-    /// [PlineSource::closest_point] may be used to check if the distance from the point to the
+    /// [`PlineSource::closest_point`] may be used to check if the distance from the point to the
     /// polyline is zero.
     ///
     /// # Examples
@@ -1530,7 +1530,7 @@ pub trait PlineSource {
     /// direction of the offset is to the left of the polyline segment tangent vectors otherwise it
     /// is to the right.
     ///
-    /// Algorithm will use [PlineOffsetOptions::default] for algorithm options.
+    /// Algorithm will use [`PlineOffsetOptions::default`] for algorithm options.
     ///
     /// # Panics
     ///
@@ -1562,7 +1562,7 @@ pub trait PlineSource {
     /// is to the right.
     ///
     /// `options` is a struct that holds optional parameters. See
-    /// [PlineOffsetOptions] for specific parameters.
+    /// [`PlineOffsetOptions`] for specific parameters.
     ///
     /// # Panics
     ///
@@ -1597,7 +1597,7 @@ pub trait PlineSource {
 
     /// Perform a boolean `operation` between this polyline and another using default options.
     ///
-    /// See [PlineSource::boolean_opt] for more information.
+    /// See [`PlineSource::boolean_opt`] for more information.
     ///
     /// # Panics
     ///
@@ -1685,7 +1685,7 @@ pub trait PlineSource {
     /// Determine if this polyline fully contains another using default options.
     ///
     /// Caution: Polylines with self-intersections may generate unexpected results.
-    /// Use scan_for_self_intersect() to find and reject self-intersecting polylines
+    /// Use `scan_for_self_intersect()` to find and reject self-intersecting polylines
     /// if this is a possibility for your input data.
     ///
     /// # Panics
@@ -1724,7 +1724,7 @@ pub trait PlineSource {
     /// Determine if this polyline fully contains another with options provided.
     ///
     /// Caution: Polylines with self-intersections may generate unexpected results.
-    /// Use scan_for_self_intersect() to find and reject self-intersecting polylines
+    /// Use `scan_for_self_intersect()` to find and reject self-intersecting polylines
     /// if this is a possibility for your input data.
     ///
     /// # Panics
@@ -1846,7 +1846,7 @@ pub trait PlineSource {
 /// Trait representing a mutable source of polyline data. This trait has all the methods and
 /// operations that can be performed on a mutable polyline.
 ///
-/// See other core polyline traits: [PlineSource] and [PlineCreation] for more information.
+/// See other core polyline traits: [`PlineSource`] and [`PlineCreation`] for more information.
 pub trait PlineSourceMut: PlineSource {
     /// Clears all existing user data values and replaces them with the provided values.
     ///
@@ -1881,7 +1881,7 @@ pub trait PlineSourceMut: PlineSource {
     /// ```
     fn set_vertex(&mut self, index: usize, vertex: PlineVertex<Self::Num>);
 
-    /// Same as [PlineSourceMut::set_vertex] but accepts each component of the vertex rather than a
+    /// Same as [`PlineSourceMut::set_vertex`] but accepts each component of the vertex rather than a
     /// vertex structure.
     #[inline]
     fn set(&mut self, index: usize, x: Self::Num, y: Self::Num, bulge: Self::Num) {
@@ -1901,7 +1901,7 @@ pub trait PlineSourceMut: PlineSource {
     /// Insert a new vertex into the polyline at the given `index` position.
     fn insert_vertex(&mut self, index: usize, vertex: PlineVertex<Self::Num>);
 
-    /// Same as [PlineSourceMut::insert_vertex] but accepts each component of the vertex rather than
+    /// Same as [`PlineSourceMut::insert_vertex`] but accepts each component of the vertex rather than
     /// a vertex structure.
     #[inline]
     fn insert(&mut self, index: usize, x: Self::Num, y: Self::Num, bulge: Self::Num) {
@@ -1938,14 +1938,14 @@ pub trait PlineSourceMut: PlineSource {
     /// Add a vertex to the end of the polyline.
     fn add_vertex(&mut self, vertex: PlineVertex<Self::Num>);
 
-    /// Same as [PlineSourceMut::add_vertex] but accepts each component of the vertex rather than a
+    /// Same as [`PlineSourceMut::add_vertex`] but accepts each component of the vertex rather than a
     /// vertex structure.
     #[inline]
     fn add(&mut self, x: Self::Num, y: Self::Num, bulge: Self::Num) {
         self.add_vertex(PlineVertex::new(x, y, bulge));
     }
 
-    /// Same as [PlineSourceMut::add_vertex] but accepts each component as elements in an array,
+    /// Same as [`PlineSourceMut::add_vertex`] but accepts each component as elements in an array,
     /// 0 = x, 1 = y, 2 = bulge.
     #[inline]
     fn add_from_array(&mut self, data: [Self::Num; 3]) {
@@ -1979,7 +1979,7 @@ pub trait PlineSourceMut: PlineSource {
         self.extend_vertexes(other.iter_vertexes());
     }
 
-    /// Same as [PlineSourceMut::extend] but removes any consecutive repeat position vertexes in the
+    /// Same as [`PlineSourceMut::extend`] but removes any consecutive repeat position vertexes in the
     /// process of copying (using `pos_equal_eps` for compare).
     #[inline]
     fn extend_remove_repeat<P>(&mut self, other: &P, pos_equal_eps: Self::Num)
@@ -2016,7 +2016,7 @@ pub trait PlineSourceMut: PlineSource {
         self.add_vertex(vertex);
     }
 
-    /// Same as [PlineSourceMut::add_or_replace_vertex] but accepts each component of the vertex
+    /// Same as [`PlineSourceMut::add_or_replace_vertex`] but accepts each component of the vertex
     /// rather than a vertex structure.
     #[inline]
     fn add_or_replace(
@@ -2090,8 +2090,8 @@ pub trait PlineSourceMut: PlineSource {
     ///
     /// This method works by simply reversing the order of the vertexes, shifting by 1 position all
     /// the vertexes, and inverting the sign of all the bulge values. E.g. after reversing the
-    /// vertex the bulge at index 0 becomes negative bulge at index 1. The end result for a is_closed
-    /// polyline is the direction will be changed from clockwise to counter clockwise or vice versa.
+    /// vertex the bulge at index 0 becomes negative bulge at index 1. For a closed polyline, this
+    /// changes the direction from clockwise to counter clockwise or vice versa.
     ///
     /// # Examples
     ///
@@ -2139,7 +2139,7 @@ pub trait PlineSourceMut: PlineSource {
 /// source and also exposes associated functions for construction. This trait is used when new
 /// polylines need to be returned from a function.
 ///
-/// See other core polyline traits: [PlineSource] and [PlineSourceMut] for more information.
+/// See other core polyline traits: [`PlineSource`] and [`PlineSourceMut`] for more information.
 pub trait PlineCreation: PlineSourceMut + Sized {
     /// Create a new empty polyline with `capacity` given and `is_closed` indicating whether it is
     /// a closed or open polyline.
@@ -2163,7 +2163,7 @@ pub trait PlineCreation: PlineSourceMut + Sized {
         result
     }
 
-    /// Same as [PlineCreation::create_from] but removes any repeat position vertexes in the
+    /// Same as [`PlineCreation::create_from`] but removes any repeat position vertexes in the
     /// process using `pos_equal_eps` for positional comparisons.
     #[inline]
     fn create_from_remove_repeat<P>(pline: &P, pos_equal_eps: Self::Num) -> Self

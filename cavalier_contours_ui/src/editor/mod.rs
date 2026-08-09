@@ -89,14 +89,14 @@ impl PolylineEditor {
         }
     }
 
-    /// Toggle the is_closed state for the specified polyline
+    /// Toggle the `is_closed` state for the specified polyline
     pub fn toggle_is_closed(&mut self, polyline_index: usize) {
         self.ensure_polyline_capacity(polyline_index);
         let current_closed = self.pending_state[polyline_index].is_closed();
         self.pending_state[polyline_index].set_is_closed(!current_closed);
     }
 
-    /// Set the is_closed state for the specified polyline
+    /// Set the `is_closed` state for the specified polyline
     pub fn set_is_closed(&mut self, polyline_index: usize, is_closed: bool) {
         self.ensure_polyline_capacity(polyline_index);
         self.pending_state[polyline_index].set_is_closed(is_closed);
@@ -150,7 +150,7 @@ impl PolylineEditor {
             .map_or(0, PlineSource::vertex_count)
     }
 
-    /// Get the is_closed state for a specific polyline
+    /// Get the `is_closed` state for a specific polyline
     pub fn get_is_closed(&self, polyline_index: usize) -> bool {
         self.pending_state
             .get(polyline_index)
@@ -657,7 +657,7 @@ impl PolylineEditor {
         }
     }
 
-    /// Ensures pending_state has capacity for the given polyline index
+    /// Ensures `pending_state` has capacity for the given polyline index
     fn ensure_polyline_capacity(&mut self, polyline_index: usize) {
         while self.pending_state.len() <= polyline_index {
             self.pending_state.push(Polyline::new());

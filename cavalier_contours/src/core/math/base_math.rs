@@ -49,7 +49,7 @@ where
 
 /// Returns the smaller difference between two angles.
 ///
-/// Result is negative if `normalize_radians(angle2 - angle1) > PI`. See [normalize_radians] for
+/// Result is negative if `normalize_radians(angle2 - angle1) > PI`. See [`normalize_radians`] for
 /// more information.
 ///
 /// # Examples
@@ -81,10 +81,10 @@ where
 
 /// Returns the smaller difference between two angles and applies the sign given.
 ///
-/// This function is similar to [delta_angle] but always returns a negative result if `negative` is
+/// This function is similar to [`delta_angle`] but always returns a negative result if `negative` is
 /// true or a positive result if `negative` is false. This is useful for ensuring a particular
 /// polarity for edge cases, e.g. if `angle1` is 0 and `angle2` is PI then the delta angle could be
-/// be considered positive or negative ([delta_angle] always returns positive).
+/// be considered positive or negative ([`delta_angle`] always returns positive).
 ///
 #[inline]
 pub fn delta_angle_signed<T>(angle1: T, angle2: T, negative: bool) -> T
@@ -98,7 +98,7 @@ where
 /// Tests if `test_angle` is between a `start_angle` and `end_angle`.
 ///
 /// Test assumes counter clockwise `start_angle` to `end_angle`, and is inclusive using `epsilon`.
-/// See [angle_is_between] function to use default fuzzy epsilon.
+/// See [`angle_is_between`] function to use default fuzzy epsilon.
 ///
 /// # Examples
 ///
@@ -123,10 +123,10 @@ where
     mid_sweep < end_sweep + epsilon
 }
 
-/// Same as [angle_is_between_eps] using default epsilon.
+/// Same as [`angle_is_between_eps`] using default epsilon.
 ///
-/// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
-/// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
+/// Default epsilon is [`fuzzy_epsilon`](crate::core::traits::FuzzyEq::fuzzy_epsilon)
+/// from [`FuzzyEq`](crate::core::traits::FuzzyEq) trait.
 #[inline]
 pub fn angle_is_between<T>(test_angle: T, start_angle: T, end_angle: T) -> bool
 where
@@ -157,10 +157,10 @@ where
     angle_is_between_eps(test_angle, start_angle, end_angle, epsilon)
 }
 
-/// Same as [angle_is_within_sweep_eps] using default epsilon.
+/// Same as [`angle_is_within_sweep_eps`] using default epsilon.
 ///
-/// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
-/// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
+/// Default epsilon is [`fuzzy_epsilon`](crate::core::traits::FuzzyEq::fuzzy_epsilon)
+/// from [`FuzzyEq`](crate::core::traits::FuzzyEq) trait.
 #[inline]
 pub fn angle_is_within_sweep<T>(test_angle: T, start_angle: T, sweep_angle: T) -> bool
 where
@@ -304,7 +304,7 @@ where
     p0 + v.scale(b)
 }
 
-/// Helper function to avoid repeating code for is_left and is_right checks.
+/// Helper function to avoid repeating code for `is_left` and `is_right` checks.
 #[inline]
 fn perp_dot_test_value<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> T
 where
@@ -334,7 +334,7 @@ where
     perp_dot_test_value(p0, p1, point) > T::zero()
 }
 
-/// Same as [is_left] but uses <= operator rather than < for boundary inclusion.
+/// Same as [`is_left`] but uses <= operator rather than < for boundary inclusion.
 #[inline]
 pub fn is_left_or_equal<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
@@ -363,10 +363,10 @@ where
     perp_dot_test_value(p0, p1, point) > -epsilon
 }
 
-/// Same as [is_left_or_coincident_eps] using default epsilon.
+/// Same as [`is_left_or_coincident_eps`] using default epsilon.
 ///
-/// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
-/// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
+/// Default epsilon is [`fuzzy_epsilon`](crate::core::traits::FuzzyEq::fuzzy_epsilon)
+/// from [`FuzzyEq`](crate::core::traits::FuzzyEq) trait.
 #[inline]
 pub fn is_left_or_coincident<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
@@ -395,10 +395,10 @@ where
     perp_dot_test_value(p0, p1, point) < epsilon
 }
 
-/// Same as [is_right_or_coincident_eps] using default epsilon.
+/// Same as [`is_right_or_coincident_eps`] using default epsilon.
 ///
-/// Default epsilon is [fuzzy_epsilon](crate::core::traits::FuzzyEq::fuzzy_epsilon)
-/// from [FuzzyEq](crate::core::traits::FuzzyEq) trait.
+/// Default epsilon is [`fuzzy_epsilon`](crate::core::traits::FuzzyEq::fuzzy_epsilon)
+/// from [`FuzzyEq`](crate::core::traits::FuzzyEq) trait.
 #[inline]
 pub fn is_right_or_coincident<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where

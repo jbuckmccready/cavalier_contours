@@ -24,7 +24,7 @@ pub enum PlineOrientation {
     CounterClockwise,
 }
 
-/// Result from calling [PlineSource::closest_point].
+/// Result from calling [`PlineSource::closest_point`].
 #[derive(Debug, Copy, Clone)]
 pub struct ClosestPointResult<T = f64>
 where
@@ -45,9 +45,9 @@ where
     T: Real,
 {
     /// Spatial index of all the polyline segment bounding boxes (or boxes no smaller, e.g. using
-    /// [PlineSource::create_approx_aabb_index] is valid). If `None` is given then it will be
-    /// computed internally. [PlineSource::create_approx_aabb_index] or
-    /// [PlineSource::create_aabb_index] may be used to create the spatial index, the only
+    /// [`PlineSource::create_approx_aabb_index`] is valid). If `None` is given then it will be
+    /// computed internally. [`PlineSource::create_approx_aabb_index`] or
+    /// [`PlineSource::create_aabb_index`] may be used to create the spatial index, the only
     /// restriction is that the spatial index bounding boxes must be at least big enough to contain
     /// the segments.
     pub aabb_index: Option<&'a StaticAABB2DIndex<T>>,
@@ -172,7 +172,7 @@ where
     /// Resultant polyline.
     pub pline: P,
     /// Slices that were stitched together to form the `pline` result. If boolean result info is not
-    /// [BooleanResultInfo::Intersected] this collection may be empty.
+    /// [`BooleanResultInfo::Intersected`] this collection may be empty.
     pub subslices: Vec<BooleanPlineSlice<P::Num>>,
 }
 
@@ -439,8 +439,8 @@ impl<T> PlineOverlappingIntersect<T> {
     }
 }
 
-/// Represents a polyline intersect that may be either a [PlineBasicIntersect] or
-/// [PlineOverlappingIntersect].
+/// Represents a polyline intersect that may be either a [`PlineBasicIntersect`] or
+/// [`PlineOverlappingIntersect`].
 #[derive(Debug, Clone, Copy)]
 pub enum PlineIntersect<T = f64> {
     Basic(PlineBasicIntersect<T>),

@@ -8,6 +8,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 - Improved `parallel_offset` robustness for repeat-position/degenerate input by sanitizing repeat
   vertices in release builds and guarding offset vector normalization against near-zero vectors.
+- Fixed C FFI shape API documentation to reference `shape` parameters and `cavc_shape_create`
+  instead of their polyline counterparts.
 
 ## 0.7.0 - 2026-01-02
 

@@ -111,7 +111,7 @@ where
 /// two polyline segments that do not share a vertex.
 ///
 /// In the case of two intersects on one segment the intersects will be added as two
-/// [PlineBasicIntersect] in the order of distance from the start of the second segment.
+/// [`PlineBasicIntersect`] in the order of distance from the start of the second segment.
 ///
 /// In the case of an intersect at the very start of a polyline segment the vertex index of the
 /// start of that segment is recorded (unless the polyline is open and the intersect is at the very
@@ -374,7 +374,7 @@ pub fn visit_intersects<P, O, T, C, V>(
 /// segment (`start_index2`) and `point2` furthest from the start of the second segment.
 ///
 /// In the case of two intersects on one segment the intersects will be added as two
-/// [PlineBasicIntersect] in the order of distance from the start of the second segment.
+/// [`PlineBasicIntersect`] in the order of distance from the start of the second segment.
 ///
 /// In the case of an intersect at the very start of a polyline segment the vertex index of the
 /// start of that segment is recorded (unless the polyline is open and the intersect is at the very
@@ -501,7 +501,7 @@ where
 /// Find if two polylines have any intersections.
 ///
 /// Any overlapping segments will be treated as an intersection and cause
-/// scan_for_intersect() to return true.
+/// `scan_for_intersect()` to return true.
 pub fn scan_for_intersect<P, O, T>(
     pline1: &P,
     pline2: &O,

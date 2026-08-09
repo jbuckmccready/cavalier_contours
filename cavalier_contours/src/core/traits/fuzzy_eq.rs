@@ -27,7 +27,7 @@ pub trait FuzzyEq: Sized + Copy {
     fn fuzzy_eq_eps(&self, other: Self, fuzzy_epsilon: Self) -> bool;
 
     /// Returns `true` is this object is approximately equal to the other one, using
-    /// the implemented [FuzzyEq::fuzzy_epsilon] value.
+    /// the implemented [`FuzzyEq::fuzzy_epsilon`] value.
     #[inline]
     fn fuzzy_eq(&self, other: Self) -> bool {
         self.fuzzy_eq_eps(other, Self::fuzzy_epsilon())
@@ -38,7 +38,7 @@ pub trait FuzzyEq: Sized + Copy {
     fn fuzzy_eq_zero_eps(&self, fuzzy_epsilon: Self) -> bool;
 
     /// Returns `true` if this value is approximately equal to zero, using
-    /// the implemented [FuzzyEq::fuzzy_epsilon] value.
+    /// the implemented [`FuzzyEq::fuzzy_epsilon`] value.
     #[inline]
     fn fuzzy_eq_zero(&self) -> bool {
         self.fuzzy_eq_zero_eps(Self::fuzzy_epsilon())
