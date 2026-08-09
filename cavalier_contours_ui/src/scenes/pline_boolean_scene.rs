@@ -285,16 +285,16 @@ fn plot_area(
                     let grabbed_vertex = pline1.get(grabbed_idx).unwrap();
                     pline1.set(
                         grabbed_idx,
-                        grabbed_vertex.x + delta.x as f64,
-                        grabbed_vertex.y + delta.y as f64,
+                        grabbed_vertex.x + f64::from(delta.x),
+                        grabbed_vertex.y + f64::from(delta.y),
                         grabbed_vertex.bulge,
                     );
                 } else {
                     let grabbed_vertex = pline2.get(grabbed_idx).unwrap();
                     pline2.set(
                         grabbed_idx,
-                        grabbed_vertex.x + delta.x as f64,
-                        grabbed_vertex.y + delta.y as f64,
+                        grabbed_vertex.x + f64::from(delta.x),
+                        grabbed_vertex.y + f64::from(delta.y),
                         grabbed_vertex.bulge,
                     );
                 }

@@ -112,7 +112,7 @@ impl Default for cavc_pline_parallel_offset_o {
             pos_equal_eps: d.pos_equal_eps,
             slice_join_eps: d.slice_join_eps,
             offset_dist_eps: d.offset_dist_eps,
-            handle_self_intersects: d.handle_self_intersects as u8,
+            handle_self_intersects: u8::from(d.handle_self_intersects),
         }
     }
 }
@@ -785,7 +785,7 @@ pub unsafe extern "C" fn cavc_pline_get_is_closed(
             return 1;
         }
         unsafe {
-            is_closed.write((*pline).0.is_closed() as u8);
+            is_closed.write(u8::from((*pline).0.is_closed()));
         }
         0
     })
@@ -1498,7 +1498,7 @@ pub unsafe extern "C" fn cavc_pline_scan_for_self_intersect(
         }
 
         unsafe {
-            is_self_intersecting.write(computed_result as u8);
+            is_self_intersecting.write(u8::from(computed_result));
         }
 
         0

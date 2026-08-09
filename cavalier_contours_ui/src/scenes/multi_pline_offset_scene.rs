@@ -280,8 +280,8 @@ fn plot_area(
             let grabbed_vertex = pline.get(grabbed_idx).unwrap();
             pline.set(
                 grabbed_idx,
-                grabbed_vertex.x + delta.x as f64,
-                grabbed_vertex.y + delta.y as f64,
+                grabbed_vertex.x + f64::from(delta.x),
+                grabbed_vertex.y + f64::from(delta.y),
                 grabbed_vertex.bulge,
             );
         } else if *dragging {

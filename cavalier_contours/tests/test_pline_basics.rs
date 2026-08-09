@@ -607,12 +607,12 @@ fn remove_redundant() {
         let radius = 5.0;
         let max_angle = std::f64::consts::FRAC_PI_2;
         let count = 4;
-        let sub_angle = (1.0 / count as f64) * max_angle;
+        let sub_angle = (1.0 / f64::from(count)) * max_angle;
         let bulge = bulge_from_angle(sub_angle);
 
         let mut polyline = Polyline::new();
         (0..=count)
-            .map(|i| (i as f64) * sub_angle)
+            .map(|i| f64::from(i) * sub_angle)
             .for_each(|angle| polyline.add(radius * angle.cos(), radius * angle.sin(), bulge));
 
         let result = polyline
@@ -632,12 +632,12 @@ fn remove_redundant() {
         let radius = 5.0;
         let max_angle = std::f64::consts::TAU;
         let count = 10;
-        let sub_angle = (1.0 / count as f64) * max_angle;
+        let sub_angle = (1.0 / f64::from(count)) * max_angle;
         let bulge = bulge_from_angle(sub_angle);
 
         let mut polyline = Polyline::new_closed();
         (0..count)
-            .map(|i| (i as f64) * sub_angle)
+            .map(|i| f64::from(i) * sub_angle)
             .for_each(|angle| polyline.add(radius * angle.cos(), radius * angle.sin(), bulge));
 
         let result = polyline
@@ -654,12 +654,12 @@ fn remove_redundant() {
         let radius = 5.0;
         let max_angle = std::f64::consts::TAU;
         let count = 10;
-        let sub_angle = (1.0 / count as f64) * max_angle;
+        let sub_angle = (1.0 / f64::from(count)) * max_angle;
         let bulge = bulge_from_angle(sub_angle);
 
         let mut polyline = Polyline::new();
         (0..=count)
-            .map(|i| (i as f64) * sub_angle)
+            .map(|i| f64::from(i) * sub_angle)
             .for_each(|angle| polyline.add(radius * angle.cos(), radius * angle.sin(), bulge));
 
         let result = polyline

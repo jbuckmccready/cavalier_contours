@@ -1394,12 +1394,12 @@ mod sort_and_join_overlapping_intersects_tests {
         // full circle composed of 10 vertexes
         let max_angle = std::f64::consts::TAU;
         let count = 10;
-        let sub_angle = (1.0 / count as f64) * max_angle;
+        let sub_angle = (1.0 / f64::from(count)) * max_angle;
         let bulge = bulge_from_angle(sub_angle);
         let radius = 1.0;
 
         let vertexes = (0..count)
-            .map(|i| (i as f64) * sub_angle)
+            .map(|i| f64::from(i) * sub_angle)
             .map(|angle| PlineVertex::new(radius * angle.cos(), radius * angle.sin(), bulge));
 
         let pline1 = Polyline::from_iter(vertexes, true);
@@ -1444,11 +1444,11 @@ mod sort_and_join_overlapping_intersects_tests {
         // full circle composed of 10 vertexes
         let max_angle = std::f64::consts::TAU;
         let count = 10;
-        let sub_angle = (1.0 / count as f64) * max_angle;
+        let sub_angle = (1.0 / f64::from(count)) * max_angle;
         let bulge = bulge_from_angle(sub_angle);
 
         let vertexes = (0..count)
-            .map(|i| (i as f64) * sub_angle)
+            .map(|i| f64::from(i) * sub_angle)
             .map(|angle| PlineVertex::new(radius * angle.cos(), radius * angle.sin(), bulge));
 
         let pline2 = Polyline::from_iter(vertexes, true);
