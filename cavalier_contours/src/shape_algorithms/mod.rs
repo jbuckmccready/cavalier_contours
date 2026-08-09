@@ -486,6 +486,19 @@ where
         offset: T,
         options: &ShapeOffsetOptions<T>,
     ) -> Vec<DissectedSlice<T>> {
+        /// A point where an offset loop should be divided during slice creation.
+        ///
+        /// This structure represents a specific location on a polyline where an intersection
+        /// occurs, defined by both the segment index and the exact position. These points
+        /// are used to divide offset loops into valid slices.
+        #[derive(Debug, Clone, Copy)]
+        struct DissectionPoint<T> {
+            /// Index of the polyline segment containing this point
+            seg_idx: usize,
+            /// Exact 2D position of the dissection point
+            pos: Vector2<T>,
+        }
+
         let offset_loop_count = ccw_offset_loops.len() + cw_offset_loops.len();
         let pos_equal_eps = options.pos_equal_eps;
         let offset_dist_eps = options.offset_dist_eps;
@@ -505,19 +518,6 @@ where
         let mut sorted_intrs = Vec::new();
         let mut slices_data = Vec::new();
         let mut query_stack = Vec::new();
-
-        /// A point where an offset loop should be divided during slice creation.
-        ///
-        /// This structure represents a specific location on a polyline where an intersection
-        /// occurs, defined by both the segment index and the exact position. These points
-        /// are used to divide offset loops into valid slices.
-        #[derive(Debug, Clone, Copy)]
-        struct DissectionPoint<T> {
-            /// Index of the polyline segment containing this point
-            seg_idx: usize,
-            /// Exact 2D position of the dissection point
-            pos: Vector2<T>,
-        }
 
         let create_slice = |pt1: &DissectionPoint<T>,
                             pt2: &DissectionPoint<T>,

@@ -548,6 +548,19 @@ pub trait PlineSource {
     /// ```
     fn remove_redundant(&self, pos_equal_eps: Self::Num) -> Option<Self::OutputPolyline> {
         use num_traits::real::Real;
+
+        enum RemoveRedundantCase<U>
+        where
+            U: Real,
+        {
+            /// Include the vertex in the result.
+            IncludeVertex,
+            /// Discard the current vertex.
+            DiscardVertex,
+            /// Discard the current vertex and update the previous vertex bulge with the value computed.
+            UpdateV1BulgeForArc(U),
+        }
+
         let vc = self.vertex_count();
         if vc < 2 {
             return None;
@@ -617,18 +630,6 @@ pub trait PlineSource {
         let mut v2_bulge_is_pos = v2.bulge_is_pos();
 
         let iter_count = if self.is_closed() { vc - 1 } else { vc - 2 };
-
-        enum RemoveRedundantCase<U>
-        where
-            U: Real,
-        {
-            /// Include the vertex in the result.
-            IncludeVertex,
-            /// Discard the current vertex.
-            DiscardVertex,
-            /// Discard the current vertex and update the previous vertex bulge with the value computed.
-            UpdateV1BulgeForArc(U),
-        }
 
         // loop through processing/considering to discard the middle vertex v2
         for (i, v3) in self
