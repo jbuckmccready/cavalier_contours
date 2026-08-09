@@ -20,6 +20,17 @@ members = [
 resolver = "2"
 
 [workspace.lints.clippy]
+# TODO: Address these remaining Clippy lints.
+cast_possible_truncation = "allow"
+float_cmp = "allow"
+items_after_statements = "allow"
+match_same_arms = "allow"
+missing_errors_doc = "allow"
+needless_pass_by_value = "allow"
+redundant_closure_for_method_calls = "allow"
+too_many_lines = "allow"
+trivially_copy_pass_by_ref = "allow"
+
 # Overly pedantic, has valid use.
 inline_always = "allow"
 # Pendantic naming better left to judgement with context.
