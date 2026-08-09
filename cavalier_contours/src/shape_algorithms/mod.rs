@@ -549,19 +549,23 @@ where
             // if that's not possible then we check all both segments midpoints of the slice
 
             let vertex_count = slice_view.vertex_count();
-            let (midpoint1, midpoint2) = if vertex_count > 3 {
-                // if slice has more than 2 segments then we can use segment not created by
-                // an intersection (arbitrarily picking segment from index 1 to index 2)
-                (seg_midpoint(slice_view.at(1), slice_view.at(2)), None)
-            } else if vertex_count == 3 {
-                // if slice has exactly 3 points then we test both segment midpoints
-                (
-                    seg_midpoint(slice_view.at(0), slice_view.at(1)),
-                    Some(seg_midpoint(slice_view.at(1), slice_view.at(2))),
-                )
-            } else {
-                // if slice has only 2 points then we can only use the midpoint of the segment
-                (seg_midpoint(slice_view.at(0), slice_view.at(1)), None)
+            let (midpoint1, midpoint2) = match vertex_count.cmp(&3) {
+                std::cmp::Ordering::Greater => {
+                    // if slice has more than 2 segments then we can use segment not created by
+                    // an intersection (arbitrarily picking segment from index 1 to index 2)
+                    (seg_midpoint(slice_view.at(1), slice_view.at(2)), None)
+                }
+                std::cmp::Ordering::Equal => {
+                    // if slice has exactly 3 points then we test both segment midpoints
+                    (
+                        seg_midpoint(slice_view.at(0), slice_view.at(1)),
+                        Some(seg_midpoint(slice_view.at(1), slice_view.at(2))),
+                    )
+                }
+                std::cmp::Ordering::Less => {
+                    // if slice has only 2 points then we can only use the midpoint of the segment
+                    (seg_midpoint(slice_view.at(0), slice_view.at(1)), None)
+                }
             };
 
             // loop through input polylines and check if slice is too close (skipping parent
