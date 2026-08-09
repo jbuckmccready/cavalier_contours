@@ -438,8 +438,9 @@ impl std::fmt::Display for IntersectionDetail {
 impl IntersectionDetail {
     fn point(&self) -> Option<(f64, f64)> {
         match self {
-            IntersectionDetail::Tangent { point, .. } => Some(*point),
-            IntersectionDetail::Basic { point, .. } => Some(*point),
+            IntersectionDetail::Tangent { point, .. } | IntersectionDetail::Basic { point, .. } => {
+                Some(*point)
+            }
             IntersectionDetail::Double { point1, .. } => Some(*point1),
             _ => None,
         }
