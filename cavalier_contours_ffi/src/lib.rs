@@ -1495,7 +1495,7 @@ pub unsafe extern "C" fn cavc_pline_scan_for_self_intersect(
                     computed_result = pline.scan_for_self_intersect_opt(unpacked_options);
                 }
             }
-        };
+        }
 
         unsafe {
             is_self_intersecting.write(computed_result as u8);

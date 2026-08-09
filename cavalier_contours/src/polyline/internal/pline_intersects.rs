@@ -211,7 +211,7 @@ where
                         }
                     }
                 }
-            };
+            }
 
             aabb_index::Control::Continue
         };

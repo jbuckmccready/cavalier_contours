@@ -339,7 +339,7 @@ fn plot_area(
                             .collapsed_color(colors.collapsed_color),
                     );
                 }
-            };
+            }
 
             if *zoom_to_fit {
                 plot_ui.set_auto_bounds([true, true]);
