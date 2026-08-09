@@ -46,14 +46,14 @@ fn single_polyline_offset() {
         "Outward offset should produce at least one result polyline"
     );
     assert!(
-        outward_results.iter().all(|p| p.is_closed()),
+        outward_results.iter().all(PlineSource::is_closed),
         "All outward offset results should be closed polylines"
     );
 
     let orig_ext = rect.extents().expect("rect has extents");
     let union_out_ext = outward_results
         .iter()
-        .filter_map(|p| p.extents())
+        .filter_map(PlineSource::extents)
         .fold(None, |acc, e| match acc {
             None => Some(e),
             Some(mut u) => {

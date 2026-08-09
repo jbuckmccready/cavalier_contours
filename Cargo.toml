@@ -21,7 +21,6 @@ resolver = "2"
 
 [workspace.lints.clippy]
 # TODO: Address these remaining Clippy lints.
-redundant_closure_for_method_calls = "allow"
 too_many_lines = "allow"
 trivially_copy_pass_by_ref = "allow"
 
