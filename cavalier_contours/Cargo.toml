@@ -12,6 +12,9 @@ rust-version.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 default = []
 # Enable serde serialize/deserialize for polylines and vertexes

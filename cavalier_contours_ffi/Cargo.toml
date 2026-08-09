@@ -11,6 +11,9 @@ rust-version.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 # using "lib" so this crate can be referenced and used directly by rust and "cdylib" so it can be used as a dynamic lib
 crate-type = ["lib", "cdylib"]

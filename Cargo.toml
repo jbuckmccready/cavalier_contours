@@ -19,6 +19,10 @@ members = [
 ]
 resolver = "2"
 
+[workspace.lints.clippy]
+inline_always = "allow"
+pedantic = { level = "warn", priority = -1 }
+
 [profile.web-release]
 inherits = "release"
 opt-level = 2 # fast and small wasm
