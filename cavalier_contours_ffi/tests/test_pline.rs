@@ -1108,7 +1108,7 @@ fn shape_eval_ffi() {
                     cavc_shape_get_ccw_pline_userdata_values(
                         result_shape,
                         index,
-                        (&mut userdata) as *mut u64
+                        userdata.as_mut_ptr()
                     ),
                     0
                 );
@@ -1353,19 +1353,19 @@ fn pline_contains_ffi() {
         let mut result: u32 = 0;
 
         assert_eq!(
-            cavc_pline_contains(rectangle, circle, ptr::null(), &mut result as *mut u32),
+            cavc_pline_contains(rectangle, circle, ptr::null(), ptr::from_mut(&mut result)),
             0
         );
         assert_eq!(result, CAVC_CONTAINS_RESULT_PLINE2_INSIDE_PLINE1);
 
         assert_eq!(
-            cavc_pline_contains(circle, rectangle, ptr::null(), &mut result as *mut u32),
+            cavc_pline_contains(circle, rectangle, ptr::null(), ptr::from_mut(&mut result)),
             0
         );
         assert_eq!(result, CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2);
 
         assert_eq!(
-            cavc_pline_contains(rectangle, triangle, ptr::null(), &mut result as *mut u32),
+            cavc_pline_contains(rectangle, triangle, ptr::null(), ptr::from_mut(&mut result)),
             0
         );
         assert_eq!(result, CAVC_CONTAINS_RESULT_DISJOINT);
@@ -1385,7 +1385,7 @@ fn pline_contains_ffi() {
                 rectangle,
                 circle,
                 rectangle_options,
-                &mut result as *mut u32
+                ptr::from_mut(&mut result)
             ),
             0
         );
@@ -1402,7 +1402,12 @@ fn pline_contains_ffi() {
         (*circle_options).pline1_aabb_index = circle_index;
 
         assert_eq!(
-            cavc_pline_contains(circle, rectangle, circle_options, &mut result as *mut u32),
+            cavc_pline_contains(
+                circle,
+                rectangle,
+                circle_options,
+                ptr::from_mut(&mut result)
+            ),
             0
         );
         assert_eq!(result, CAVC_CONTAINS_RESULT_PLINE1_INSIDE_PLINE2);
@@ -1412,7 +1417,7 @@ fn pline_contains_ffi() {
                 rectangle,
                 triangle,
                 rectangle_options,
-                &mut result as *mut u32
+                ptr::from_mut(&mut result)
             ),
             0
         );
