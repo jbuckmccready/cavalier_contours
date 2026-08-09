@@ -96,23 +96,16 @@ impl<T> SlicePoint<T> {
     }
 }
 
-/// Slice the given pline at all of its intersects for boolean operations.
-///
-/// If `use_second_index` is true then the second index of the intersect types is used to correspond
-/// with pline, otherwise the first index is used. `point_on_slice_pred` is called on at least one
-/// point from each slice, if it returns true then the slice is kept, otherwise it is discarded.
-/// `output` is populated with open polylines that represent all the slices.
-pub fn slice_at_intersects<P, T, F>(
+/// Builds intersection points keyed by segment start index and sorted along each segment.
+fn build_intersects_lookup<P, T>(
     pline: &P,
     boolean_info: &ProcessForBooleanResult<T>,
     use_second_index: bool,
-    point_on_slice_pred: &mut F,
-    output_slices: &mut Vec<BooleanPlineSlice<T>>,
     pos_equal_eps: T,
-) where
+) -> BTreeMap<usize, Vec<SlicePoint<T>>>
+where
     P: PlineSource<Num = T> + ?Sized,
     T: Real,
-    F: FnMut(Vector2<T>) -> bool,
 {
     let mut intersects_lookup = BTreeMap::<usize, Vec<SlicePoint<T>>>::new();
 
@@ -196,6 +189,30 @@ pub fn slice_at_intersects<P, T, F>(
             dist1.total_cmp(&dist2)
         });
     }
+
+    intersects_lookup
+}
+
+/// Slice the given pline at all of its intersects for boolean operations.
+///
+/// If `use_second_index` is true then the second index of the intersect types is used to correspond
+/// with pline, otherwise the first index is used. `point_on_slice_pred` is called on at least one
+/// point from each slice, if it returns true then the slice is kept, otherwise it is discarded.
+/// `output` is populated with open polylines that represent all the slices.
+pub fn slice_at_intersects<P, T, F>(
+    pline: &P,
+    boolean_info: &ProcessForBooleanResult<T>,
+    use_second_index: bool,
+    point_on_slice_pred: &mut F,
+    output_slices: &mut Vec<BooleanPlineSlice<T>>,
+    pos_equal_eps: T,
+) where
+    P: PlineSource<Num = T> + ?Sized,
+    T: Real,
+    F: FnMut(Vector2<T>) -> bool,
+{
+    let intersects_lookup =
+        build_intersects_lookup(pline, boolean_info, use_second_index, pos_equal_eps);
 
     for (&start_index, intrs_list) in &intersects_lookup {
         let next_index = pline.next_wrapping_index(start_index);
