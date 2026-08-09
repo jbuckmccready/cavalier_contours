@@ -3,7 +3,9 @@ use cavalier_contours::{
     polyline::{
         BooleanOp, BooleanPlineSlice, BooleanResult, PlineCreation, PlineSource, PlineSourceMut,
         PlineViewData, Polyline,
-        internal::pline_boolean::{process_for_boolean, prune_slices, slice_at_intersects},
+        internal::pline_boolean::{
+            PruneMode, SliceStarts, process_for_boolean, prune_slices, slice_at_intersects,
+        },
     },
     shape_algorithms::Shape,
 };
@@ -53,10 +55,16 @@ impl Mode {
     }
 
     fn supports_pruned_slices(&self) -> bool {
-        matches!(
-            self,
-            Mode::None | Mode::Or | Mode::And | Mode::Not | Mode::Xor
-        )
+        self.prune_mode().is_some()
+    }
+
+    fn prune_mode(&self) -> Option<PruneMode> {
+        match self {
+            Mode::Or => Some(PruneMode::Union),
+            Mode::And => Some(PruneMode::Intersection),
+            Mode::Not => Some(PruneMode::FirstMinusSecond),
+            Mode::None | Mode::Xor | Mode::Intersects | Mode::Slices => None,
+        }
     }
 }
 
@@ -72,9 +80,7 @@ enum SceneState {
     BooleanResultWithPrunedSlices {
         result: BooleanResult<Polyline>,
         pruned_slices: Vec<BooleanPlineSlice<f64>>,
-        start_of_pline2_slices: usize,
-        start_of_pline1_overlapping_slices: usize,
-        start_of_pline2_overlapping_slices: usize,
+        starts: SliceStarts,
     },
     Intersects {
         intersects: Vec<PlotPoint>,
@@ -442,9 +448,7 @@ fn plot_area(
                 SceneState::BooleanResultWithPrunedSlices {
                     result,
                     pruned_slices,
-                    start_of_pline2_slices,
-                    start_of_pline1_overlapping_slices,
-                    start_of_pline2_overlapping_slices,
+                    starts,
                 } => {
                     for slice in &pruned_slices {
                         let slice_view = if slice.source_is_pline1 {
@@ -476,13 +480,13 @@ fn plot_area(
 
                     // Draw pruned slices with categorized colors (overlaid on top)
                     for (i, pline) in plines.iter().enumerate() {
-                        let color = if i < start_of_pline2_slices {
+                        let color = if i < starts.pline2 {
                             // Pline1 non-overlapping slices
                             colors.primary_stroke
-                        } else if i < start_of_pline1_overlapping_slices {
+                        } else if i < starts.pline1_overlapping {
                             // Pline2 non-overlapping slices
                             colors.secondary_stroke
-                        } else if i < start_of_pline2_overlapping_slices {
+                        } else if i < starts.pline2_overlapping {
                             // Pline1 overlapping slices
                             colors.warning_color
                         } else {
@@ -534,22 +538,19 @@ fn build_scene_state(
                 _ => unreachable!(),
             };
 
-            if *show_pruned_slices {
+            if *show_pruned_slices && let Some(prune_mode) = mode.prune_mode() {
                 let result = pline1.boolean(pline2, op);
                 let pline1_aabb_index = pline1.create_approx_aabb_index();
                 let boolean_info =
                     process_for_boolean(pline1, pline2, &pline1_aabb_index, pos_equal_eps);
 
-                let pruned_slices = prune_slices(pline1, pline2, &boolean_info, op, pos_equal_eps);
+                let pruned_slices =
+                    prune_slices(pline1, pline2, &boolean_info, prune_mode, pos_equal_eps);
 
                 SceneState::BooleanResultWithPrunedSlices {
                     result,
                     pruned_slices: pruned_slices.slices_remaining,
-                    start_of_pline2_slices: pruned_slices.start_of_pline2_slices,
-                    start_of_pline1_overlapping_slices: pruned_slices
-                        .start_of_pline1_overlapping_slices,
-                    start_of_pline2_overlapping_slices: pruned_slices
-                        .start_of_pline2_overlapping_slices,
+                    starts: pruned_slices.starts,
                 }
             } else {
                 SceneState::BooleanResult(pline1.boolean(pline2, op))

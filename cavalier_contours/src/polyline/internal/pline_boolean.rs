@@ -332,31 +332,51 @@ pub fn slice_at_intersects<P, T, F>(
     }
 }
 
+/// Start indices for the ordered groups in [`PrunedSlices::slices_remaining`].
+#[derive(Debug, Clone, Copy)]
+pub struct SliceStarts {
+    /// Start of the non-overlapping slices from the second polyline.
+    pub pline2: usize,
+    /// Start of the overlapping slices from the first polyline.
+    pub pline1_overlapping: usize,
+    /// Start of the overlapping slices from the second polyline.
+    pub pline2_overlapping: usize,
+}
+
 /// Holds all the slices after pruning them for the boolean operation performed. These slices can
 /// then be stitched together to form the final result.
 pub struct PrunedSlices<T> {
     /// Remaining slices to be stitched together.
     ///
     /// This Vec holds all the slices ordered according to their source and type: first block is
-    /// pline1 non-overlapping slices, next block starting at `start_of_pline2_slices` index
-    /// position is non-overlapping slices from pline2, next block starting at
-    /// `start_of_pline1_overlapping_slices` is pline1 overlapping slices,
-    /// and finally the last block starting at `start_of_pline1_overlapping_slices` holds pline2
+    /// pline1 non-overlapping slices, next block starting at `starts.pline2` is non-overlapping
+    /// slices from pline2, next block starting at `starts.pline1_overlapping` is pline1 overlapping
+    /// slices, and finally the last block starting at `starts.pline2_overlapping` holds pline2
     /// overlapping slices.
     pub slices_remaining: Vec<BooleanPlineSlice<T>>,
-    pub start_of_pline2_slices: usize,
-    pub start_of_pline1_overlapping_slices: usize,
-    pub start_of_pline2_overlapping_slices: usize,
+    /// Start indices for each slice group.
+    pub starts: SliceStarts,
 }
 
-/// Prunes slices from polylines based on the specified boolean operation.
+/// Controls which non-overlapping polyline slices are kept during pruning.
+///
+/// Overlapping slice candidates are retained in every mode for stitch selection.
+#[derive(Debug, Clone, Copy)]
+pub enum PruneMode {
+    /// Keeps each polyline's slices that lie outside the other polyline.
+    Union,
+    /// Keeps each polyline's slices that lie inside the other polyline.
+    Intersection,
+    /// Keeps first-polyline slices outside the second and second-polyline slices inside the first.
+    FirstMinusSecond,
+    /// Keeps first-polyline slices inside the second and second-polyline slices outside the first.
+    SecondMinusFirst,
+}
+
+/// Prunes slices from polylines based on the specified pruning mode.
 ///
 /// This function slices both polylines at their intersection points and filters the resulting
-/// slices based on the boolean operation's requirements. For example:
-/// - **OR**: Keeps slices that are outside the other polyline
-/// - **AND**: Keeps slices that are inside the other polyline
-/// - **NOT**: Keeps pline1 slices outside pline2, and pline2 slices inside pline1
-/// - **XOR**: Same as NOT (first pass only - XOR requires two passes, see `prune_slices_impl`)
+/// slices based on the pruning mode's requirements.
 ///
 /// The resulting slices are organized into categories:
 /// 1. Non-overlapping slices from pline1
@@ -366,12 +386,12 @@ pub struct PrunedSlices<T> {
 ///
 /// These categorized slices can then be stitched together to form the final boolean result.
 ///
-/// # Argument
+/// # Arguments
 ///
 /// - `pline1`: First polyline
 /// - `pline2`: Second polyline
 /// - `boolean_info`: Precomputed intersection and overlap information
-/// - `operation`: The boolean operation to perform
+/// - `mode`: The slice pruning mode to apply
 /// - `pos_equal_eps`: Epsilon for position equality comparisons
 ///
 /// # Returns
@@ -380,36 +400,12 @@ pub struct PrunedSlices<T> {
 ///
 /// # Public Visibility
 ///
-/// This method is made public for visualization and testing purposes.
+/// This function is public for visualization and testing purposes.
 pub fn prune_slices<P, R, T>(
     pline1: &P,
     pline2: &R,
     boolean_info: &ProcessForBooleanResult<T>,
-    operation: BooleanOp,
-    pos_equal_eps: T,
-) -> PrunedSlices<T>
-where
-    P: PlineSource<Num = T> + ?Sized,
-    R: PlineSource<Num = T> + ?Sized,
-    T: Real,
-{
-    prune_slices_impl(
-        pline1,
-        pline2,
-        boolean_info,
-        operation,
-        false,
-        pos_equal_eps,
-    )
-}
-
-// Internal implementation that supports XOR second pass logic
-fn prune_slices_impl<P, R, T>(
-    pline1: &P,
-    pline2: &R,
-    boolean_info: &ProcessForBooleanResult<T>,
-    operation: BooleanOp,
-    xor_second_pass: bool,
+    mode: PruneMode,
     pos_equal_eps: T,
 ) -> PrunedSlices<T>
 where
@@ -423,80 +419,48 @@ where
     let mut point_in_pline2 = |pt: Vector2<T>| pline2.winding_number(pt) != 0;
 
     // slice pline1
-    if xor_second_pass {
-        // For XOR second pass: pline2 NOT pline1
-        slice_at_intersects(
+    match mode {
+        PruneMode::Union | PruneMode::FirstMinusSecond => slice_at_intersects(
+            pline1,
+            boolean_info,
+            false,
+            &mut |pt: Vector2<T>| !point_in_pline2(pt),
+            &mut slices_remaining,
+            pos_equal_eps,
+        ),
+        PruneMode::Intersection | PruneMode::SecondMinusFirst => slice_at_intersects(
             pline1,
             boolean_info,
             false,
             &mut point_in_pline2,
             &mut slices_remaining,
             pos_equal_eps,
-        );
-    } else {
-        match operation {
-            BooleanOp::Or => slice_at_intersects(
-                pline1,
-                boolean_info,
-                false,
-                &mut |pt: Vector2<T>| !point_in_pline2(pt),
-                &mut slices_remaining,
-                pos_equal_eps,
-            ),
-            BooleanOp::And => slice_at_intersects(
-                pline1,
-                boolean_info,
-                false,
-                &mut point_in_pline2,
-                &mut slices_remaining,
-                pos_equal_eps,
-            ),
-            BooleanOp::Not | BooleanOp::Xor => slice_at_intersects(
-                pline1,
-                boolean_info,
-                false,
-                &mut |pt: Vector2<T>| !point_in_pline2(pt),
-                &mut slices_remaining,
-                pos_equal_eps,
-            ),
-        }
+        ),
     }
 
-    let start_of_pline2_slices = slices_remaining.len();
+    let pline2_start = slices_remaining.len();
 
     // slice pline2
-    if xor_second_pass {
-        // For XOR second pass: pline2 NOT pline1
-        slice_at_intersects(
+    match mode {
+        PruneMode::Union | PruneMode::SecondMinusFirst => slice_at_intersects(
             pline2,
             boolean_info,
             true,
             &mut |pt: Vector2<T>| !point_in_pline1(pt),
             &mut slices_remaining,
             pos_equal_eps,
-        );
-    } else {
-        match operation {
-            BooleanOp::Or | BooleanOp::Xor => slice_at_intersects(
-                pline2,
-                boolean_info,
-                true,
-                &mut |pt: Vector2<T>| !point_in_pline1(pt),
-                &mut slices_remaining,
-                pos_equal_eps,
-            ),
-            BooleanOp::And | BooleanOp::Not => slice_at_intersects(
-                pline2,
-                boolean_info,
-                true,
-                &mut point_in_pline1,
-                &mut slices_remaining,
-                pos_equal_eps,
-            ),
-        }
+        ),
+        PruneMode::Intersection | PruneMode::FirstMinusSecond => slice_at_intersects(
+            pline2,
+            boolean_info,
+            true,
+            &mut point_in_pline1,
+            &mut slices_remaining,
+            pos_equal_eps,
+        ),
     }
 
-    let start_of_pline1_overlapping_slices = slices_remaining.len();
+    let pline1_overlapping = slices_remaining.len();
 
     // reserve space for set of overlapping slices from both polylines
     slices_remaining.reserve(2 * boolean_info.overlapping_slices.len());
@@ -509,7 +473,7 @@ where
             .map(|s| BooleanPlineSlice::from_overlapping(pline2, s, s.opposing_directions)),
     );
 
-    let start_of_pline2_overlapping_slices = slices_remaining.len();
+    let pline2_overlapping = slices_remaining.len();
 
     // add pline2 overlapping slices (note they are already oriented with same direction as pline2)
     slices_remaining.extend(
@@ -519,24 +483,27 @@ where
             .map(|s| BooleanPlineSlice::from_overlapping(pline2, s, false)),
     );
 
-    // Determine set_opposing_direction based on operation
-    let set_opposing_direction = match operation {
-        BooleanOp::Or | BooleanOp::And => false,
-        BooleanOp::Not | BooleanOp::Xor => true,
+    // Determine set_opposing_direction based on mode
+    let set_opposing_direction = match mode {
+        PruneMode::Union | PruneMode::Intersection => false,
+        PruneMode::FirstMinusSecond | PruneMode::SecondMinusFirst => true,
     };
 
     if set_opposing_direction != boolean_info.opposing_directions() {
         // invert pline1 directions to match request to set opposing direction
-        slices_remaining[0..start_of_pline2_slices]
+        slices_remaining[0..pline2_start]
             .iter_mut()
             .for_each(|s| s.view_data.inverted_direction = true);
     }
 
+    let starts = SliceStarts {
+        pline2: pline2_start,
+        pline1_overlapping,
+        pline2_overlapping,
+    };
     PrunedSlices {
         slices_remaining,
-        start_of_pline2_slices,
-        start_of_pline1_overlapping_slices,
-        start_of_pline2_overlapping_slices,
+        starts,
     }
 }
 pub trait StitchSelector {
@@ -545,40 +512,26 @@ pub trait StitchSelector {
 
 #[derive(Debug, Clone)]
 pub struct OrAndStitchSelector {
-    start_of_pline2_slices: usize,
-    start_of_pline1_overlapping_slices: usize,
-    start_of_pline2_overlapping_slices: usize,
+    starts: SliceStarts,
 }
 
 impl OrAndStitchSelector {
     #[must_use]
-    pub fn new(
-        start_of_pline2_slices: usize,
-        start_of_pline1_overlapping_slices: usize,
-        start_of_pline2_overlapping_slices: usize,
-    ) -> Self {
-        Self {
-            start_of_pline2_slices,
-            start_of_pline1_overlapping_slices,
-            start_of_pline2_overlapping_slices,
-        }
+    pub fn new(starts: SliceStarts) -> Self {
+        Self { starts }
     }
 
     #[must_use]
     pub fn from_pruned_slices<T>(pruned_slices: &PrunedSlices<T>) -> Self {
-        Self::new(
-            pruned_slices.start_of_pline2_slices,
-            pruned_slices.start_of_pline1_overlapping_slices,
-            pruned_slices.start_of_pline2_overlapping_slices,
-        )
+        Self::new(pruned_slices.starts)
     }
 }
 
 impl StitchSelector for OrAndStitchSelector {
     fn select(&self, current_slice_idx: usize, available_idx: &[usize]) -> Option<usize> {
-        let is_pline1_idx = current_slice_idx < self.start_of_pline2_slices
-            || (current_slice_idx >= self.start_of_pline1_overlapping_slices
-                && current_slice_idx < self.start_of_pline2_overlapping_slices);
+        let is_pline1_idx = current_slice_idx < self.starts.pline2
+            || (current_slice_idx >= self.starts.pline1_overlapping
+                && current_slice_idx < self.starts.pline2_overlapping);
 
         let first_available = || Some(available_idx[0]);
 
@@ -587,23 +540,19 @@ impl StitchSelector for OrAndStitchSelector {
         if is_pline1_idx {
             // attempt to stitch to non-overlapping pline2 slice
             available()
-                .find(|&i| {
-                    i >= self.start_of_pline2_slices && i < self.start_of_pline1_overlapping_slices
-                })
+                .find(|&i| i >= self.starts.pline2 && i < self.starts.pline1_overlapping)
                 // attempt to stitch to non-overlapping pline1 slice
-                .or_else(|| available().find(|&i| i < self.start_of_pline2_slices))
+                .or_else(|| available().find(|&i| i < self.starts.pline2))
                 // just use first available
                 .or_else(first_available)
         } else {
             // attempt to stitch to non-overlapping pline1 slice
             available()
-                .find(|&i| i < self.start_of_pline2_slices)
+                .find(|&i| i < self.starts.pline2)
                 // attempt to stitch to non-overlapping pline2 slice
                 .or_else(|| {
-                    available().find(|&i| {
-                        i >= self.start_of_pline2_slices
-                            && i < self.start_of_pline1_overlapping_slices
-                    })
+                    available()
+                        .find(|&i| i >= self.starts.pline2 && i < self.starts.pline1_overlapping)
                 })
                 // just use first available
                 .or_else(first_available)
@@ -612,53 +561,40 @@ impl StitchSelector for OrAndStitchSelector {
 }
 
 pub struct NotXorStitchSelector {
-    start_of_pline2_slices: usize,
-    start_of_pline1_overlapping_slices: usize,
-    start_of_pline2_overlapping_slices: usize,
+    starts: SliceStarts,
 }
 
 impl NotXorStitchSelector {
     #[must_use]
-    pub fn new(
-        start_of_pline2_slices: usize,
-        start_of_pline1_overlapping_slices: usize,
-        start_of_pline2_overlapping_slices: usize,
-    ) -> Self {
-        Self {
-            start_of_pline2_slices,
-            start_of_pline1_overlapping_slices,
-            start_of_pline2_overlapping_slices,
-        }
+    pub fn new(starts: SliceStarts) -> Self {
+        Self { starts }
     }
 
     #[must_use]
     pub fn from_pruned_slices<T>(pruned_slices: &PrunedSlices<T>) -> Self {
-        Self::new(
-            pruned_slices.start_of_pline2_slices,
-            pruned_slices.start_of_pline1_overlapping_slices,
-            pruned_slices.start_of_pline2_overlapping_slices,
-        )
+        Self::new(pruned_slices.starts)
     }
 
     fn idx_for_pline1_slice(&self, available_idx: &[usize]) -> Option<usize> {
         available_idx
             .iter()
             .copied()
-            .find(|&i| i < self.start_of_pline2_slices)
+            .find(|&i| i < self.starts.pline2)
     }
 
     fn idx_for_pline2_slice(&self, available_idx: &[usize]) -> Option<usize> {
-        available_idx.iter().copied().find(|&i| {
-            i >= self.start_of_pline2_slices && i < self.start_of_pline1_overlapping_slices
-        })
+        available_idx
+            .iter()
+            .copied()
+            .find(|&i| i >= self.starts.pline2 && i < self.starts.pline1_overlapping)
     }
 }
 
 impl StitchSelector for NotXorStitchSelector {
     fn select(&self, current_slice_idx: usize, available_idx: &[usize]) -> Option<usize> {
-        if current_slice_idx >= self.start_of_pline1_overlapping_slices {
+        if current_slice_idx >= self.starts.pline1_overlapping {
             // current slice is overlapping
-            if current_slice_idx < self.start_of_pline2_overlapping_slices {
+            if current_slice_idx < self.starts.pline2_overlapping {
                 // current overlapping slice is from pline1
                 // attempt to stitch to slice from pline2 then to
                 // pline1 and if both fail then return None (stitching overlapping to overlapping is
@@ -676,7 +612,7 @@ impl StitchSelector for NotXorStitchSelector {
         }
 
         // else current slice is not overlapping
-        if current_slice_idx < self.start_of_pline2_slices {
+        if current_slice_idx < self.starts.pline2 {
             // current slice is from pline1, attempt to stitch to slice from pline2 and if not
             // possible then just return first available
             return self
@@ -934,8 +870,13 @@ where
             } else {
                 // keep all slices of pline1 that are not in pline2 and all slices of pline2 that
                 // are not in pline1
-                let pruned_slices =
-                    prune_slices(pline1, pline2, &boolean_info, BooleanOp::Or, pos_equal_eps);
+                let pruned_slices = prune_slices(
+                    pline1,
+                    pline2,
+                    &boolean_info,
+                    PruneMode::Union,
+                    pos_equal_eps,
+                );
 
                 let stitch_selector = OrAndStitchSelector::from_pruned_slices(&pruned_slices);
 
@@ -995,8 +936,13 @@ where
             } else {
                 // keep all slices from pline1 that are in pline2 and all slices from pline2 that
                 // are in pline1
-                let pruned_slices =
-                    prune_slices(pline1, pline2, &boolean_info, BooleanOp::And, pos_equal_eps);
+                let pruned_slices = prune_slices(
+                    pline1,
+                    pline2,
+                    &boolean_info,
+                    PruneMode::Intersection,
+                    pos_equal_eps,
+                );
 
                 let stitch_selector = OrAndStitchSelector::from_pruned_slices(&pruned_slices);
                 let pos_plines = stitch_slices_into_closed_polylines(
@@ -1037,8 +983,13 @@ where
             } else {
                 // keep all slices from pline1 that are not in pline2 and all slices on pline2 that
                 // are in pline1
-                let pruned_slices =
-                    prune_slices(pline1, pline2, &boolean_info, BooleanOp::Not, pos_equal_eps);
+                let pruned_slices = prune_slices(
+                    pline1,
+                    pline2,
+                    &boolean_info,
+                    PruneMode::FirstMinusSecond,
+                    pos_equal_eps,
+                );
 
                 let stitch_selector = NotXorStitchSelector::from_pruned_slices(&pruned_slices);
 
@@ -1080,8 +1031,13 @@ where
                 }
             } else {
                 // collect pline1 NOT pline2 results
-                let pruned_slices1 =
-                    prune_slices(pline1, pline2, &boolean_info, BooleanOp::Not, pos_equal_eps);
+                let pruned_slices1 = prune_slices(
+                    pline1,
+                    pline2,
+                    &boolean_info,
+                    PruneMode::FirstMinusSecond,
+                    pos_equal_eps,
+                );
 
                 let stitch_selector1 = NotXorStitchSelector::from_pruned_slices(&pruned_slices1);
                 let mut remaining1 = stitch_slices_into_closed_polylines(
@@ -1094,12 +1050,11 @@ where
                 );
 
                 // collect pline2 NOT pline1 results
-                let pruned_slices2 = prune_slices_impl(
+                let pruned_slices2 = prune_slices(
                     pline1,
                     pline2,
                     &boolean_info,
-                    BooleanOp::Xor,
-                    true, // XOR second pass for pline2 NOT pline1
+                    PruneMode::SecondMinusFirst,
                     pos_equal_eps,
                 );
 
