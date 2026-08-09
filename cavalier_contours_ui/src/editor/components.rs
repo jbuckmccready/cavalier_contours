@@ -1,5 +1,5 @@
 use cavalier_contours::polyline::PlineVertex;
-use eframe::egui::Ui;
+use egui::Ui;
 
 pub fn show_vertex_table(ui: &mut Ui, vertex_data: &mut Vec<PlineVertex>, table_id: &str) -> bool {
     use egui_extras::{Column, TableBuilder};

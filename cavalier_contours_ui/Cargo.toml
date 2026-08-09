@@ -9,7 +9,7 @@ edition.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 license.workspace = true
-rust-version.workspace = true
+rust-version = "1.95"
 repository.workspace = true
 version.workspace = true
 
@@ -22,10 +22,10 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
 cavalier_contours = {version = "0.7", path = "../cavalier_contours", features = ["serde"]}
-egui = "0.33.0"
-egui_plot = "0.34.0"
-egui_extras = "0.33.0"
-eframe = { version = "0.33.0", default-features = false, features = [
+egui = "0.36.1"
+egui_plot = "0.37.0"
+egui_extras = "0.36.1"
+eframe = { version = "0.36.1", default-features = false, features = [
     "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".

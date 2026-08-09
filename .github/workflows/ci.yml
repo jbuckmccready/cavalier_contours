@@ -29,13 +29,28 @@ jobs:
         run: |
           cargo test --workspace --verbose
 
-  lint:
+  msrv:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.88.0
+
+      - name: Rust Cache # cache the rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check non-UI crates
+        run: |
+          cargo check --workspace --exclude cavalier_contours_ui --all-targets --verbose
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
         with:
           components: rustfmt, clippy
 

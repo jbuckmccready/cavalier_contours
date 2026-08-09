@@ -16,7 +16,7 @@ impl MainApp {
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
         // bump overall font style size up as default is a bit small
-        cc.egui_ctx.style_mut(|style| {
+        cc.egui_ctx.all_styles_mut(|style| {
             for v in style.text_styles.values_mut() {
                 v.size += 2.0;
             }
@@ -39,7 +39,7 @@ impl eframe::App for MainApp {
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
-        self.scenes.ui(ctx, frame);
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        self.scenes.ui(ui, frame);
     }
 }

@@ -1,5 +1,5 @@
 use cavalier_contours::polyline::{PlineSource, PlineSourceMut, PlineVertex, Polyline};
-use eframe::egui::{ScrollArea, TextEdit, Ui, Vec2, Window};
+use egui::{ScrollArea, TextEdit, Ui, Vec2, Window};
 
 pub mod components;
 

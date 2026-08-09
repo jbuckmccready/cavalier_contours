@@ -7,8 +7,7 @@ use cavalier_contours::{
         },
     },
 };
-use eframe::egui::{CentralPanel, Rect, ScrollArea, Slider, Ui, Vec2};
-use egui::Id;
+use egui::{CentralPanel, Id, Rect, ScrollArea, Slider, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint};
 use std::borrow::Cow;
 
@@ -144,7 +143,7 @@ fn controls_panel(
     polyline_editor: &mut PolylineEditor,
 ) {
     controls_side_panel("pline_offset_controls")
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
 
@@ -251,7 +250,7 @@ fn plot_area(
         Mode::RawOffsetSegments => build_raw_offset_segments(pline, offset),
     };
 
-    CentralPanel::default().show_inside(ui, |ui| {
+    CentralPanel::default().show(ui, |ui| {
         let plot = settings
             .apply_to_plot(Plot::new("pline_offset_scene"))
             .data_aspect(1.0)

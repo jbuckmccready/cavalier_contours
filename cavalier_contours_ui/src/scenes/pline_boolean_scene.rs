@@ -9,7 +9,7 @@ use cavalier_contours::{
     },
     shape_algorithms::Shape,
 };
-use eframe::egui::{CentralPanel, Rect, ScrollArea, Ui, Vec2};
+use egui::{CentralPanel, Rect, ScrollArea, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint, PlotPoints};
 
 use crate::editor::PolylineEditor;
@@ -189,7 +189,7 @@ fn controls_panel(
     polyline_editor: &mut PolylineEditor,
 ) {
     controls_side_panel("pline_boolean_controls")
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
 
@@ -262,7 +262,7 @@ fn plot_area(
         panic!("Expected two polylines, but found less");
     };
 
-    CentralPanel::default().show_inside(ui, |ui| {
+    CentralPanel::default().show(ui, |ui| {
         let plot = settings
             .apply_to_plot(Plot::new("pline_boolean_scene"))
             .data_aspect(1.0)

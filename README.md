@@ -74,7 +74,8 @@ See more examples [here](examples/README.md).
 
 ## Requirements
 
-- Rust 1.88+ (MSRV)
+- Rust 1.88+ for the published `cavalier_contours` library and FFI crate
+- Rust 1.95+ for the unpublished `cavalier_contours_ui` demo and testing app
 - Tested with CI on Linux, macOS, and Windows
 
 ## Why go to Rust?

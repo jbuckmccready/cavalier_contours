@@ -3,8 +3,7 @@ use cavalier_contours::{
     polyline::{PlineCreation, PlineSource, PlineSourceMut, Polyline},
     shape_algorithms::{Shape, ShapeOffsetOptions},
 };
-use eframe::egui::{Rect, ScrollArea, Slider, Ui, Vec2};
-use egui::Id;
+use egui::{Id, Rect, ScrollArea, Slider, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint, PlotPoints};
 
 use crate::editor::PolylineEditor;
@@ -166,7 +165,7 @@ fn controls_panel(
     polyline_editor: &mut PolylineEditor,
 ) {
     controls_side_panel("multi_pline_offset_panel")
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.add_space(ui.spacing().item_spacing.y);
 

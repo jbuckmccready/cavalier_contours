@@ -1,6 +1,4 @@
-use eframe::egui;
-use eframe::egui::Context;
-use egui::RichText;
+use egui::{RichText, Ui};
 
 use super::Scene;
 use super::scene_settings::SceneSettings;
@@ -32,7 +30,7 @@ impl DemoScenes {
         }
     }
 
-    pub fn ui(&mut self, ctx: &Context, _epi_frame: &eframe::Frame) {
+    pub fn ui(&mut self, ui: &mut Ui, _frame: &eframe::Frame) {
         let Self {
             settings,
             settings_open,
@@ -41,12 +39,15 @@ impl DemoScenes {
             ..
         } = self;
 
-        // Apply theme to egui context
-        ctx.set_visuals(settings.theme.to_egui_visuals(ctx));
+        // Apply theme to the root UI and egui context.
+        let ctx = ui.ctx().clone();
+        let visuals = settings.theme.to_egui_visuals(&ctx);
+        ctx.set_visuals(visuals.clone());
+        ui.visuals_mut().clone_from(&visuals);
 
         let selected_before = *selected;
         let mut sel = selected.unwrap_or(0);
-        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+        egui::Panel::top("menu_bar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 use egui::special_emojis::GITHUB;
                 ui.hyperlink_to(
@@ -55,7 +56,7 @@ impl DemoScenes {
                 );
 
                 ui.toggle_value(settings_open, "🔧 Settings");
-                settings.show(ctx, settings_open);
+                settings.show(&ctx, settings_open);
             });
             ui.separator();
             ui.horizontal(|ui| {
@@ -66,9 +67,9 @@ impl DemoScenes {
         });
         *selected = Some(sel);
 
-        let fill = ctx.style().visuals.extreme_bg_color;
+        let fill = ui.visuals().extreme_bg_color;
         let frame = egui::Frame::NONE.fill(fill);
-        egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
+        egui::CentralPanel::default().frame(frame).show(ui, |ui| {
             scenes[selected.unwrap_or(0)].ui(ui, settings, *selected != selected_before);
         });
     }
