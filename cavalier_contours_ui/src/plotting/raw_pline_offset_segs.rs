@@ -47,6 +47,10 @@ impl<'a> RawPlineOffsetSegsPlotItem<'a> {
 }
 
 impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "lyon drawing types use f32"
+    )]
     fn shapes(
         &self,
         _ui: &egui::Ui,
@@ -96,14 +100,14 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
                 let (r, c) = seg_arc_radius_and_center(seg.v1, seg.v2);
 
                 let radius = (scaling * r) as f32;
-                let sweep_angle = angle_from_bulge(seg.v1.bulge);
+                let sweep_angle = angle_from_bulge(seg.v1.bulge) as f32;
 
                 builder.arc(
                     lyon_point(c, transform),
                     lyon::path::math::vector(radius, radius),
                     lyon::geom::Angle {
                         // negate the sweep angle because y axis is flipped
-                        radians: -sweep_angle as f32,
+                        radians: -sweep_angle,
                     },
                     lyon::geom::Angle { radians: 0.0 },
                 );

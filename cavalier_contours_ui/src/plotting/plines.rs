@@ -163,6 +163,10 @@ impl<T> PlotItem for PlinesPlotItem<T>
 where
     T: PlinesPlotData,
 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "lyon drawing types use f32"
+    )]
     fn shapes(&self, _ui: &egui::Ui, transform: &PlotTransform, shapes: &mut Vec<egui::Shape>) {
         if !plot_bounds_valid(transform.bounds()) {
             return;
@@ -201,14 +205,14 @@ where
                         let (r, c) = seg_arc_radius_and_center(v1, v2);
 
                         let radius = (scaling * r) as f32;
-                        let sweep_angle = angle_from_bulge(v1.bulge);
+                        let sweep_angle = angle_from_bulge(v1.bulge) as f32;
 
                         builder.arc(
                             lyon_point(c, transform),
                             lyon::path::math::vector(radius, radius),
                             lyon::geom::Angle {
                                 // negate the sweep angle because y axis is flipped
-                                radians: -sweep_angle as f32,
+                                radians: -sweep_angle,
                             },
                             lyon::geom::Angle { radians: 0.0 },
                         );
