@@ -290,8 +290,9 @@ fn plot_area(
                         .map(|v| plot_ui.screen_from_plot(PlotPoint::new(v.x, v.y)))
                         .enumerate()
                     {
-                        let hit_size =
-                            2.0 * (plot_ui.ctx().input(|i| i.aim_radius()) + PLOT_VERTEX_RADIUS);
+                        let hit_size = 2.0
+                            * (plot_ui.ctx().input(egui::InputState::aim_radius)
+                                + PLOT_VERTEX_RADIUS);
 
                         let hit_box = Rect::from_center_size(pt, Vec2::splat(hit_size));
 

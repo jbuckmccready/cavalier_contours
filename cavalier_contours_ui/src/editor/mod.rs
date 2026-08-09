@@ -147,14 +147,14 @@ impl PolylineEditor {
     pub fn vertex_count(&self, polyline_index: usize) -> usize {
         self.pending_state
             .get(polyline_index)
-            .map_or(0, |p| p.vertex_count())
+            .map_or(0, PlineSource::vertex_count)
     }
 
     /// Get the is_closed state for a specific polyline
     pub fn get_is_closed(&self, polyline_index: usize) -> bool {
         self.pending_state
             .get(polyline_index)
-            .is_some_and(|p| p.is_closed())
+            .is_some_and(PlineSource::is_closed)
     }
 
     /// Apply all pending table changes to the provided polylines
