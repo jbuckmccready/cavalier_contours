@@ -117,6 +117,7 @@ impl PolylineEditor {
     }
 
     /// Check if there are any pending changes in the table editor
+    #[must_use]
     pub fn has_pending_table_changes(&self, polylines: &[Polyline]) -> bool {
         for (pl1, pl2) in polylines.iter().zip(self.pending_state.iter()) {
             if pl1.is_closed() != pl2.is_closed()
@@ -134,11 +135,13 @@ impl PolylineEditor {
     }
 
     /// Check if there are any pending changes in the JSON editor
+    #[must_use]
     pub fn has_pending_json_changes(&self) -> bool {
         self.current_json != self.pending_json
     }
 
     /// Get the current number of polylines being edited
+    #[must_use]
     pub fn polyline_count(&self) -> usize {
         self.pending_state.len()
     }
@@ -168,6 +171,7 @@ impl PolylineEditor {
     // ===== Constructor methods =====
 
     /// Creates a polyline editor configured for editing a single polyline
+    #[must_use]
     pub fn single(title: &str) -> Self {
         Self::new(PolylineEditorConfig {
             window_title: title.to_string(),
@@ -179,6 +183,7 @@ impl PolylineEditor {
     }
 
     /// Creates a polyline editor configured for editing two polylines side-by-side
+    #[must_use]
     pub fn dual(title: &str) -> Self {
         Self::new(PolylineEditorConfig {
             window_title: title.to_string(),
@@ -193,6 +198,7 @@ impl PolylineEditor {
     }
 
     /// Creates a polyline editor configured for editing multiple polylines with accordion layout
+    #[must_use]
     pub fn multi(title: &str) -> Self {
         Self::new(PolylineEditorConfig {
             window_title: title.to_string(),
@@ -220,6 +226,7 @@ impl PolylineEditor {
         self.show_window = true;
     }
 
+    #[must_use]
     pub fn is_window_open(&self) -> bool {
         self.show_window
     }

@@ -28,14 +28,17 @@ impl<T> ProcessForBooleanResult<T>
 where
     T: Real,
 {
+    #[must_use]
     pub fn completely_overlapping(&self) -> bool {
         self.overlapping_slices.len() == 1 && self.overlapping_slices[0].is_loop
     }
 
+    #[must_use]
     pub fn opposing_directions(&self) -> bool {
         self.pline1_orientation != self.pline2_orientation
     }
 
+    #[must_use]
     pub fn any_intersects(&self) -> bool {
         !self.intersects.is_empty() || !self.overlapping_slices.is_empty()
     }
@@ -531,6 +534,7 @@ pub struct OrAndStitchSelector {
 }
 
 impl OrAndStitchSelector {
+    #[must_use]
     pub fn new(
         start_of_pline2_slices: usize,
         start_of_pline1_overlapping_slices: usize,
@@ -543,6 +547,7 @@ impl OrAndStitchSelector {
         }
     }
 
+    #[must_use]
     pub fn from_pruned_slices<T>(pruned_slices: &PrunedSlices<T>) -> Self {
         Self::new(
             pruned_slices.start_of_pline2_slices,
@@ -596,6 +601,7 @@ pub struct NotXorStitchSelector {
 }
 
 impl NotXorStitchSelector {
+    #[must_use]
     pub fn new(
         start_of_pline2_slices: usize,
         start_of_pline1_overlapping_slices: usize,
@@ -608,6 +614,7 @@ impl NotXorStitchSelector {
         }
     }
 
+    #[must_use]
     pub fn from_pruned_slices<T>(pruned_slices: &PrunedSlices<T>) -> Self {
         Self::new(
             pruned_slices.start_of_pline2_slices,

@@ -70,6 +70,7 @@ where
     T: Real,
 {
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             aabb_index: None,
@@ -123,6 +124,7 @@ where
     T: Real,
 {
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             pline1_aabb_index: None,
@@ -222,6 +224,7 @@ where
     P: PlineCreation,
 {
     #[inline]
+    #[must_use]
     pub fn new(
         pos_plines: Vec<BooleanResultPline<P>>,
         neg_plines: Vec<BooleanResultPline<P>>,
@@ -235,6 +238,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn empty(result_info: BooleanResultInfo) -> Self {
         Self::new(Vec::new(), Vec::new(), result_info)
     }
@@ -283,6 +287,7 @@ where
     T: Real,
 {
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             pline1_aabb_index: None,
@@ -334,6 +339,7 @@ where
     T: Real,
 {
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             aabb_index: None,
@@ -369,6 +375,7 @@ where
     T: Real,
 {
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             pline1_aabb_index: None,
@@ -588,6 +595,7 @@ pub struct PlineIntersectsCollection<T = f64> {
 
 impl<T> PlineIntersectsCollection<T> {
     #[inline]
+    #[must_use]
     pub fn new(
         basic_intersects: Vec<PlineBasicIntersect<T>>,
         overlapping_intersects: Vec<PlineOverlappingIntersect<T>>,
@@ -599,6 +607,7 @@ impl<T> PlineIntersectsCollection<T> {
     }
 
     #[inline]
+    #[must_use]
     pub fn new_empty() -> Self {
         Self::new(Vec::new(), Vec::new())
     }

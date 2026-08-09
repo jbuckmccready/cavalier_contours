@@ -54,6 +54,7 @@ where
 ///     unreachable!("expected tangent intersect");
 /// }
 ///```
+#[must_use]
 pub fn line_circle_intr<T>(
     p0: Vector2<T>,
     p1: Vector2<T>,

@@ -20,6 +20,7 @@ use std::{fmt::Display, ops};
 /// let length = v1.length();
 /// let normalized = v1.normalize();
 /// ```
+#[must_use]
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct Vector2<T = f64> {
     /// The x-coordinate component.
@@ -61,24 +62,28 @@ where
 
     /// Dot product.
     #[inline]
+    #[must_use]
     pub fn dot(&self, other: Self) -> T {
         self.x * other.x + self.y * other.y
     }
 
     /// Compute the perpendicular dot product (`self.x * other.y - self.y * other.x`).
     #[inline]
+    #[must_use]
     pub fn perp_dot(&self, other: Self) -> T {
         self.x * other.y - self.y * other.x
     }
 
     /// Squared length of the vector.
     #[inline]
+    #[must_use]
     pub fn length_squared(&self) -> T {
         self.dot(*self)
     }
 
     /// Length of the vector.
     #[inline]
+    #[must_use]
     pub fn length(&self) -> T {
         self.dot(*self).sqrt()
     }
@@ -107,12 +112,14 @@ where
 
     /// Fuzzy equal comparison with another vector using `fuzzy_epsilon` given.
     #[inline]
+    #[must_use]
     pub fn fuzzy_eq_eps(&self, other: Self, fuzzy_epsilon: T) -> bool {
         self.x.fuzzy_eq_eps(other.x, fuzzy_epsilon) && self.y.fuzzy_eq_eps(other.y, fuzzy_epsilon)
     }
 
     /// Fuzzy equal comparison with another vector using `T::fuzzy_epsilon()`.
     #[inline]
+    #[must_use]
     pub fn fuzzy_eq(&self, other: Self) -> bool {
         self.fuzzy_eq_eps(other, T::fuzzy_epsilon())
     }

@@ -12,31 +12,37 @@ pub trait Real:
     + 'static
 {
     #[inline]
+    #[must_use]
     fn pi() -> Self {
         Self::from(std::f64::consts::PI).unwrap()
     }
 
     #[inline]
+    #[must_use]
     fn tau() -> Self {
         Self::from(std::f64::consts::TAU).unwrap()
     }
 
     #[inline]
+    #[must_use]
     fn two() -> Self {
         Self::one() + Self::one()
     }
 
     #[inline]
+    #[must_use]
     fn four() -> Self {
         Self::two() + Self::two()
     }
 
     #[inline]
+    #[must_use]
     fn min_value() -> Self {
         num_traits::real::Real::min_value()
     }
 
     #[inline]
+    #[must_use]
     fn max_value() -> Self {
         num_traits::real::Real::max_value()
     }

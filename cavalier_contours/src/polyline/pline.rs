@@ -46,6 +46,7 @@ where
 {
     /// Create a new empty [Polyline] with `is_closed` set to false.
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Polyline {
             vertex_data: Vec::new(),
@@ -56,6 +57,7 @@ where
 
     /// Create a new empty [Polyline] with `is_closed` set to true.
     #[inline]
+    #[must_use]
     pub fn new_closed() -> Self {
         Polyline {
             vertex_data: Vec::new(),
@@ -65,6 +67,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn get_userdata_count(&self) -> usize {
         self.userdata.len()
     }

@@ -54,6 +54,7 @@ where
 ///     unreachable!("expected a tangent intersection");
 /// }
 ///```
+#[must_use]
 pub fn circle_circle_intr<T>(
     radius1: T,
     center1: Vector2<T>,

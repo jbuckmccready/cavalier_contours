@@ -87,6 +87,7 @@ where
 ///```
 /// Line segments are defined by `v1->v2` and `u1->u2`.
 /// Handles the cases where the lines may be parallel, collinear, or single points.
+#[must_use]
 pub fn line_line_intr<T>(
     v1: Vector2<T>,
     v2: Vector2<T>,

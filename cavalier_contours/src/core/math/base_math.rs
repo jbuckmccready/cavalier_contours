@@ -12,6 +12,7 @@ use crate::core::traits::Real;
 /// assert_eq!(max_val, 8);
 /// ```
 #[inline]
+#[must_use]
 pub fn min_max<T>(v1: T, v2: T) -> (T, T)
 where
     T: PartialOrd,
@@ -36,6 +37,7 @@ where
 /// assert!(normalize_radians(2.0 * PI).fuzzy_eq(2.0 * PI));
 /// ```
 #[inline]
+#[must_use]
 pub fn normalize_radians<T>(angle: T) -> T
 where
     T: Real,
@@ -67,6 +69,7 @@ where
 /// assert!(delta_angle(0.25 * PI, 0.5 * PI).fuzzy_eq(0.25 * PI));
 /// ```
 #[inline]
+#[must_use]
 pub fn delta_angle<T>(angle1: T, angle2: T) -> T
 where
     T: Real,
@@ -87,6 +90,7 @@ where
 /// be considered positive or negative ([`delta_angle`] always returns positive).
 ///
 #[inline]
+#[must_use]
 pub fn delta_angle_signed<T>(angle1: T, angle2: T, negative: bool) -> T
 where
     T: Real,
@@ -113,6 +117,7 @@ where
 /// assert!(angle_is_between_eps(0.0, PI, PI / 2.0, 1e-5));
 /// ```
 #[inline]
+#[must_use]
 pub fn angle_is_between_eps<T>(test_angle: T, start_angle: T, end_angle: T, epsilon: T) -> bool
 where
     T: Real,
@@ -128,6 +133,7 @@ where
 /// Default epsilon is [`fuzzy_epsilon`](crate::core::traits::FuzzyEq::fuzzy_epsilon)
 /// from [`FuzzyEq`](crate::core::traits::FuzzyEq) trait.
 #[inline]
+#[must_use]
 pub fn angle_is_between<T>(test_angle: T, start_angle: T, end_angle: T) -> bool
 where
     T: Real,
@@ -140,6 +146,7 @@ where
 /// If `sweep_angle` is positive then sweep is counter clockwise, otherwise it is clockwise.
 /// `epsilon` controls the fuzzy inclusion.
 #[inline]
+#[must_use]
 pub fn angle_is_within_sweep_eps<T>(
     test_angle: T,
     start_angle: T,
@@ -162,6 +169,7 @@ where
 /// Default epsilon is [`fuzzy_epsilon`](crate::core::traits::FuzzyEq::fuzzy_epsilon)
 /// from [`FuzzyEq`](crate::core::traits::FuzzyEq) trait.
 #[inline]
+#[must_use]
 pub fn angle_is_within_sweep<T>(test_angle: T, start_angle: T, sweep_angle: T) -> bool
 where
     T: Real,
@@ -177,6 +185,7 @@ where
 /// The purpose of this function is to minimize error in the process of finding solutions
 /// to the quadratic equation.
 #[inline]
+#[must_use]
 pub fn quadratic_solutions<T>(a: T, b: T, c: T, sqrt_discriminant: T) -> (T, T)
 where
     T: Real,
@@ -204,6 +213,7 @@ where
 
 /// Distance squared between the points `p0` and `p1`.
 #[inline]
+#[must_use]
 pub fn dist_squared<T>(p0: Vector2<T>, p1: Vector2<T>) -> T
 where
     T: Real,
@@ -214,6 +224,7 @@ where
 
 /// Angle of the direction vector described by `p0` to `p1`.
 #[inline]
+#[must_use]
 pub fn angle<T>(p0: Vector2<T>, p1: Vector2<T>) -> T
 where
     T: Real,
@@ -254,6 +265,7 @@ where
 /// Note this function assumes the `point` is on the line and properly handles the cases of vertical
 /// and horizontal lines by using the component with the largest difference in the calculation.
 #[inline]
+#[must_use]
 pub fn parametric_from_point<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>, epsilon: T) -> T
 where
     T: Real,
@@ -327,6 +339,7 @@ where
 /// assert!(!is_left(p0, p1, Vector2::new(1.0, 0.0)));
 /// ```
 #[inline]
+#[must_use]
 pub fn is_left<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
     T: Real,
@@ -336,6 +349,7 @@ where
 
 /// Same as [`is_left`] but uses <= operator rather than < for boundary inclusion.
 #[inline]
+#[must_use]
 pub fn is_left_or_equal<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
     T: Real,
@@ -350,6 +364,7 @@ where
 ///
 /// `epsilon` controls the fuzzy compare.
 #[inline]
+#[must_use]
 pub fn is_left_or_coincident_eps<T>(
     p0: Vector2<T>,
     p1: Vector2<T>,
@@ -368,6 +383,7 @@ where
 /// Default epsilon is [`fuzzy_epsilon`](crate::core::traits::FuzzyEq::fuzzy_epsilon)
 /// from [`FuzzyEq`](crate::core::traits::FuzzyEq) trait.
 #[inline]
+#[must_use]
 pub fn is_left_or_coincident<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
     T: Real,
@@ -382,6 +398,7 @@ where
 ///
 /// `epsilon` controls the fuzzy compare.
 #[inline]
+#[must_use]
 pub fn is_right_or_coincident_eps<T>(
     p0: Vector2<T>,
     p1: Vector2<T>,
@@ -400,6 +417,7 @@ where
 /// Default epsilon is [`fuzzy_epsilon`](crate::core::traits::FuzzyEq::fuzzy_epsilon)
 /// from [`FuzzyEq`](crate::core::traits::FuzzyEq) trait.
 #[inline]
+#[must_use]
 pub fn is_right_or_coincident<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> bool
 where
     T: Real,
@@ -434,6 +452,7 @@ where
 /// );
 /// ```
 #[inline]
+#[must_use]
 pub fn point_within_arc_sweep<T>(
     center: Vector2<T>,
     arc_start: Vector2<T>,
@@ -459,6 +478,7 @@ where
 /// By definition `bulge = tan(arc_sweep_angle / 4)`.
 /// Note if `angle` is negative then bulge returned will be negative (clockwise arc).
 #[inline]
+#[must_use]
 pub fn bulge_from_angle<T>(angle: T) -> T
 where
     T: Real,
@@ -471,6 +491,7 @@ where
 /// By definition `arc_sweep_angle = 4 * atan(bulge)`.
 /// Note if `bulge` is negative then angle returned will be negative (clockwise arc).
 #[inline]
+#[must_use]
 pub fn angle_from_bulge<T>(bulge: T) -> T
 where
     T: Real,

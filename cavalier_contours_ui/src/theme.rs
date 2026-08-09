@@ -10,6 +10,7 @@ pub enum Theme {
 }
 
 impl Theme {
+    #[must_use]
     pub fn label(&self) -> &'static str {
         match self {
             Theme::Light => "☀ Light",
@@ -27,6 +28,7 @@ impl Theme {
         }
     }
 
+    #[must_use]
     pub fn to_egui_visuals(&self, ctx: &egui::Context) -> egui::Visuals {
         match self {
             Theme::Light => egui::Visuals::light(),
@@ -41,6 +43,7 @@ impl Theme {
         }
     }
 
+    #[must_use]
     pub fn colors(&self, ctx: &egui::Context) -> ThemeColors {
         match self {
             Theme::Light => ThemeColors::light(),
@@ -159,6 +162,7 @@ impl ThemeColors {
     }
 
     /// Get a color from the multi-color palette by index
+    #[must_use]
     pub fn get_multi_color(&self, index: usize) -> Color32 {
         self.multi_colors[index % self.multi_colors.len()]
     }

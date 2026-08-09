@@ -2189,6 +2189,7 @@ pub trait PlineCreation: PlineSourceMut + Sized {
 
     /// Create empty polyline with `is_closed` set to false.
     #[inline]
+    #[must_use]
     fn empty() -> Self {
         Self::with_capacity(0, false)
     }
@@ -2383,6 +2384,7 @@ pub struct PlineSegIndexIterator {
 
 impl PlineSegIndexIterator {
     #[inline]
+    #[must_use]
     pub fn new(vertex_count: usize, is_closed: bool) -> PlineSegIndexIterator {
         let remaining = if vertex_count < 2 {
             0

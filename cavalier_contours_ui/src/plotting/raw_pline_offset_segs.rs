@@ -23,6 +23,7 @@ pub struct RawPlineOffsetSegsPlotItem<'a> {
 }
 
 impl<'a> RawPlineOffsetSegsPlotItem<'a> {
+    #[must_use]
     pub fn new(segs: &'a [RawPlineOffsetSeg<f64>]) -> Self {
         Self {
             segs,
@@ -32,11 +33,13 @@ impl<'a> RawPlineOffsetSegsPlotItem<'a> {
         }
     }
 
+    #[must_use]
     pub fn color(mut self, color: epaint::Color32) -> Self {
         self.color = color;
         self
     }
 
+    #[must_use]
     pub fn collapsed_color(mut self, color: epaint::Color32) -> Self {
         self.collapsed_color = color;
         self

@@ -66,6 +66,7 @@ impl<T> IndexedPolyline<T>
 where
     T: Real,
 {
+    #[must_use]
     pub fn new(polyline: Polyline<T>) -> Self {
         let spatial_index = polyline.create_approx_aabb_index();
         Self {
@@ -124,6 +125,7 @@ where
     T: Real,
 {
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             pos_equal_eps: T::from(1e-5).unwrap(),
@@ -191,6 +193,7 @@ where
 
     /// Return an empty shape (0 polylines).
     #[inline]
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             ccw_plines: Vec::new(),

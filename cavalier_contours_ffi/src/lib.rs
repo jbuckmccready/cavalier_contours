@@ -40,10 +40,12 @@ pub struct cavc_point {
 }
 
 impl cavc_point {
+    #[must_use]
     pub fn new(x: f64, y: f64) -> Self {
         cavc_point { x, y }
     }
 
+    #[must_use]
     pub fn from_internal(v: Vector2<f64>) -> Self {
         cavc_point::new(v.x, v.y)
     }
@@ -59,10 +61,12 @@ pub struct cavc_vertex {
 }
 
 impl cavc_vertex {
+    #[must_use]
     pub fn new(x: f64, y: f64, bulge: f64) -> Self {
         cavc_vertex { x, y, bulge }
     }
 
+    #[must_use]
     pub fn from_internal(v: PlineVertex<f64>) -> Self {
         cavc_vertex::new(v.x, v.y, v.bulge)
     }
@@ -92,6 +96,7 @@ impl cavc_pline_parallel_offset_o {
     /// # Safety
     ///
     /// `aabb_index` field must be null or a valid pointer to a [`cavc_aabbindex`].
+    #[must_use]
     pub unsafe fn to_internal(&self) -> PlineOffsetOptions<'_, f64> {
         let aabb_index = unsafe { self.aabb_index.as_ref().map(|w| &w.0) };
         PlineOffsetOptions {
@@ -199,6 +204,7 @@ impl cavc_pline_boolean_o {
     /// # Safety
     ///
     /// `pline1_aabb_index` field must be null or a valid pointer to a [`cavc_aabbindex`].
+    #[must_use]
     pub unsafe fn to_internal(&self) -> PlineBooleanOptions<'_, f64> {
         let pline1_aabb_index = unsafe { self.pline1_aabb_index.as_ref().map(|w| &w.0) };
         PlineBooleanOptions {
@@ -320,6 +326,7 @@ impl cavc_pline_self_intersect_o {
     /// # Safety
     ///
     /// `pline_aabb_index` field must be null or a valid pointer to a [`cavc_aabbindex`].
+    #[must_use]
     pub unsafe fn to_internal(&self) -> Option<PlineSelfIntersectOptions<'_, f64>> {
         let pline_aabb_index = unsafe { self.pline_aabb_index.as_ref().map(|w| &w.0) };
         let include_value = match self.include {
@@ -428,6 +435,7 @@ impl cavc_pline_contains_o {
     /// # Safety
     ///
     /// `pline1_aabb_index` field must be null or a valid pointer to a [`cavc_aabbindex`].
+    #[must_use]
     pub unsafe fn to_internal(&self) -> PlineContainsOptions<'_, f64> {
         let pline1_aabb_index = unsafe { self.pline1_aabb_index.as_ref().map(|w| &w.0) };
         PlineContainsOptions {
@@ -1934,6 +1942,7 @@ pub struct cavc_shape_offset_o {
 
 impl cavc_shape_offset_o {
     /// Convert FFI shape offset options type to internal type.
+    #[must_use]
     pub fn to_internal(&self) -> ShapeOffsetOptions<f64> {
         ShapeOffsetOptions {
             pos_equal_eps: self.pos_equal_eps,
