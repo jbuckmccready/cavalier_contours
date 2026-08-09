@@ -1827,16 +1827,16 @@ pub trait PlineSource {
                 // line segment
                 let pt = v1.pos() + (v2.pos() - v1.pos()).scale(t);
                 return Ok((i, pt));
-            } else {
-                // arc segment
-                let (radius, center) = seg_arc_radius_and_center(v1, v2);
-                let start_angle = angle(center, v1.pos());
-                let total_sweep_angle = angle_from_bulge(v1.bulge);
-                let target_angle = start_angle + total_sweep_angle * t;
-
-                let pt = point_on_circle(radius, center, target_angle);
-                return Ok((i, pt));
             }
+
+            // arc segment
+            let (radius, center) = seg_arc_radius_and_center(v1, v2);
+            let start_angle = angle(center, v1.pos());
+            let total_sweep_angle = angle_from_bulge(v1.bulge);
+            let target_angle = start_angle + total_sweep_angle * t;
+
+            let pt = point_on_circle(radius, center, target_angle);
+            return Ok((i, pt));
         }
 
         Err(acc_length)
