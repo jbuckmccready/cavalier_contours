@@ -1492,7 +1492,7 @@ pub unsafe extern "C" fn cavc_pline_scan_for_self_intersect(
             match options {
                 None => return 2, // invalid options were passed in.
                 Some(unpacked_options) => {
-                    computed_result = pline.scan_for_self_intersect_opt(unpacked_options)
+                    computed_result = pline.scan_for_self_intersect_opt(unpacked_options);
                 }
             }
         };

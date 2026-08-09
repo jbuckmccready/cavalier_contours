@@ -233,7 +233,7 @@ fn controls_panel(
                     data.insert_temp(
                         last_others_width_id,
                         ui.min_rect().width() - this_target_width,
-                    )
+                    );
                 });
             })
         });

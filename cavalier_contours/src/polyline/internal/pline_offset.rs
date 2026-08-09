@@ -253,7 +253,7 @@ fn line_arc_join<T, O>(
                     intersect.y,
                     bulge_from_angle(theta),
                     pos_equal_eps,
-                )
+                );
             } else {
                 result.add_or_replace(intersect.x, intersect.y, u1.bulge, pos_equal_eps);
             }

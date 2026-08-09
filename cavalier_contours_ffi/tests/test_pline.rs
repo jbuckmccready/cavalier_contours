@@ -201,7 +201,7 @@ fn pline_invert_direction() {
         assert_eq!(v.y, 0.0);
         assert_eq!(v.bulge, -1.0);
 
-        cavc_pline_f(pline)
+        cavc_pline_f(pline);
     }
 }
 
@@ -222,7 +222,7 @@ fn pline_scale() {
         assert_eq!(v.y, 0.0);
         assert_eq!(v.bulge, 1.0);
 
-        cavc_pline_f(pline)
+        cavc_pline_f(pline);
     }
 }
 
@@ -243,7 +243,7 @@ fn pline_translate() {
         assert_eq!(v.y, 1.0);
         assert_eq!(v.bulge, 1.0);
 
-        cavc_pline_f(pline)
+        cavc_pline_f(pline);
     }
 }
 
@@ -269,7 +269,7 @@ fn pline_remove_repeat_pos() {
             assert_eq!(v.y, 0.0);
             assert_eq!(v.bulge, 1.0);
 
-            cavc_pline_f(pline)
+            cavc_pline_f(pline);
         }
     }
 
@@ -289,7 +289,7 @@ fn pline_remove_repeat_pos() {
             assert_eq!(v.y, 0.0);
             assert_eq!(v.bulge, 1.0);
 
-            cavc_pline_f(pline)
+            cavc_pline_f(pline);
         }
     }
 }
@@ -316,7 +316,7 @@ fn pline_remove_redundant() {
             assert_eq!(v.y, 0.0);
             assert_eq!(v.bulge, 1.0);
 
-            cavc_pline_f(pline)
+            cavc_pline_f(pline);
         }
     }
 
@@ -340,7 +340,7 @@ fn pline_remove_redundant() {
             assert_fuzzy_eq!(v.y, 0.0);
             assert_fuzzy_eq!(v.bulge, 1.0);
 
-            cavc_pline_f(pline)
+            cavc_pline_f(pline);
         }
     }
 }

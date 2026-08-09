@@ -1885,7 +1885,7 @@ pub trait PlineSourceMut: PlineSource {
     /// vertex structure.
     #[inline]
     fn set(&mut self, index: usize, x: Self::Num, y: Self::Num, bulge: Self::Num) {
-        self.set_vertex(index, PlineVertex::new(x, y, bulge))
+        self.set_vertex(index, PlineVertex::new(x, y, bulge));
     }
 
     /// Set the last vertex of the polyline.
@@ -1988,7 +1988,7 @@ pub trait PlineSourceMut: PlineSource {
     {
         self.reserve(other.vertex_count());
         for v in other.iter_vertexes() {
-            self.add_or_replace_vertex(v, pos_equal_eps)
+            self.add_or_replace_vertex(v, pos_equal_eps);
         }
     }
 

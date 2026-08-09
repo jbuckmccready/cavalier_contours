@@ -745,9 +745,9 @@ where
 
     let stitch_slice_onto = |s: &BooleanPlineSlice<T>, target: &mut O| {
         if s.source_is_pline1 {
-            target.extend_remove_repeat(&s.view(source_pline1), pos_equal_eps)
+            target.extend_remove_repeat(&s.view(source_pline1), pos_equal_eps);
         } else {
-            target.extend_remove_repeat(&s.view(source_pline2), pos_equal_eps)
+            target.extend_remove_repeat(&s.view(source_pline2), pos_equal_eps);
         }
     };
 

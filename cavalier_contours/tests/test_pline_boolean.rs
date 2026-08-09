@@ -240,7 +240,7 @@ impl ModifiedPlineSetVisitor for SameBooleanTestVisitor<'_> {
                     &pline_state,
                     &pline_state2,
                     self.input_properties,
-                )
+                );
             });
     }
 }
@@ -330,7 +330,7 @@ fn verify_slice_set(
 
     let stitch_slice_onto = |s: &BooleanPlineSlice, target: &mut Polyline| {
         let source = if s.source_is_pline1 { pline1 } else { pline2 };
-        target.extend_remove_repeat(&s.view(source), PlineProperties::POS_EQ_EPS)
+        target.extend_remove_repeat(&s.view(source), PlineProperties::POS_EQ_EPS);
     };
 
     let first_slice = &result_pline.subslices[0];

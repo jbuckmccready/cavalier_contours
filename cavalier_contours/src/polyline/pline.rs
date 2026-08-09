@@ -172,7 +172,7 @@ where
 
     #[inline]
     fn add_vertex(&mut self, vertex: PlineVertex<Self::Num>) {
-        self.vertex_data.push(vertex)
+        self.vertex_data.push(vertex);
     }
 
     #[inline]
@@ -187,7 +187,7 @@ where
 
     #[inline]
     fn clear(&mut self) {
-        self.vertex_data.clear()
+        self.vertex_data.clear();
     }
 
     #[inline]

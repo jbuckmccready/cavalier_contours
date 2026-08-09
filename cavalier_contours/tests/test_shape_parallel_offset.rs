@@ -21,7 +21,7 @@ where
     assert!(
         property_sets_match(&result_properties, expected_properties_set),
         "result property sets do not match"
-    )
+    );
 }
 
 macro_rules! declare_offset_tests {
