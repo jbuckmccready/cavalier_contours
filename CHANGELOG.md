@@ -4,12 +4,28 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ## Unreleased
 
+### Changed 🔧
+
+- ⚠️ BREAKING: Changed C FFI container counts, lengths, capacities, and indexes from `uint32_t` to
+  `size_t` and updated the generated header accordingly.
+- Added `#[must_use]` to public functions and types, which may affect users of `-D warnings`.
+
 ### Fixed 🐛
 
 - Improved `parallel_offset` robustness for repeat-position/degenerate input by sanitizing repeat
   vertices in release builds and guarding offset vector normalization against near-zero vectors.
 - Fixed C FFI shape API documentation to reference `shape` parameters and `cavc_shape_create`
   instead of their polyline counterparts.
+- Fixed the UI polyline editor failing to detect pending changes when polylines were added or
+  removed.
+
+### Internal
+
+- Enabled workspace-wide Clippy pedantic lints and fixed the reported warnings.
+- Refactored boolean slice pruning to use explicit pruning modes, grouped slice boundaries, and a
+  separate intersection lookup helper.
+- Added a checked-in `cbindgen` configuration for C header generation.
+- Updated the GitHub Actions checkout and Rust toolchain actions.
 
 ## 0.7.0 - 2026-01-02
 
