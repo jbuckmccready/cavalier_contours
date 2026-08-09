@@ -2010,7 +2010,7 @@ pub unsafe extern "C" fn cavc_shape_create(
             let count: usize = (*plinelist).0.len();
             let mut v: Vec<Polyline<f64>> = Vec::with_capacity(count);
 
-            for pline in (*plinelist).0.iter() {
+            for pline in &(*plinelist).0 {
                 v.push((**pline).0.clone());
             }
 

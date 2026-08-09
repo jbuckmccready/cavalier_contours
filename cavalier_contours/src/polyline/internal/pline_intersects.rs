@@ -474,7 +474,7 @@ where
     // remove any duplicate points caused by end point intersects + overlapping
     let mut final_basic_intrs = Vec::with_capacity(result.basic_intersects.len());
 
-    for intr in result.basic_intersects.iter() {
+    for intr in &result.basic_intersects {
         if possible_duplicates1.contains(&intr.start_index1) {
             let start_pt1 = pline1.at(intr.start_index1).pos();
             if intr.point.fuzzy_eq_eps(start_pt1, pos_equal_eps) {

@@ -380,7 +380,7 @@ fn plot_area(
                     overlapping_slices,
                 } => {
                     intrs = intersects;
-                    for (view_data, _) in overlapping_slices.iter() {
+                    for (view_data, _) in &overlapping_slices {
                         plines.push(Polyline::create_from(&view_data.view(pline1)));
                     }
 
@@ -415,11 +415,11 @@ fn plot_area(
                     pline1_slices,
                     pline2_slices,
                 } => {
-                    for slice in pline1_slices.iter() {
+                    for slice in &pline1_slices {
                         let slice_view = slice.view(pline1);
                         plines.push(Polyline::create_from(&slice_view));
                     }
-                    for slice in pline2_slices.iter() {
+                    for slice in &pline2_slices {
                         let slice_view = slice.view(pline2);
                         plines.push(Polyline::create_from(&slice_view));
                     }
@@ -445,7 +445,7 @@ fn plot_area(
                     start_of_pline1_overlapping_slices,
                     start_of_pline2_overlapping_slices,
                 } => {
-                    for slice in pruned_slices.iter() {
+                    for slice in &pruned_slices {
                         let slice_view = if slice.source_is_pline1 {
                             slice.view(pline1)
                         } else {

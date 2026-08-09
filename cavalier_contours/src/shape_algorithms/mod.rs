@@ -166,7 +166,7 @@ where
             let mut b = StaticAABB2DIndexBuilder::new(ccw_plines.len() + cw_plines.len());
 
             let mut add_all_bounds = |plines: &[IndexedPolyline<T>]| {
-                for pline in plines.iter() {
+                for pline in plines {
                     let bounds = pline
                         .spatial_index
                         .bounds()
@@ -258,7 +258,7 @@ where
         let mut cw_offset_loops = Vec::new();
         let mut parent_idx = 0;
 
-        for pline in self.ccw_plines.iter() {
+        for pline in &self.ccw_plines {
             for offset_pline in pline.parallel_offset_for_shape(offset, options) {
                 let area = offset_pline.area();
                 // check if orientation inverted (due to collapse of very narrow or small input)
@@ -281,7 +281,7 @@ where
             parent_idx += 1;
         }
 
-        for pline in self.cw_plines.iter() {
+        for pline in &self.cw_plines {
             for offset_pline in pline.parallel_offset_for_shape(offset, options) {
                 let area = offset_pline.area();
                 // check if orientation inverted (due to collapse of very narrow or small input)
@@ -309,7 +309,7 @@ where
                 StaticAABB2DIndexBuilder::new(ccw_offset_loops.len() + cw_offset_loops.len());
 
             let mut add_all_bounds = |loops: &[OffsetLoop<T>]| {
-                for l in loops.iter() {
+                for l in loops {
                     let bounds = l
                         .indexed_pline
                         .spatial_index
@@ -753,7 +753,7 @@ where
 
         let slice_starts_aabb_index = {
             let mut builder = StaticAABB2DIndexBuilder::new(slices_data.len());
-            for slice in slices_data.iter() {
+            for slice in &slices_data {
                 let start_point = slice.v_data.updated_start.pos();
                 builder.add(
                     start_point.x - slice_join_eps,
@@ -848,7 +848,7 @@ where
                 StaticAABB2DIndexBuilder::new(ccw_plines_result.len() + cw_plines_result.len());
 
             let mut add_all_bounds = |plines: &[IndexedPolyline<T>]| {
-                for pline in plines.iter() {
+                for pline in plines {
                     let bounds = pline
                         .spatial_index
                         .bounds()

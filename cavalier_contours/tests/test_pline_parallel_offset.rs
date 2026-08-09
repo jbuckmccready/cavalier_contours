@@ -18,7 +18,7 @@ fn offset_into_properties_set(
         ..Default::default()
     };
     let offset_results = polyline.parallel_offset_opt(offset, &options);
-    for r in offset_results.iter() {
+    for r in &offset_results {
         assert!(
             r.remove_repeat_pos(PlineProperties::POS_EQ_EPS).is_none(),
             "offset result should not have repeat positioned vertexes",

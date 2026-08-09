@@ -315,7 +315,7 @@ fn plot_area(
             // TODO: color pickers
             match &scene_state {
                 SceneState::Offset { all_offset_plines } => {
-                    for (pl, same_orientation) in all_offset_plines.iter() {
+                    for (pl, same_orientation) in all_offset_plines {
                         let color = if *same_orientation {
                             colors.primary_stroke
                         } else {
@@ -390,7 +390,7 @@ fn build_offset(
         }
 
         // repeat offset for same orientation ones
-        for pl in same_orientation.iter() {
+        for pl in &same_orientation {
             offset_plines.extend(pl.parallel_offset_opt(*offset, &offset_opt));
         }
 

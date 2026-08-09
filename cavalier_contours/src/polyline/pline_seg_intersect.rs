@@ -329,7 +329,7 @@ where
             let mut end_point_intrs: [Option<Vector2<T>>; 2] = [None; 2];
             // helper function to collect end point intersects
             let mut try_add_end_point_intr = |intr: Vector2<T>| {
-                for slot in end_point_intrs.iter_mut() {
+                for slot in &mut end_point_intrs {
                     match slot {
                         Some(pt) => {
                             if pt.fuzzy_eq_eps(intr, pos_equal_eps) {

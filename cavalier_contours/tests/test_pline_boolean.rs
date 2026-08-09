@@ -30,7 +30,7 @@ fn run_same_boolean_test(
 ) {
     use cavalier_contours::polyline::BooleanOp::*;
     // test same polyline
-    for &op in [Or, And].iter() {
+    for &op in &[Or, And] {
         let result = self1.boolean(self2, op);
         assert!(matches!(result.result_info, BooleanResultInfo::Overlapping));
         let mut passed = result.pos_plines.len() == 1 && result.neg_plines.is_empty();
@@ -49,7 +49,7 @@ fn run_same_boolean_test(
         );
     }
 
-    for &op in [Not, Xor].iter() {
+    for &op in &[Not, Xor] {
         let result = self1.boolean(self2, op);
         assert!(matches!(result.result_info, BooleanResultInfo::Overlapping));
         let passed = result.pos_plines.is_empty() && result.neg_plines.is_empty();

@@ -130,14 +130,14 @@ pub fn slice_at_intersects<P, T, F>(
 
     if use_second_index {
         // using start_index2 from intersects
-        for intr in boolean_info.intersects.iter() {
+        for intr in &boolean_info.intersects {
             intersects_lookup
                 .entry(intr.start_index2)
                 .or_default()
                 .push(SlicePoint::new(intr.point, false));
         }
 
-        for overlapping_slice in boolean_info.overlapping_slices.iter() {
+        for overlapping_slice in &boolean_info.overlapping_slices {
             let sp = overlapping_slice.view_data.updated_start.pos();
             let ep = overlapping_slice.view_data.end_point;
             let mut sp_idx = overlapping_slice.start_indexes.1;
@@ -155,14 +155,14 @@ pub fn slice_at_intersects<P, T, F>(
         }
     } else {
         // use start_index1 from intersects
-        for intr in boolean_info.intersects.iter() {
+        for intr in &boolean_info.intersects {
             intersects_lookup
                 .entry(intr.start_index1)
                 .or_default()
                 .push(SlicePoint::new(intr.point, false));
         }
 
-        for overlapping_slice in boolean_info.overlapping_slices.iter() {
+        for overlapping_slice in &boolean_info.overlapping_slices {
             let sp = overlapping_slice.view_data.updated_start.pos();
             let ep = overlapping_slice.view_data.end_point;
             let mut sp_idx = overlapping_slice.start_indexes.0;
@@ -185,7 +185,7 @@ pub fn slice_at_intersects<P, T, F>(
     }
 
     // sort intersects by distance from segment start vertex
-    for (&i, intr_list) in intersects_lookup.iter_mut() {
+    for (&i, intr_list) in &mut intersects_lookup {
         let start_pos = pline.at(i).pos();
         intr_list.sort_unstable_by(|intr1, intr2| {
             let dist1 = dist_squared(intr1.pos, start_pos);
@@ -194,7 +194,7 @@ pub fn slice_at_intersects<P, T, F>(
         });
     }
 
-    for (&start_index, intrs_list) in intersects_lookup.iter() {
+    for (&start_index, intrs_list) in &intersects_lookup {
         let next_index = pline.next_wrapping_index(start_index);
         let start_vertex = pline.at(start_index);
         let end_vertex = pline.at(next_index);
@@ -694,7 +694,7 @@ where
     let aabb_index = {
         let mut builder = StaticAABB2DIndexBuilder::new(slices.len());
 
-        for slice in slices.iter() {
+        for slice in slices {
             let pt = if slice.view_data.inverted_direction {
                 slice.view_data.end_point
             } else {
@@ -828,7 +828,7 @@ where
     composite_userdata.extend(source_pline1.get_userdata_values());
     composite_userdata.extend(source_pline2.get_userdata_values());
 
-    for result_item in result.iter_mut() {
+    for result_item in &mut result {
         result_item
             .pline
             .set_userdata_values(composite_userdata.iter().copied());

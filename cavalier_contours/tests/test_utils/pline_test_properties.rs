@@ -120,7 +120,7 @@ where
 
 pub fn userdata_sets_match(actual: &[u64], expected: &[u64]) -> bool {
     let mut sets_match = true;
-    for datum in expected.iter() {
+    for datum in expected {
         if (!actual.contains(datum)) {
             sets_match = false;
             break;

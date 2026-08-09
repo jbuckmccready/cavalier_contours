@@ -333,7 +333,7 @@ fn plot_area(
                         .vertex_color(colors.vertex_color),
                 );
 
-                for shape in offset_shapes.iter() {
+                for shape in offset_shapes {
                     plot_ui.add(PlinesPlotItem::new(shape).stroke_color(colors.primary_stroke));
                 }
             }

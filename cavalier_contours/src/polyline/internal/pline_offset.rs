@@ -754,7 +754,7 @@ where
     }
 
     // sort intersects by distance from segment start vertex
-    for (&i, intr_list) in intersects_lookup.iter_mut() {
+    for (&i, intr_list) in &mut intersects_lookup {
         let start_pos = raw_offset_polyline.at(i).pos();
         intr_list.sort_unstable_by(|&si1, &si2| {
             let dist1 = dist_squared(si1, start_pos);
@@ -870,7 +870,7 @@ where
         point_valid_dist(slice.end_point, query_stack)
     };
 
-    for (&start_index, intr_list) in intersects_lookup.iter() {
+    for (&start_index, intr_list) in &intersects_lookup {
         let mut intr_list_iter = intr_list.windows(2);
         while let Some(&[intr1, intr2]) = intr_list_iter.next() {
             let slice = PlineViewData::from_slice_points(
@@ -1088,14 +1088,14 @@ where
     }
 
     // add all self intersects
-    for &si in self_intrs.iter() {
+    for &si in &self_intrs {
         add_intr(si.start_index1, si.point);
         add_intr(si.start_index2, si.point);
     }
 
     // only add intersects with start_index1 from dual intersects (corresponds to the the raw offset
     // polyline)
-    for &intr in dual_intrs.basic_intersects.iter() {
+    for &intr in &dual_intrs.basic_intersects {
         add_intr(intr.start_index1, intr.point);
     }
     // Note not adding any overlapping intersects (they can only arise due to collapsing regions)
@@ -1123,7 +1123,7 @@ where
     }
 
     // sort intersects by distance from segment start vertex
-    for (&i, intr_list) in intersects_lookup.iter_mut() {
+    for (&i, intr_list) in &mut intersects_lookup {
         let start_pos = raw_offset_polyline.at(i).pos();
         intr_list.sort_unstable_by(|&si1, &si2| {
             let dist1 = dist_squared(si1, start_pos);
@@ -1260,7 +1260,7 @@ where
         }
     }
 
-    for (&start_index, intr_list) in intersects_lookup.iter() {
+    for (&start_index, intr_list) in &intersects_lookup {
         let mut intr_list_iter = intr_list.windows(2);
         while let Some(&[intr1, intr2]) = intr_list_iter.next() {
             let slice = PlineViewData::from_slice_points(
@@ -1562,7 +1562,7 @@ where
         "bug: result should never have repeat position vertexes"
     );
 
-    for cursor in result.iter_mut() {
+    for cursor in &mut result {
         cursor.set_userdata_values(polyline.get_userdata_values());
     }
 
