@@ -119,6 +119,10 @@ impl PolylineEditor {
     /// Check if there are any pending changes in the table editor
     #[must_use]
     pub fn has_pending_table_changes(&self, polylines: &[Polyline]) -> bool {
+        if polylines.len() != self.pending_state.len() {
+            return true;
+        }
+
         for (pl1, pl2) in polylines.iter().zip(self.pending_state.iter()) {
             if pl1.is_closed() != pl2.is_closed()
                 || pl1.vertex_count() != pl2.vertex_count()
@@ -722,5 +726,25 @@ impl PolylineEditor {
                 serde_json::to_string_pretty(&combined).unwrap_or_default()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_pending_polyline_count_changes() {
+        let polylines = vec![Polyline::new()];
+        let mut editor = PolylineEditor::multi("test");
+        editor.initialize_with_polylines(polylines.clone());
+
+        assert!(!editor.has_pending_table_changes(&polylines));
+
+        editor.pending_state.push(Polyline::new());
+        assert!(editor.has_pending_table_changes(&polylines));
+
+        editor.pending_state.clear();
+        assert!(editor.has_pending_table_changes(&polylines));
     }
 }
