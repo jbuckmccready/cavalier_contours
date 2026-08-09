@@ -100,6 +100,7 @@ where
 
     /// Create a copy of the vertex with new bulge value but same `x` and `y` values.
     #[inline]
+    #[must_use]
     pub fn with_bulge(&self, bulge: T) -> Self {
         PlineVertex::new(self.x, self.y, bulge)
     }

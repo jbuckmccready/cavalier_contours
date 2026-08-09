@@ -140,16 +140,19 @@ impl<T> PlinesPlotItem<T> {
         }
     }
 
+    #[must_use]
     pub fn vertex_color(mut self, color: epaint::Color32) -> Self {
         self.vertex_color = color;
         self
     }
 
+    #[must_use]
     pub fn stroke_color(mut self, color: epaint::Color32) -> Self {
         self.stroke_color = color;
         self
     }
 
+    #[must_use]
     pub fn fill_color(mut self, color: epaint::Color32) -> Self {
         self.fill_color = color;
         self

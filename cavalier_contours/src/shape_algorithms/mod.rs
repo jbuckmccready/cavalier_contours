@@ -202,6 +202,7 @@ where
         }
     }
 
+    #[must_use]
     pub fn parallel_offset(&self, offset: T, options: ShapeOffsetOptions<T>) -> Self {
         let (ccw_offset_loops, cw_offset_loops, offset_loops_index) =
             self.create_offset_loops_with_index(offset, &options);
@@ -739,6 +740,7 @@ where
     ///
     /// This method is made public for visualization and testing purposes, allowing the stitching
     /// process to be observed and the final assembly logic to be independently tested.
+    #[must_use]
     pub fn stitch_slices_together(
         &self,
         slices_data: Vec<DissectedSlice<T>>,
