@@ -1788,8 +1788,9 @@ pub trait PlineSource {
     /// polyline's total path length. Where `seg_index` is the index of the segment the point lies
     /// on, e.g. if point is on the second segment of the polyline then `seg_index = 1`.
     ///
-    /// Returns `Err((total_path_length))` if `target_path_length` is greater than total path
-    /// length of the polyline.
+    /// # Errors
+    ///
+    /// Returns the total path length if `target_path_length` exceeds it.
     ///
     /// # Examples
     ///
