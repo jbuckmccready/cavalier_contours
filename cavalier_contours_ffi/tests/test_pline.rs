@@ -13,7 +13,7 @@ fn create_pline(vertexes: &[(f64, f64, f64)], is_closed: bool) -> *mut cavc_plin
         cavc_pline_create(
             buffer.as_ptr(),
             buffer.len() as u32,
-            if is_closed { 1 } else { 0 },
+            u8::from(is_closed),
             &mut result,
         )
     };
