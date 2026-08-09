@@ -1067,7 +1067,7 @@ mod find_intersects_tests {
         pline2.add(-1.0, -1.0, 0.0);
         pline2.add(0.0, 0.0, 0.0);
 
-        let intrs = find_intersects(&pline1, &pline2, &Default::default());
+        let intrs = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         assert_eq!(intrs.basic_intersects.len(), 1);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
@@ -1086,7 +1086,7 @@ mod find_intersects_tests {
         pline2.add(0.0, 0.0, 0.0);
         pline2.add(1.0, 1.0, 0.0);
 
-        let intrs = find_intersects(&pline1, &pline2, &Default::default());
+        let intrs = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         assert_eq!(intrs.basic_intersects.len(), 1);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
@@ -1106,7 +1106,7 @@ mod find_intersects_tests {
         pline2.add(0.0, 0.0, 0.0);
         pline2.add(-1.0, -1.0, 0.0);
 
-        let intrs = find_intersects(&pline1, &pline2, &Default::default());
+        let intrs = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         assert_eq!(intrs.basic_intersects.len(), 1);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
@@ -1126,7 +1126,7 @@ mod find_intersects_tests {
         pline2.add(1.0, 0.0, 1.0);
         pline2.add(2.0, 0.0, 1.0);
 
-        let intrs = find_intersects(&pline1, &pline2, &Default::default());
+        let intrs = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         assert_eq!(intrs.basic_intersects.len(), 1);
         assert_eq!(intrs.overlapping_intersects.len(), 0);
@@ -1145,7 +1145,7 @@ mod find_intersects_tests {
 
         let pline2 = pline1.clone();
 
-        let mut intrs = find_intersects(&pline1, &pline2, &Default::default());
+        let mut intrs = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 2);
@@ -1178,7 +1178,7 @@ mod find_intersects_tests {
         pline2.add(0.0, 0.0, -1.0);
         pline2.add(1.0, 0.0, -1.0);
 
-        let mut intrs = find_intersects(&pline1, &pline2, &Default::default());
+        let mut intrs = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 2);
@@ -1211,7 +1211,7 @@ mod find_intersects_tests {
         pline2.add(0.0, 0.0, 1.0);
         pline2.add(1.0, 0.0, 1.0);
 
-        let mut intrs = find_intersects(&pline1, &pline2, &Default::default());
+        let mut intrs = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         assert_eq!(intrs.basic_intersects.len(), 0);
         assert_eq!(intrs.overlapping_intersects.len(), 2);
@@ -1275,7 +1275,7 @@ mod sort_and_join_overlapping_intersects_tests {
         pline2.add(0.0, 0.0, 1.0);
         pline2.add(1.0, 0.0, 1.0);
 
-        let mut intersects = find_intersects(&pline1, &pline2, &Default::default());
+        let mut intersects = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         let slices = sort_and_join_overlapping_intersects(
             &mut intersects.overlapping_intersects,
@@ -1306,7 +1306,7 @@ mod sort_and_join_overlapping_intersects_tests {
         pline2.add(1.0, 0.0, 1.0);
         pline2.add(0.0, 0.0, 1.0);
 
-        let mut intersects = find_intersects(&pline1, &pline2, &Default::default());
+        let mut intersects = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         let slices = sort_and_join_overlapping_intersects(
             &mut intersects.overlapping_intersects,
@@ -1337,7 +1337,7 @@ mod sort_and_join_overlapping_intersects_tests {
         pline2.add(0.0, 0.0, -1.0);
         pline2.add(1.0, 0.0, -1.0);
 
-        let mut intersects = find_intersects(&pline1, &pline2, &Default::default());
+        let mut intersects = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         let slices = sort_and_join_overlapping_intersects(
             &mut intersects.overlapping_intersects,
@@ -1368,7 +1368,7 @@ mod sort_and_join_overlapping_intersects_tests {
         pline2.add(0.5, -0.5, 1.0);
         pline2.add(0.5, 0.5, 1.0);
 
-        let mut intersects = find_intersects(&pline1, &pline2, &Default::default());
+        let mut intersects = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         let slices = sort_and_join_overlapping_intersects(
             &mut intersects.overlapping_intersects,
@@ -1409,7 +1409,7 @@ mod sort_and_join_overlapping_intersects_tests {
         pline2.add(-radius, 0.0, 1.0);
         pline2.add(radius, 0.0, 0.0);
 
-        let mut intersects = find_intersects(&pline1, &pline2, &Default::default());
+        let mut intersects = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         let slices = sort_and_join_overlapping_intersects(
             &mut intersects.overlapping_intersects,
@@ -1453,7 +1453,7 @@ mod sort_and_join_overlapping_intersects_tests {
 
         let pline2 = Polyline::from_iter(vertexes, true);
 
-        let mut intersects = find_intersects(&pline1, &pline2, &Default::default());
+        let mut intersects = find_intersects(&pline1, &pline2, &FindIntersectsOptions::default());
 
         let slices = sort_and_join_overlapping_intersects(
             &mut intersects.overlapping_intersects,

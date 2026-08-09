@@ -27,7 +27,7 @@ impl MainApp {
             return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
         }
 
-        Default::default()
+        MainApp::default()
     }
 }
 

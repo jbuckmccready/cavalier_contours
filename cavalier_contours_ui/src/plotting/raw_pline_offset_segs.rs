@@ -124,7 +124,7 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
         let mesh = epaint::Mesh {
             vertices: lyon_mesh.vertices,
             indices: lyon_mesh.indices,
-            texture_id: Default::default(),
+            texture_id: epaint::TextureId::default(),
         };
 
         shapes.push(egui::Shape::mesh(Arc::new(mesh)));

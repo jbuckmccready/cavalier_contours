@@ -177,7 +177,7 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset_o_init(
         }
 
         unsafe {
-            options.write(Default::default());
+            options.write(cavc_pline_parallel_offset_o::default());
         }
         0
     })
@@ -280,7 +280,7 @@ pub unsafe extern "C" fn cavc_pline_boolean_o_init(options: *mut cavc_pline_bool
         }
 
         unsafe {
-            options.write(Default::default());
+            options.write(cavc_pline_boolean_o::default());
         }
         0
     })
@@ -408,7 +408,7 @@ pub unsafe extern "C" fn cavc_pline_self_intersect_o_init(
         }
 
         unsafe {
-            options.write(Default::default());
+            options.write(cavc_pline_self_intersect_o::default());
         }
         0
     })
@@ -503,7 +503,7 @@ pub unsafe extern "C" fn cavc_pline_contains_o_init(options: *mut cavc_pline_con
         }
 
         unsafe {
-            options.write(Default::default());
+            options.write(cavc_pline_contains_o::default());
         }
         0
     })
@@ -1971,7 +1971,7 @@ pub unsafe extern "C" fn cavc_shape_offset_o_init(options: *mut cavc_shape_offse
         }
 
         unsafe {
-            options.write(Default::default());
+            options.write(cavc_shape_offset_o::default());
         }
         0
     })

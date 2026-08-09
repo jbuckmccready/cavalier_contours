@@ -1,6 +1,9 @@
 mod test_utils;
 
-use cavalier_contours::{polyline::Polyline, shape_algorithms::Shape};
+use cavalier_contours::{
+    polyline::Polyline,
+    shape_algorithms::{Shape, ShapeOffsetOptions},
+};
 use test_utils::{PlineProperties, create_property_set};
 
 use crate::test_utils::property_sets_match;
@@ -10,7 +13,7 @@ where
     I: IntoIterator<Item = Polyline>,
 {
     let s = Shape::from_plines(input);
-    let result = s.parallel_offset(offset, Default::default());
+    let result = s.parallel_offset(offset, ShapeOffsetOptions::default());
     let plines = result
         .ccw_plines
         .iter()

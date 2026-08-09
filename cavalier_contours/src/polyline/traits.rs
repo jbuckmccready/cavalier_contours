@@ -1352,7 +1352,7 @@ pub trait PlineSource {
         C: ControlFlow,
         V: PlineIntersectVisitor<Self::Num, C>,
     {
-        self.visit_self_intersects_opt(visitor, &Default::default())
+        self.visit_self_intersects_opt(visitor, &PlineSelfIntersectOptions::default())
     }
 
     /// Visit self intersects of the polyline using options provided.
@@ -1413,7 +1413,7 @@ pub trait PlineSource {
         V: TwoPlinesIntersectVisitor<Self::Num, C>,
         C: ControlFlow,
     {
-        self.visit_intersects_opt(other, visitor, &Default::default());
+        self.visit_intersects_opt(other, visitor, &FindIntersectsOptions::default());
     }
 
     /// Visit all intersects between two polylines using the options provided.
@@ -1458,7 +1458,7 @@ pub trait PlineSource {
     /// ```
     #[inline]
     fn scan_for_self_intersect(&self) -> bool {
-        self.scan_for_self_intersect_opt(&Default::default())
+        self.scan_for_self_intersect_opt(&PlineSelfIntersectOptions::default())
     }
 
     /// Scan for self intersects using options provided.
@@ -1504,7 +1504,7 @@ pub trait PlineSource {
     where
         P: PlineSource<Num = Self::Num> + ?Sized,
     {
-        self.find_intersects_opt(other, &Default::default())
+        self.find_intersects_opt(other, &FindIntersectsOptions::default())
     }
 
     /// Find all intersects between two polylines using the options provided.
@@ -1552,7 +1552,7 @@ pub trait PlineSource {
     /// assert!(offset_pline[1].fuzzy_eq(PlineVertex::new(0.8, 0.0, 1.0)));
     /// ```
     fn parallel_offset(&self, offset: Self::Num) -> Vec<Self::OutputPolyline> {
-        self.parallel_offset_opt(offset, &Default::default())
+        self.parallel_offset_opt(offset, &PlineOffsetOptions::default())
     }
 
     /// Compute the parallel offset polylines of the polyline with options given.
@@ -1629,7 +1629,7 @@ pub trait PlineSource {
     where
         P: PlineSource<Num = Self::Num> + ?Sized,
     {
-        self.boolean_opt(other, operation, &Default::default())
+        self.boolean_opt(other, operation, &PlineBooleanOptions::default())
     }
 
     /// Perform a boolean `operation` between this polyline and another with options provided.
@@ -1718,7 +1718,7 @@ pub trait PlineSource {
     where
         P: PlineSource<Num = Self::Num> + ?Sized,
     {
-        self.contains_opt(other, &Default::default())
+        self.contains_opt(other, &PlineContainsOptions::default())
     }
 
     /// Determine if this polyline fully contains another with options provided.
