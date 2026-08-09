@@ -1,3 +1,8 @@
+#![allow(
+    clippy::float_cmp,
+    reason = "exact float comparisons are intentional in this example"
+)]
+
 use cavalier_contours::polyline::{PlineSource, PlineSourceMut, Polyline};
 
 fn main() {

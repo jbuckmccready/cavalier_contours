@@ -1,3 +1,8 @@
+#![allow(
+    clippy::float_cmp,
+    reason = "exact float comparisons are intentional in these tests"
+)]
+
 use cavalier_contours::{
     assert_fuzzy_eq,
     core::{
