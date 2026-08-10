@@ -38,7 +38,7 @@ where
 {
     let process_line_seg = |v1: PlineVertex<T>, v2: PlineVertex<T>| -> RawPlineOffsetSeg<T> {
         let line_v = v2.pos() - v1.pos();
-        let offset_v = line_v.safe_unit_perp().scale(offset);
+        let offset_v = line_v.unit_perp().scale(offset);
         RawPlineOffsetSeg {
             v1: PlineVertex::from_vector2(v1.pos() + offset_v, T::zero()),
             v2: PlineVertex::from_vector2(v2.pos() + offset_v, T::zero()),
@@ -51,8 +51,8 @@ where
         let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
         let offs = if v1.bulge_is_neg() { offset } else { -offset };
         let radius_after_offset = arc_radius + offs;
-        let v1_to_center = (v1.pos() - arc_center).safe_normalize();
-        let v2_to_center = (v2.pos() - arc_center).safe_normalize();
+        let v1_to_center = (v1.pos() - arc_center).normalize();
+        let v2_to_center = (v2.pos() - arc_center).normalize();
 
         let (new_v1_bulge, collapsed_arc) = if radius_after_offset.fuzzy_lt(T::zero()) {
             // collapsed arc, offset arc start and end points towards arc center and turn into line

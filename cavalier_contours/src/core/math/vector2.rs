@@ -94,22 +94,6 @@ where
         self.scale(T::one() / self.length())
     }
 
-    /// Normalize the vector unless it is too small to do so robustly.
-    ///
-    /// Returns a zero vector when `length_squared <= fuzzy_epsilon^2`.
-    ///
-    /// This guards geometry algorithms against degenerate segments (for example, repeated input
-    /// points during parallel offset) where `normalize()` can produce unstable results.
-    #[inline]
-    pub fn safe_normalize(&self) -> Self {
-        let eps = T::fuzzy_epsilon();
-        if self.length_squared() <= eps * eps {
-            Vector2::zero()
-        } else {
-            self.normalize()
-        }
-    }
-
     /// Fuzzy equal comparison with another vector using `fuzzy_epsilon` given.
     #[inline]
     #[must_use]
@@ -134,15 +118,6 @@ where
     #[inline]
     pub fn unit_perp(&self) -> Self {
         self.perp().normalize()
-    }
-
-    /// Create a perpendicular unit vector, or zero for near-zero inputs.
-    ///
-    /// Example breakdown case: offsetting a segment whose endpoints are effectively the same point.
-    /// A plain `unit_perp()` is unstable there, while this keeps the offset step finite.
-    #[inline]
-    pub fn safe_unit_perp(&self) -> Self {
-        self.perp().safe_normalize()
     }
 
     /// Rotate this point around an `origin` point by some `angle` in radians.
