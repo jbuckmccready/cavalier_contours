@@ -2,7 +2,7 @@
 authors = ["Buck McCready <jbuckmccready@gmail.com>"]
 categories = ["algorithms", "data-structures", "graphics", "mathematics"]
 edition = "2024"
-homepage = "https://wwww.cavaliercontours.dev"
+homepage = "https://www.cavaliercontours.dev"
 keywords = ["algorithm", "2d", "computational", "geometry", "spatial"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
