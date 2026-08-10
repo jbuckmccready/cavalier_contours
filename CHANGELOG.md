@@ -2,15 +2,20 @@
 
 All notable changes to the cavalier_contours crate will be documented in this file.
 
-## Unreleased
+## 0.8.0 - 2026-08-09
 
 ### Changed 🔧
 
-- ⚠️ BREAKING: Changed C FFI container counts, lengths, capacities, and indexes from `uint32_t` to
-  `size_t` and updated the generated header accordingly.
+- ⚠️ BREAKING: Normalized C FFI container counts, lengths, capacities, and indexes to `size_t`
+  from `uint32_t` or `uintptr_t`, and updated the generated header accordingly.
 - ⚠️ BREAKING: Changed `Shape::parallel_offset` to borrow `ShapeOffsetOptions` instead of taking it
   by value.
+- ⚠️ BREAKING: Changed `Shape::stitch_slices_together` to borrow a slice of `DissectedSlice` values
+  instead of taking a `Vec` by value.
+- Changed the public boolean slice pruning helpers under `polyline::internal` to use explicit pruning
+  modes, grouped slice boundaries, and a separate intersection lookup helper.
 - Added `#[must_use]` to public functions and types, which may affect users of `-D warnings`.
+- Updated `static_aabb2d_index` from 2.0 to 2.1.
 
 ### Fixed 🐛
 
@@ -19,8 +24,10 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - Fixed how position epsilon is applied to arc sweep checks so they behave consistently at different
   scales and small negative offsets are no longer dropped
   ([#82](https://github.com/jbuckmccready/cavalier_contours/issues/82)).
-- Improved `parallel_offset` robustness for repeat-position/degenerate input by sanitizing repeat
-  vertices in release builds and guarding offset vector normalization against near-zero vectors.
+- Improved `parallel_offset` robustness for repeat-position input by sanitizing repeat vertices
+  before offsetting.
+- Fixed collapsed near-vertex offset slices that could cause a debug panic
+  ([#83](https://github.com/jbuckmccready/cavalier_contours/pull/83)).
 - Fixed C FFI shape API documentation to reference `shape` parameters and `cavc_shape_create`
   instead of their polyline counterparts.
 - Fixed the UI polyline editor failing to detect pending changes when polylines were added or
@@ -31,8 +38,6 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - Updated the UI crate to Rust 1.95.0.
 - Updated the UI crate to `egui` 0.36.1 and matching support crates.
 - Enabled workspace-wide Clippy pedantic lints and fixed the reported warnings.
-- Refactored boolean slice pruning to use explicit pruning modes, grouped slice boundaries, and a
-  separate intersection lookup helper.
 - Added a checked-in `cbindgen` configuration for C header generation.
 - Updated the GitHub Actions checkout and Rust toolchain actions.
 
