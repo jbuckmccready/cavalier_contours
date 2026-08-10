@@ -517,6 +517,16 @@ mod test_past_failures {
                          (177.34193697590484, 2672.8004884239886, 0.0)], 81.0) =>
             [PlineProperties::new(2, 0.0, 26.59869314313687, 149.7575959931641, 2753.3410345904244, 176.35229795820428,  2753.7944426095614, vec![4])]
         }
+        near_tangent_line_arc_joins {
+            // The two line-circle intersects at each arc join must not collapse to one tangent
+            // intersect when their positions differ by more than the position epsilon.
+            (pline_open_userdata![[4], (28.4408, 11.7648, 0.0),
+                         (42.1788, -1.97424, 0.198723),
+                         (44.6542, -3.0, 0.0),
+                         (49.6542, -3.0, 0.0)], 1.0) =>
+            [PlineProperties::new(4, 0.0, 26.393274274152024, 29.147933544518214, -2.0,
+                                  49.6542, 12.471880016841876, vec![4])]
+        }
         closed_pline1 {
             (pline_closed_userdata![[4], (100.0, 100.0, -0.5),
                            (80.0, 90.0, 0.374794619217547),

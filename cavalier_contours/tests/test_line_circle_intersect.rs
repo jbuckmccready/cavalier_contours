@@ -128,3 +128,42 @@ fn tangent_at_start_point() {
     let result = line_circle_intr(p0, p1, radius, circle_center, 1e-5);
     assert_case_eq!(result, TangentIntersect { t0: 0.0 });
 }
+
+#[test]
+fn near_tangent_intersections_use_position_epsilon_at_different_radii() {
+    let p0 = Vector2::new(-1.0, 0.0);
+    let p1 = Vector2::new(1.0, 0.0);
+    let half_intersect_spacing = 5e-4f64;
+
+    for radius in [0.01, 1.0, 100.0] {
+        let center_y = (radius * radius - half_intersect_spacing * half_intersect_spacing).sqrt();
+        let result = line_circle_intr(p0, p1, radius, Vector2::new(0.0, center_y), 1e-5);
+        assert_case_eq!(
+            result,
+            TwoIntersects {
+                t0: 0.5 - half_intersect_spacing / 2.0,
+                t1: 0.5 + half_intersect_spacing / 2.0,
+            }
+        );
+    }
+}
+
+#[test]
+fn near_tangent_intersections_snap_when_positions_are_equal() {
+    let p0 = Vector2::new(-1.0, 0.0);
+    let p1 = Vector2::new(1.0, 0.0);
+    let half_intersect_spacing = 2e-6f64;
+
+    for radius in [0.01, 1.0, 100.0] {
+        let center_y = (radius * radius - half_intersect_spacing * half_intersect_spacing).sqrt();
+        let result = line_circle_intr(p0, p1, radius, Vector2::new(0.0, center_y), 1e-5);
+        assert_case_eq!(result, TangentIntersect { t0: 0.5 });
+    }
+}
+
+#[test]
+fn point_segment_uses_position_epsilon() {
+    let point = Vector2::new(0.0, 100.001);
+    let result = line_circle_intr(point, point, 100.0, Vector2::new(0.0, 0.0), 0.01);
+    assert_case_eq!(result, TangentIntersect { t0: 0.0 });
+}

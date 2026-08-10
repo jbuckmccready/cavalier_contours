@@ -31,10 +31,11 @@ where
 /// `P(t) = p0 + t * (p1 - p0)` for `t = 0` to `t = 1`. If `t < 0` or `t > 1` then intersect occurs
 /// only when extending the segment out past the points `p0` and `p1` given.
 /// If `t < 0` then the intersect is nearest to `p0`, if `t > 1.0` then the intersect is
-/// nearest to `p1`. Intersects are "sticky" and "snap" to tangent points using fuzzy comparisons,
-/// e.g. a segment very close to being tangent line will return a single intersect point.
+/// nearest to `p1`. Intersects are "sticky" and "snap" to tangent points using fuzzy comparisons.
+/// Two intersect points that are fuzzy equal are returned as one tangent intersect. A line outside
+/// the circle but within `epsilon` of its radius is also returned as a tangent intersect.
 ///
-/// `epsilon` is used for fuzzy float comparisons.
+/// `epsilon` is a positional tolerance used for fuzzy comparisons.
 ///
 /// # Examples
 ///
@@ -88,7 +89,7 @@ where
         // fuzziness
         let xh = (p0.x + p1.x) / T::two() - h;
         let yk = (p0.y + p1.y) / T::two() - k;
-        if (xh * xh + yk * yk).fuzzy_eq_eps(radius * radius, eps) {
+        if (xh * xh + yk * yk).sqrt().fuzzy_eq_eps(radius, eps) {
             return TangentIntersect { t0: T::zero() };
         }
 
@@ -143,21 +144,28 @@ where
     let x0 = -a * c / a2_b2 + h;
     let y0 = -b * c / a2_b2 + k;
 
-    if shortest_dist.fuzzy_eq_eps(radius, eps) {
+    if shortest_dist >= radius {
         let t = parametric_from_point(p0, p1, Vector2::new(x0, y0), eps);
         return TangentIntersect { t0: t };
     }
 
     let d = r2 - c2 / a2_b2;
-    // taking abs to avoid NaN in case of very very small negative number as input to sqrt
+    // Taking abs avoids NaN if round-off makes d slightly negative after shortest_dist compared
+    // less than radius above.
     let mult = (d / a2_b2).abs().sqrt();
 
-    let x_sol1 = x0 + b * mult;
-    let x_sol2 = x0 - b * mult;
-    let y_sol1 = y0 - a * mult;
-    let y_sol2 = y0 + a * mult;
-    let sol1 = parametric_from_point(p0, p1, Vector2::new(x_sol1, y_sol1), eps);
-    let sol2 = parametric_from_point(p0, p1, Vector2::new(x_sol2, y_sol2), eps);
+    let point1 = Vector2::new(x0 + b * mult, y0 - a * mult);
+    let point2 = Vector2::new(x0 - b * mult, y0 + a * mult);
+    // Apply the positional epsilon to the intersection positions. Avoiding comparing shortest_dist
+    // with the radius because that can merge points much farther apart than epsilon when the circle
+    // radius is large.
+    if point1.fuzzy_eq_eps(point2, eps) {
+        let t = parametric_from_point(p0, p1, Vector2::new(x0, y0), eps);
+        return TangentIntersect { t0: t };
+    }
+
+    let sol1 = parametric_from_point(p0, p1, point1, eps);
+    let sol2 = parametric_from_point(p0, p1, point2, eps);
     let (t0, t1) = min_max(sol1, sol2);
     TwoIntersects { t0, t1 }
 }
