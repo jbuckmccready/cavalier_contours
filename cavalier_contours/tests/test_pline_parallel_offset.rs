@@ -515,7 +515,7 @@ mod test_past_failures {
                          (177.34188421196347, 2672.8004877792832, 0.0),
                          (177.34191528862172, 2672.8004881589986, 0.0),
                          (177.34193697590484, 2672.8004884239886, 0.0)], 81.0) =>
-            [PlineProperties::new(2, 0.0, 26.59869314313687, 149.7575959931641, 2753.3410345904244, 176.35229795820428,  2753.7944426095614, vec![4])]
+            [PlineProperties::new(2, 0.0, 26.598592332972057, 149.7576202566804, 2753.3410351213056, 176.35224446582043, 2753.7944419559553, vec![4])]
         }
         near_tangent_line_arc_joins {
             // The two line-circle intersects at each arc join must not collapse to one tangent
@@ -654,6 +654,22 @@ mod test_past_failures {
                            (-0.2928932188134524, 15.707106781186548, 0.0),
                            (2.7071067811865475, 12.707106781186548, -0.6681786379192991)], 1.0) =>
             [PlineProperties::new(7, -64.3633792727984, 31.14604709099094, -3.0, 5.0, 4.0, 17.0, vec![])]
+        }
+        issue82_small_joining_arc {
+            // Regression test for issue #82: offset should not treat a point on the opposite side
+            // of a small joining arc's supporting circle as being within the arc sweep.
+            // Before the fix, offsetting by -0.005 returned no result.
+            // https://github.com/jbuckmccready/cavalier_contours/issues/82
+            (pline_open_userdata![[4], (28.7793, 24.1251, 0.0),
+                         (26.6719, 18.6144, 0.0),
+                         (27.4604, 13.6769, 0.157308),
+                         (28.4408, 11.7648, 0.0),
+                         (42.1788, -1.97424, 0.198723),
+                         (44.6542, -3.0, 0.0),
+                         (49.6542, -3.0, 0.0),
+                         (54.7638, -0.0499998, 0.0)], -0.005) =>
+            [PlineProperties::new(10, 0.0, 46.17509506225231, 26.6669, -3.005,
+                                  54.766299981736054, 24.126885959158443, vec![4])]
         }
     );
 }

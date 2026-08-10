@@ -430,7 +430,7 @@ where
 /// Arc is defined by `center`, `arc_start`, `arc_end`, and arc direction parameter `is_clockwise`.
 /// The angle region is defined as if the arc had infinite radius projected outward in a cone.
 ///
-/// `epsilon` is used for fuzzy comparing.
+/// `epsilon` is a positional tolerance used for fuzzy comparing against the sweep boundaries.
 ///
 /// # Examples
 /// ```
@@ -464,13 +464,37 @@ pub fn point_within_arc_sweep<T>(
 where
     T: Real,
 {
-    if is_clockwise {
-        is_right_or_coincident_eps(center, arc_start, point, epsilon)
-            && is_left_or_coincident_eps(center, arc_end, point, epsilon)
-    } else {
-        is_left_or_coincident_eps(center, arc_start, point, epsilon)
-            && is_right_or_coincident_eps(center, arc_end, point, epsilon)
+    debug_assert!(epsilon > T::zero());
+
+    // The center is the sweep region's apex, so include points within the position tolerance of it.
+    let point_vector = point - center;
+    if point_vector.length_squared() < epsilon * epsilon {
+        return true;
     }
+
+    // Construct the sweep boundary vectors and determine which side of each one the point lies on.
+    let start_vector = arc_start - center;
+    let end_vector = arc_end - center;
+    let start_cross = start_vector.perp_dot(point_vector);
+    let end_cross = end_vector.perp_dot(point_vector);
+
+    // First test the whole sweep region without tolerance.
+    let exactly_within_sweep = if is_clockwise {
+        start_cross <= T::zero() && end_cross >= T::zero()
+    } else {
+        start_cross >= T::zero() && end_cross <= T::zero()
+    };
+    if exactly_within_sweep {
+        return true;
+    }
+
+    // Then give fuzzy inclusion around each forward boundary ray. Scaling epsilon by the ray length
+    // makes the cross product comparison a position-based tolerance.
+    let fuzzy_on_ray = |ray: Vector2<T>, cross: T| {
+        ray.dot(point_vector) >= T::zero() && cross.abs() < epsilon * ray.length()
+    };
+
+    fuzzy_on_ray(start_vector, start_cross) || fuzzy_on_ray(end_vector, end_cross)
 }
 
 /// Returns the bulge for the given arc `sweep_angle`.
@@ -497,4 +521,29 @@ where
     T: Real,
 {
     T::four() * bulge.atan()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn small_arc_sweep_excludes_opposite_point_at_different_scales() {
+        let center = Vector2::new(27.4604, 13.6769);
+        let arc_start = Vector2::new(27.455462563050666, 13.676111510068951);
+        let arc_end = Vector2::new(27.45546524477275, 13.676094896995954);
+        let opposite_point = Vector2::new(27.465336109592272, 13.67769680169451);
+
+        for scale in [0.001, 1.0, 1000.0] {
+            let scale_point = |point: Vector2<f64>| center + (point - center).scale(scale);
+            assert!(!point_within_arc_sweep(
+                center,
+                scale_point(arc_start),
+                scale_point(arc_end),
+                false,
+                scale_point(opposite_point),
+                1e-5 * scale,
+            ));
+        }
+    }
 }
