@@ -116,6 +116,10 @@ typedef struct cavc_shape_offset_o {
   double slice_join_eps;
 } cavc_shape_offset_o;
 
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+
 /**
  * Create a new [`cavc_pline_parallel_offset_o`] object.
  *
@@ -1302,3 +1306,7 @@ int32_t cavc_shape_get_cw_pline_userdata_count(const struct cavc_shape *shape,
 int32_t cavc_shape_get_cw_pline_userdata_values(const struct cavc_shape *shape,
                                                 size_t polyline_index,
                                                 uint64_t *userdata_values);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif  // __cplusplus
