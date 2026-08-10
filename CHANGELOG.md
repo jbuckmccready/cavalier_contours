@@ -14,6 +14,11 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ### Fixed 🐛
 
+- Fixed how position epsilon is applied to line-circle intersections so distinct near-tangent
+  intersections are not merged.
+- Fixed how position epsilon is applied to arc sweep checks so they behave consistently at different
+  scales and small negative offsets are no longer dropped
+  ([#82](https://github.com/jbuckmccready/cavalier_contours/issues/82)).
 - Improved `parallel_offset` robustness for repeat-position/degenerate input by sanitizing repeat
   vertices in release builds and guarding offset vector normalization against near-zero vectors.
 - Fixed C FFI shape API documentation to reference `shape` parameters and `cavc_shape_create`
@@ -23,6 +28,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ### Internal
 
+- Updated the UI crate to Rust 1.95.0.
+- Updated the UI crate to `egui` 0.36.1 and matching support crates.
 - Enabled workspace-wide Clippy pedantic lints and fixed the reported warnings.
 - Refactored boolean slice pruning to use explicit pruning modes, grouped slice boundaries, and a
   separate intersection lookup helper.
