@@ -1542,10 +1542,10 @@ where
         return Vec::new();
     }
 
-    // In release builds we still sanitize repeat positions to prevent unstable/degenerate segments.
+    // Sanitize repeat positions to prevent unstable/degenerate segments.
     let mut result = if let Some(cleaned) = polyline.remove_repeat_pos(options.pos_equal_eps) {
         if cleaned.vertex_count() < 2 {
-            Vec::new()
+            Vec::<O>::new()
         } else {
             // user-provided aabb index is tied to the original polyline, rebuild for cleaned source
             parallel_offset_for_source(&cleaned, offset, options, false)
@@ -1554,15 +1554,8 @@ where
         parallel_offset_for_source(polyline, offset, options, true)
     };
 
-    debug_assert!(
-        result
-            .iter()
-            .all(|p: &O| p.remove_repeat_pos(options.pos_equal_eps).is_none()),
-        "bug: result should never have repeat position vertexes"
-    );
-
-    for cursor in &mut result {
-        cursor.set_userdata_values(polyline.get_userdata_values());
+    for pline in &mut result {
+        pline.set_userdata_values(polyline.get_userdata_values());
     }
 
     result
