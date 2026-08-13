@@ -30,6 +30,24 @@ fn point_and_circle() {
 }
 
 #[test]
+fn point_and_circle_with_quarter_arcs() {
+    let bulge = (std::f64::consts::PI / 8.0).tan();
+    let pl = pline_closed![
+        (1.0, 0.0, bulge),
+        (0.0, 1.0, bulge),
+        (-1.0, 0.0, bulge),
+        (0.0, -1.0, bulge),
+    ];
+
+    assert_eq!(pl.winding_number(Vector2::zero()), 1);
+    assert_eq!(pl.winding_number(Vector2::new(2.0, 0.25)), 0);
+
+    let mut pl = pl;
+    pl.invert_direction_mut();
+    assert_eq!(pl.winding_number(Vector2::zero()), -1);
+}
+
+#[test]
 fn point_and_rectangle() {
     let pl = pline_closed![
         (0.0, 0.0, 0.0),

@@ -6,7 +6,7 @@ use crate::{
     core::{
         Control,
         math::{
-            Vector2, angle, angle_from_bulge, bulge_from_angle, delta_angle, dist_squared, is_left,
+            Vector2, angle, angle_from_bulge, bulge_from_angle, delta_angle, is_left,
             is_left_or_equal, point_on_circle,
         },
         traits::{ControlFlow, FuzzyEq, FuzzyOrd, Real},
@@ -1121,7 +1121,7 @@ pub trait PlineSource {
                         result += 1;
                     }
                 } else if v2.y <= point.y && !is_left(v1.pos(), v2.pos(), point) {
-                    // right an downward crossing
+                    // right and downward crossing
                     result -= 1;
                 }
 
@@ -1138,10 +1138,22 @@ pub trait PlineSource {
                     is_left_or_equal(v1.pos(), v2.pos(), point)
                 };
 
-                let dist_to_arc_center_less_than_radius = || {
-                    let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-                    let dist2 = dist_squared(arc_center, point);
-                    dist2 < arc_radius * arc_radius
+                let point_inside_circle = || {
+                    // Compare against the supporting circle without computing its center or radius.
+                    // Scaling both sides by 16 * bulge² avoids a square root and division.
+                    let one = Self::Num::one();
+                    let two = Self::Num::two();
+                    let dx = v2.x - v1.x;
+                    let dy = v2.y - v1.y;
+                    let b = v1.bulge;
+                    let b2 = b * b;
+                    let offset = one - b2;
+                    let scale = two * b;
+                    let x = scale * (two * point.x - v1.x - v2.x) + dy * offset;
+                    let y = scale * (two * point.y - v1.y - v2.y) - dx * offset;
+                    let r = one + b2;
+
+                    x * x + y * y < (dx * dx + dy * dy) * r * r
                 };
 
                 let mut result = 0;
@@ -1155,13 +1167,13 @@ pub trait PlineSource {
                                 result += 1;
                             } else {
                                 // counter clockwise arc right of chord
-                                if dist_to_arc_center_less_than_radius() {
+                                if point_inside_circle() {
                                     result += 1;
                                 }
                             }
                         } else if point_is_left {
                             // clockwise arc left of chord
-                            if !dist_to_arc_center_less_than_radius() {
+                            if !point_inside_circle() {
                                 result += 1;
                             }
                             // else clockwise arc right of chord, no crossing
@@ -1172,14 +1184,14 @@ pub trait PlineSource {
                             && !point_is_left
                             && v2.x < point.x
                             && point.x < v1.x
-                            && dist_to_arc_center_less_than_radius()
+                            && point_inside_circle()
                         {
                             result += 1;
                         } else if !is_ccw
                             && point_is_left
                             && v1.x < point.x
                             && point.x < v2.x
-                            && dist_to_arc_center_less_than_radius()
+                            && point_inside_circle()
                         {
                             result -= 1;
                         }
@@ -1189,14 +1201,14 @@ pub trait PlineSource {
                     if is_ccw {
                         if !point_is_left {
                             // counter clockwise arc right of chord
-                            if !dist_to_arc_center_less_than_radius() {
+                            if !point_inside_circle() {
                                 result -= 1;
                             }
                         }
                     // else counter clockwise arc left of chord, no crossing
                     } else if point_is_left {
                         // clockwise arc left of chord
-                        if dist_to_arc_center_less_than_radius() {
+                        if point_inside_circle() {
                             result -= 1;
                         }
                     } else {
@@ -1209,14 +1221,14 @@ pub trait PlineSource {
                         && !point_is_left
                         && v1.x < point.x
                         && point.x < v2.x
-                        && dist_to_arc_center_less_than_radius()
+                        && point_inside_circle()
                     {
                         result += 1;
                     } else if !is_ccw
                         && point_is_left
                         && v2.x < point.x
                         && point.x < v1.x
-                        && dist_to_arc_center_less_than_radius()
+                        && point_inside_circle()
                     {
                         result -= 1;
                     }

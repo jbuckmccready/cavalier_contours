@@ -17,6 +17,7 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   candidates.
 - Reuse the AABB query stack when finding open-offset end-circle intersections (avoids small
   allocation).
+- Optimized arc winding-number checks to avoid calculating circle centers and radii.
 
 ### Internal
 
