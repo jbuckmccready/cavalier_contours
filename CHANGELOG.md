@@ -15,6 +15,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 - Improved parallel offset slice stitching by selecting the next candidate without sorting all
   candidates.
+- Reuse the AABB query stack when finding open-offset end-circle intersections (avoids small
+  allocation).
 
 ### Internal
 

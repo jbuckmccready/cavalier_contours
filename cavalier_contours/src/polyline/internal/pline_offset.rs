@@ -416,6 +416,7 @@ where
 fn visit_circle_intersects<P, T, F, V>(
     pline: &P,
     query: &CircleIntersectQuery<'_, T>,
+    query_stack: &mut Vec<usize>,
     filter: &F,
     visitor: &mut V,
 ) where
@@ -452,16 +453,9 @@ fn visit_circle_intersects<P, T, F, V>(
             )
     };
 
-    let query_results = aabb_index.query(
-        circle_center.x - circle_radius,
-        circle_center.y - circle_radius,
-        circle_center.x + circle_radius,
-        circle_center.y + circle_radius,
-    );
-
-    for item in query_results {
+    let mut query_visitor = |item: usize| {
         let Some(start_index) = filter(item) else {
-            continue;
+            return;
         };
         let v1 = pline.at(start_index);
         let v2 = pline.at(pline.next_wrapping_index(start_index));
@@ -513,7 +507,16 @@ fn visit_circle_intersects<P, T, F, V>(
                 }
             }
         }
-    }
+    };
+
+    aabb_index.visit_query_with_stack(
+        circle_center.x - circle_radius,
+        circle_center.y - circle_radius,
+        circle_center.x + circle_radius,
+        circle_center.y + circle_radius,
+        &mut query_visitor,
+        query_stack,
+    );
 }
 
 pub fn slices_from_dual_raw_offsets<P, R, T>(
@@ -615,6 +618,7 @@ where
     let mut add_intr = |start_index: usize, intr: Vector2<T>| {
         intersects_lookup.entry(start_index).or_default().push(intr);
     };
+    let mut query_stack = Vec::with_capacity(8);
 
     if !original_polyline.is_closed() {
         // add intersects between circles generated at original open polyline end points and raw
@@ -640,6 +644,7 @@ where
                 visit_circle_intersects(
                     raw_offset_polyline,
                     &query,
+                    &mut query_stack,
                     &include_segment,
                     &mut add_intr,
                 );
@@ -647,6 +652,7 @@ where
                 visit_circle_intersects(
                     raw_offset_polyline,
                     &query,
+                    &mut query_stack,
                     &Some,
                     &mut add_intr,
                 );
@@ -667,8 +673,6 @@ where
         add_intr(intr.start_index1, intr.point);
     }
     // Note not adding any overlapping intersects (they can only arise due to collapsing regions)
-
-    let mut query_stack = Vec::with_capacity(8);
 
     if intersects_lookup.is_empty() {
         if has_invalid {
