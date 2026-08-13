@@ -1022,15 +1022,13 @@ where
                 end_point.fuzzy_eq_eps(initial_start_point, pos_equal_eps)
             };
 
-            query_results.sort_unstable_by(|a, b| {
-                // sort by index distance then by end of slice connecting to initial start
-                // this ordering ensures overlapping slices are retained in stitching
+            let Some(next_index) = query_results.iter().copied().min_by(|a, b| {
+                // Choose by index distance, then by the end of the slice connecting to the initial
+                // start. This ordering ensures overlapping slices are retained in stitching.
                 get_index_dist(*a)
                     .cmp(&get_index_dist(*b))
                     .then_with(|| end_connects_to_start(*a).cmp(&end_connects_to_start(*b)))
-            });
-
-            if query_results.is_empty() {
+            }) else {
                 // done stitching current polyline
                 if current_pline.vertex_count() > 1 {
                     let current_pline_sp = current_pline.at(0).pos();
@@ -1044,12 +1042,12 @@ where
                     result.push(current_pline);
                 }
                 break;
-            }
+            };
 
             // else continue stitching
-            visited_indexes[query_results[0]] = true;
+            visited_indexes[next_index] = true;
             current_pline.remove_last();
-            current_index = query_results[0];
+            current_index = next_index;
         }
     }
 

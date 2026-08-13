@@ -11,6 +11,11 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   This fixes the "wifi leaking" pattern with repeated offsets reported
   ([#79](https://github.com/jbuckmccready/cavalier_contours/issues/79)).
 
+### Optimizations ⚡
+
+- Improved parallel offset slice stitching by selecting the next candidate without sorting all
+  candidates.
+
 ### Internal
 
 - Added Criterion benchmarks for polyline area and raw and final parallel offset creation.
