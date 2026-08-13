@@ -169,7 +169,6 @@ where
         return C::continuing();
     }
 
-    let mut visited_pairs = HashSet::with_capacity(vc);
     let mut query_stack = Vec::with_capacity(8);
 
     // iterate all segment bounding boxes in the spatial index querying itself to test for self
@@ -191,20 +190,17 @@ where
             else {
                 return aabb_index::Control::Continue;
             };
+            // Each pair is returned once from each segment's query. Process it only when the
+            // queried segment has the lower start index.
+            if hit_i <= i {
+                return aabb_index::Control::Continue;
+            }
+
             let hit_j = polyline.next_wrapping_index(hit_i);
             // skip local segments
-            if i == hit_i || i == hit_j || j == hit_i || j == hit_j {
+            if i == hit_j || j == hit_i {
                 return aabb_index::Control::Continue;
             }
-
-            // skip already visited pairs (reverse index pair order for lookup to work, e.g. we
-            // visit (1, 2) then (2, 1) and we only want to visit the segment pair once)
-            if visited_pairs.contains(&(hit_i, i)) {
-                return aabb_index::Control::Continue;
-            }
-            // add pair being visited
-            visited_pairs.insert((i, hit_i));
-
             let u1 = polyline.at(hit_i);
             let u2 = polyline.at(hit_j);
             let skip_intr_at_end = |intr: Vector2<T>| -> bool {
