@@ -2,8 +2,8 @@ use cavalier_contours::{
     pline_closed,
     polyline::{
         PlineOffsetOptions, PlineSource, PlineSourceMut, Polyline,
-        internal::pline_offset::{
-            RawPlineOffsetSeg, create_raw_offset_polyline, create_untrimmed_raw_offset_segs,
+        internal::raw_pline_offset::{
+            RawOffsetSeg, create_raw_offset, create_untrimmed_raw_offset_segs,
         },
     },
 };
@@ -12,7 +12,7 @@ use egui_plot::{Plot, PlotPoint};
 use std::borrow::Cow;
 
 use crate::editor::PolylineEditor;
-use crate::plotting::{PlinePlotData, PlinesPlotItem, RawPlineOffsetSegsPlotItem};
+use crate::plotting::{PlinePlotData, PlinesPlotItem, RawOffsetSegsPlotItem};
 use crate::theme::ThemeColors;
 
 use super::{
@@ -34,7 +34,9 @@ enum Mode {
         handle_self_intersects: bool,
         max_offset_count: usize,
     },
-    RawOffset,
+    RawOffset {
+        show_invalid_segments: bool,
+    },
     RawOffsetSegments,
 }
 
@@ -42,7 +44,7 @@ impl Mode {
     fn label(&self) -> &'static str {
         match self {
             Mode::Offset { .. } => "Offset",
-            Mode::RawOffset => "Raw Offset",
+            Mode::RawOffset { .. } => "Raw Offset",
             Mode::RawOffsetSegments => "Raw Offset Segments",
         }
     }
@@ -51,6 +53,12 @@ impl Mode {
         Mode::Offset {
             handle_self_intersects: true,
             max_offset_count: 10,
+        }
+    }
+
+    fn raw_offset_default() -> Self {
+        Mode::RawOffset {
+            show_invalid_segments: false,
         }
     }
 }
@@ -67,9 +75,10 @@ enum SceneState {
     },
     RawOffset {
         raw_offset_pline: Polyline,
+        invalid_segments: Vec<Polyline>,
     },
     RawOffsetSegments {
-        segments: Vec<RawPlineOffsetSeg<f64>>,
+        segments: Vec<RawOffsetSeg<f64>>,
     },
 }
 
@@ -154,7 +163,7 @@ fn controls_panel(
                         .selected_text(mode.label())
                         .show_ui(ui, |ui| {
                             ui.selectable_value(mode, Mode::offset_default(), Mode::offset_default().label()).on_hover_text("Generate parallel offsets");
-                            ui.selectable_value(mode, Mode::RawOffset, Mode::RawOffset.label()).on_hover_text("Generate single raw offset polyline");
+                            ui.selectable_value(mode, Mode::raw_offset_default(), Mode::raw_offset_default().label()).on_hover_text("Generate single raw offset polyline");
                             ui.selectable_value(mode, Mode::RawOffsetSegments, Mode::RawOffsetSegments.label()).on_hover_text("Generate the raw offset polyline segments");
                         });
                 });
@@ -178,6 +187,16 @@ fn controls_panel(
                         ui.label("Offset").on_hover_text("Parallel offset distance, positive value will offset to the left of curve direction");
                         ui.add(Slider::new(offset, -100.0..=100.0));
                     });
+
+                if let Mode::RawOffset {
+                    show_invalid_segments,
+                } = mode
+                {
+                    ui.checkbox(show_invalid_segments, "Show Invalid Segments")
+                        .on_hover_text(
+                            "Highlight all locally invalid raw offset segments",
+                        );
+                }
 
                 if let Mode::Offset {
                     handle_self_intersects,
@@ -247,7 +266,9 @@ fn plot_area(
             handle_self_intersects,
             max_offset_count,
         } => build_offset(pline, offset, *handle_self_intersects, *max_offset_count),
-        Mode::RawOffset => build_raw_offset(pline, offset),
+        Mode::RawOffset {
+            show_invalid_segments,
+        } => build_raw_offset(pline, offset, *show_invalid_segments),
         Mode::RawOffsetSegments => build_raw_offset_segments(pline, offset),
     };
 
@@ -327,15 +348,25 @@ fn plot_area(
                             .add(PlinesPlotItem::new(PlinePlotData::new(pl)).stroke_color(color));
                     }
                 }
-                SceneState::RawOffset { raw_offset_pline } => {
+                SceneState::RawOffset {
+                    raw_offset_pline,
+                    invalid_segments,
+                } => {
                     plot_ui.add(
                         PlinesPlotItem::new(PlinePlotData::new(raw_offset_pline))
                             .stroke_color(colors.primary_stroke),
                     );
+
+                    for segment in invalid_segments {
+                        plot_ui.add(
+                            PlinesPlotItem::new(PlinePlotData::new(segment))
+                                .stroke_color(colors.error_color),
+                        );
+                    }
                 }
                 SceneState::RawOffsetSegments { segments } => {
                     plot_ui.add(
-                        RawPlineOffsetSegsPlotItem::new(&segments[..])
+                        RawOffsetSegsPlotItem::new(&segments[..])
                             .color(colors.raw_offset_color)
                             .collapsed_color(colors.collapsed_color),
                     );
@@ -411,18 +442,43 @@ fn build_offset(
     SceneState::Offset { all_offset_plines }
 }
 
-fn build_raw_offset(pline: &Polyline, offset: f64) -> SceneState {
+fn build_raw_offset(pline: &Polyline, offset: f64, show_invalid_segments: bool) -> SceneState {
     let offset_opt = PlineOffsetOptions::default();
 
-    let raw_offset_pline: Polyline =
-        create_raw_offset_polyline(pline, offset, offset_opt.pos_equal_eps);
+    let raw_offset = create_raw_offset(pline, offset, offset_opt.pos_equal_eps);
+    let invalid_segments = if show_invalid_segments {
+        invalid_raw_offset_segments(&raw_offset.polyline, &raw_offset.invalid_segments)
+    } else {
+        Vec::new()
+    };
 
-    SceneState::RawOffset { raw_offset_pline }
+    SceneState::RawOffset {
+        raw_offset_pline: raw_offset.polyline,
+        invalid_segments,
+    }
+}
+
+fn invalid_raw_offset_segments(
+    raw_offset_pline: &Polyline,
+    invalid_segments: &[bool],
+) -> Vec<Polyline> {
+    invalid_segments
+        .iter()
+        .enumerate()
+        .filter(|&(_, &invalid)| invalid)
+        .map(|(index, _)| {
+            let start = raw_offset_pline.at(index);
+            let end = raw_offset_pline.at(raw_offset_pline.next_wrapping_index(index));
+            let mut segment = Polyline::new();
+            segment.add_vertex(start);
+            segment.add(end.x, end.y, 0.0);
+            segment
+        })
+        .collect()
 }
 
 fn build_raw_offset_segments(pline: &Polyline, offset: f64) -> SceneState {
-    let raw_offset_segs: Vec<RawPlineOffsetSeg<f64>> =
-        create_untrimmed_raw_offset_segs(pline, offset);
+    let raw_offset_segs: Vec<RawOffsetSeg<f64>> = create_untrimmed_raw_offset_segs(pline, offset);
 
     SceneState::RawOffsetSegments {
         segments: raw_offset_segs,

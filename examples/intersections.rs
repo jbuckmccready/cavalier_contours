@@ -529,40 +529,36 @@ impl IntersectionCounter {
 }
 
 impl PlineIntersectVisitor<f64, Control<()>> for IntersectionCounter {
-    fn visit_basic_intr(
-        &mut self,
-        intr: cavalier_contours::polyline::PlineBasicIntersect<f64>,
-    ) -> Control<()> {
-        self.count += 1;
-        self.basic_intersections.push((intr.point.x, intr.point.y));
-        println!(
-            "  Basic intersection #{}: ({:.2}, {:.2}) at segments ({}, {})",
-            self.count, intr.point.x, intr.point.y, intr.start_index1, intr.start_index2
-        );
-        Control::Continue
-    }
-
-    fn visit_overlapping_intr(
-        &mut self,
-        intr: cavalier_contours::polyline::PlineOverlappingIntersect<f64>,
-    ) -> Control<()> {
-        self.count += 1;
-        self.overlapping_intersections.push((
-            intr.point1.x,
-            intr.point1.y,
-            intr.point2.x,
-            intr.point2.y,
-        ));
-        println!(
-            "  Overlapping intersection #{}: ({:.2}, {:.2}) to ({:.2}, {:.2}) at segments ({}, {})",
-            self.count,
-            intr.point1.x,
-            intr.point1.y,
-            intr.point2.x,
-            intr.point2.y,
-            intr.start_index1,
-            intr.start_index2
-        );
+    fn visit(&mut self, intersect: PlineIntersect<f64>) -> Control<()> {
+        match intersect {
+            PlineIntersect::Basic(intr) => {
+                self.count += 1;
+                self.basic_intersections.push((intr.point.x, intr.point.y));
+                println!(
+                    "  Basic intersection #{}: ({:.2}, {:.2}) at segments ({}, {})",
+                    self.count, intr.point.x, intr.point.y, intr.start_index1, intr.start_index2
+                );
+            }
+            PlineIntersect::Overlapping(intr) => {
+                self.count += 1;
+                self.overlapping_intersections.push((
+                    intr.point1.x,
+                    intr.point1.y,
+                    intr.point2.x,
+                    intr.point2.y,
+                ));
+                println!(
+                    "  Overlapping intersection #{}: ({:.2}, {:.2}) to ({:.2}, {:.2}) at segments ({}, {})",
+                    self.count,
+                    intr.point1.x,
+                    intr.point1.y,
+                    intr.point2.x,
+                    intr.point2.y,
+                    intr.start_index1,
+                    intr.start_index2
+                );
+            }
+        }
         Control::Continue
     }
 }

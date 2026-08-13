@@ -1,11 +1,6 @@
 use std::sync::Arc;
 
-use cavalier_contours::{
-    core::math::angle_from_bulge,
-    polyline::{
-        internal::pline_offset::RawPlineOffsetSeg, seg_arc_radius_and_center, seg_bounding_box,
-    },
-};
+use cavalier_contours::polyline::internal::raw_pline_offset::RawOffsetSeg;
 use egui::epaint;
 use egui_plot::PlotItem;
 use lyon::{
@@ -15,16 +10,16 @@ use lyon::{
 
 use super::{VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point, plot_bounds_valid};
 
-pub struct RawPlineOffsetSegsPlotItem<'a> {
-    pub segs: &'a [RawPlineOffsetSeg<f64>],
+pub struct RawOffsetSegsPlotItem<'a> {
+    pub segs: &'a [RawOffsetSeg<f64>],
     pub color: epaint::Color32,
     pub collapsed_color: epaint::Color32,
     base: egui_plot::PlotItemBase,
 }
 
-impl<'a> RawPlineOffsetSegsPlotItem<'a> {
+impl<'a> RawOffsetSegsPlotItem<'a> {
     #[must_use]
-    pub fn new(segs: &'a [RawPlineOffsetSeg<f64>]) -> Self {
+    pub fn new(segs: &'a [RawOffsetSeg<f64>]) -> Self {
         Self {
             segs,
             color: epaint::Color32::GRAY,
@@ -46,7 +41,7 @@ impl<'a> RawPlineOffsetSegsPlotItem<'a> {
     }
 }
 
-impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
+impl PlotItem for RawOffsetSegsPlotItem<'_> {
     #[expect(
         clippy::cast_possible_truncation,
         reason = "lyon drawing types use f32"
@@ -57,11 +52,7 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
         transform: &egui_plot::PlotTransform,
         shapes: &mut Vec<egui::Shape>,
     ) {
-        if !plot_bounds_valid(transform.bounds()) {
-            return;
-        }
-
-        if self.segs.is_empty() {
+        if !plot_bounds_valid(transform.bounds()) || self.segs.is_empty() {
             return;
         }
 
@@ -71,76 +62,64 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
             return;
         }
 
-        // scale using x value (assuming uniform scaling)
         let scaling = transform.dpos_dvalue_x();
-
         let mut lyon_mesh: VertexBuffers<_, u32> = VertexBuffers::new();
         let mut stroke_tess = StrokeTessellator::new();
-        let line_width = 1.0;
 
-        for seg in self.segs {
-            let color = if seg.collapsed_arc {
+        for segment in self.segs {
+            let color = if matches!(segment, RawOffsetSeg::Collapsed(_)) {
                 self.collapsed_color
             } else {
                 self.color
             };
-
             if color == epaint::Color32::TRANSPARENT {
                 continue;
             }
 
             let mut builder = WithSvg::<lyon::path::Builder>::new(lyon::path::Builder::new());
-            let p1 = lyon_point(seg.v1.pos(), transform);
-            let p2 = lyon_point(seg.v2.pos(), transform);
-
-            builder.move_to(p1);
-            if seg.v1.bulge_is_zero() {
-                builder.line_to(p2);
-            } else {
-                let (r, c) = seg_arc_radius_and_center(seg.v1, seg.v2);
-
-                let radius = (scaling * r) as f32;
-                let sweep_angle = angle_from_bulge(seg.v1.bulge) as f32;
-
-                builder.arc(
-                    lyon_point(c, transform),
-                    lyon::path::math::vector(radius, radius),
-                    lyon::geom::Angle {
-                        // negate the sweep angle because y axis is flipped
-                        radians: -sweep_angle,
-                    },
-                    lyon::geom::Angle { radians: 0.0 },
-                );
+            builder.move_to(lyon_point(segment.start(), transform));
+            match segment {
+                RawOffsetSeg::Line(line) => {
+                    builder.line_to(lyon_point(line.end, transform));
+                }
+                RawOffsetSeg::Collapsed(arc) => {
+                    builder.line_to(lyon_point(arc.end, transform));
+                }
+                RawOffsetSeg::Arc(arc) => {
+                    let radius = (scaling * arc.radius) as f32;
+                    builder.arc(
+                        lyon_point(arc.center, transform),
+                        lyon::path::math::vector(radius, radius),
+                        lyon::geom::Angle {
+                            radians: -arc.sweep as f32,
+                        },
+                        lyon::geom::Angle { radians: 0.0 },
+                    );
+                }
             }
 
             let path = builder.build();
-
-            // cull path to only include segments within the plot bounds, this is performance
-            // benefit as it avoids tessellating stroke segments that are not visible which is
-            // significant when zooming in as the number of triangles generated can be very large
             let stroke_path = cull_path(&path, transform.frame());
             stroke_tess
                 .tessellate(
                     stroke_path,
-                    &StrokeOptions::DEFAULT.with_line_width(line_width),
+                    &StrokeOptions::DEFAULT.with_line_width(1.0),
                     &mut BuffersBuilder::new(&mut lyon_mesh, VertexConstructor { color }),
                 )
                 .unwrap();
         }
 
-        let mesh = epaint::Mesh {
+        shapes.push(egui::Shape::mesh(Arc::new(epaint::Mesh {
             vertices: lyon_mesh.vertices,
             indices: lyon_mesh.indices,
             texture_id: epaint::TextureId::default(),
-        };
-
-        shapes.push(egui::Shape::mesh(Arc::new(mesh)));
+        })));
     }
 
     fn initialize(&mut self, _x_range: std::ops::RangeInclusive<f64>) {}
 
     fn name(&self) -> &'static str {
-        "RawPlineOffsetSegs"
+        "RawOffsetSegs"
     }
 
     fn color(&self) -> egui::Color32 {
@@ -164,7 +143,8 @@ impl PlotItem for RawPlineOffsetSegsPlotItem<'_> {
     fn bounds(&self) -> egui_plot::PlotBounds {
         self.segs
             .iter()
-            .map(|s| aabb_to_plotbounds(&seg_bounding_box(s.v1, s.v2)))
+            .map(RawOffsetSeg::bounding_box)
+            .map(|bounds| aabb_to_plotbounds(&bounds))
             .fold(egui_plot::PlotBounds::NOTHING, |mut acc, bounds| {
                 acc.merge(&bounds);
                 acc

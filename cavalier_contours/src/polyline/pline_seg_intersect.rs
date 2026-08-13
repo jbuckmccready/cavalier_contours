@@ -55,6 +55,7 @@ where
 ///
 /// Segments are defined by `v1->v2` and `u1->u2`. `pos_equal_eps` is used for fuzzy float
 /// comparisons.
+#[must_use]
 pub fn pline_seg_intr<T>(
     v1: PlineVertex<T>,
     v2: PlineVertex<T>,

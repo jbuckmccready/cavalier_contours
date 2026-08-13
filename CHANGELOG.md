@@ -4,6 +4,13 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ## Unreleased
 
+### Fixed 🐛
+
+- Fixed parallel offsets containing locally inverted source spans, which could pass the
+  global distance checks to produce invalid outputs (this is also a significant optimization).
+  This fixes the "wifi leaking" pattern with repeated offsets reported
+  ([#79](https://github.com/jbuckmccready/cavalier_contours/issues/79)).
+
 ### Internal
 
 - Added Criterion benchmarks for polyline area and raw and final parallel offset creation.

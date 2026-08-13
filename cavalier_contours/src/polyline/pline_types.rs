@@ -1,12 +1,15 @@
 //! Supporting public types used in the core polyline trait methods.
 
-use super::{PlineVertex, PlineView, PlineViewData, internal::pline_intersects::OverlappingSlice};
+use super::{PlineVertex, PlineView, PlineViewData};
 use crate::{
     core::{
         math::Vector2,
         traits::{ControlFlow, Real},
     },
-    polyline::{PlineCreation, PlineSegIntr, PlineSource, ViewDataValidation},
+    polyline::{
+        PlineCreation, PlineSegIntr, PlineSource, ViewDataValidation,
+        internal::pline_intersects::OverlappingSlice,
+    },
 };
 use static_aabb2d_index::StaticAABB2DIndex;
 
@@ -183,6 +186,7 @@ where
     P: PlineCreation,
 {
     #[inline]
+    #[must_use]
     pub fn new(pline: P, subslices: Vec<BooleanPlineSlice<P::Num>>) -> Self {
         Self { pline, subslices }
     }
@@ -244,6 +248,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn from_whole_plines<I>(
         pos_plines: I,
         neg_plines: I,
@@ -407,6 +412,7 @@ pub struct PlineBasicIntersect<T = f64> {
 
 impl<T> PlineBasicIntersect<T> {
     #[inline]
+    #[must_use]
     pub fn new(start_index1: usize, start_index2: usize, point: Vector2<T>) -> Self {
         Self {
             start_index1,
@@ -431,6 +437,7 @@ pub struct PlineOverlappingIntersect<T = f64> {
 
 impl<T> PlineOverlappingIntersect<T> {
     #[inline]
+    #[must_use]
     pub fn new(
         start_index1: usize,
         start_index2: usize,
@@ -456,34 +463,75 @@ pub enum PlineIntersect<T = f64> {
 
 impl<T> PlineIntersect<T> {
     #[inline]
+    #[must_use]
     pub fn new_basic(start_index1: usize, start_index2: usize, point: Vector2<T>) -> Self {
-        PlineIntersect::Basic(PlineBasicIntersect::new(start_index1, start_index2, point))
+        PlineIntersect::Basic(PlineBasicIntersect {
+            start_index1,
+            start_index2,
+            point,
+        })
     }
 
     #[inline]
+    #[must_use]
     pub fn new_overlapping(
         start_index1: usize,
         start_index2: usize,
         point1: Vector2<T>,
         point2: Vector2<T>,
     ) -> Self {
-        PlineIntersect::Overlapping(PlineOverlappingIntersect::new(
+        PlineIntersect::Overlapping(PlineOverlappingIntersect {
             start_index1,
             start_index2,
             point1,
             point2,
-        ))
+        })
     }
 }
 
-/// Trait for visiting polyline intersects.
+/// Identifies an item considered during self-intersection traversal.
+///
+/// Filter implementations may use this distinction to map compact spatial-index item IDs back to
+/// polyline segment indexes while handling local segment indexes directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlineIntersectFilterItem {
+    /// Start index of a segment used in a local self-intersection test.
+    LocalSegment(usize),
+    /// Item ID from the spatial index used for global self-intersection tests.
+    GlobalAabbItem(usize),
+}
+
+impl PlineIntersectFilterItem {
+    /// Returns the segment index or spatial-index item ID carried by this value.
+    #[inline]
+    #[must_use]
+    pub fn index(self) -> usize {
+        match self {
+            Self::LocalSegment(index) | Self::GlobalAabbItem(index) => index,
+        }
+    }
+}
+
+/// Trait for filtering and visiting polyline self-intersections.
 pub trait PlineIntersectVisitor<T, C>
 where
     T: Real,
     C: ControlFlow,
 {
-    fn visit_basic_intr(&mut self, intr: PlineBasicIntersect<T>) -> C;
-    fn visit_overlapping_intr(&mut self, intr: PlineOverlappingIntersect<T>) -> C;
+    /// Resolves a traversal item to a polyline segment start index.
+    ///
+    /// Return `None` to exclude the item before its detailed intersection tests. The default
+    /// implementation treats the item ID as its segment index and includes it. A
+    /// [`PlineIntersectFilterItem::LocalSegment`] already contains its segment index and should
+    /// only be accepted or rejected; a [`PlineIntersectFilterItem::GlobalAabbItem`] may require
+    /// mapping when the spatial index contains only a subset of segments.
+    #[inline]
+    fn filter_map(&self, item: PlineIntersectFilterItem) -> Option<usize> {
+        Some(item.index())
+    }
+
+    /// Visits a basic or overlapping self-intersection.
+    fn visit(&mut self, intersect: PlineIntersect<T>) -> C;
 }
 
 impl<T, C, F> PlineIntersectVisitor<T, C> for F
@@ -493,32 +541,63 @@ where
     F: FnMut(PlineIntersect<T>) -> C,
 {
     #[inline]
-    fn visit_basic_intr(&mut self, intr: PlineBasicIntersect<T>) -> C {
-        self(PlineIntersect::Basic(intr))
-    }
-
-    #[inline]
-    fn visit_overlapping_intr(&mut self, intr: PlineOverlappingIntersect<T>) -> C {
-        self(PlineIntersect::Overlapping(intr))
+    fn visit(&mut self, intersect: PlineIntersect<T>) -> C {
+        self(intersect)
     }
 }
 
-// Simple struct that bundles up the context information for visiting intersections of two polylines.
-// Note: two of these are used when making a visit, one for each polyline.
+/// Segment context supplied when visiting an intersection between two polylines.
 #[derive(Default, Copy, Clone)]
 pub struct PlineIntersectVisitContext<T> {
+    /// Start vertex index of the segment.
     pub vertex_index: usize,
+    /// Segment start vertex.
     pub v1: PlineVertex<T>,
+    /// Segment end vertex.
     pub v2: PlineVertex<T>,
 }
 
-/// Visitor trait used to visit intersections of two plines.
+/// Identifies an item considered while finding intersections between two polylines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TwoPlinesIntersectFilterItem {
+    /// Item ID from the first polyline's spatial index.
+    Pline1AabbItem(usize),
+    /// Start index of a segment from the directly iterated second polyline.
+    Pline2Segment(usize),
+}
+
+impl TwoPlinesIntersectFilterItem {
+    /// Returns the segment index or spatial-index item ID carried by this value.
+    #[inline]
+    #[must_use]
+    pub fn index(self) -> usize {
+        match self {
+            Self::Pline1AabbItem(index) | Self::Pline2Segment(index) => index,
+        }
+    }
+}
+
+/// Trait for filtering and visiting intersections between two polylines.
 pub trait TwoPlinesIntersectVisitor<T, C>
 where
     T: Real,
     C: ControlFlow,
 {
-    /// Visit the intersection.
+    /// Resolves a traversal item to a segment start index in its source polyline.
+    ///
+    /// Return `None` to exclude the item. Second-polyline segments are filtered before their
+    /// spatial query, while first-polyline items are filtered before detailed intersection tests.
+    /// A [`TwoPlinesIntersectFilterItem::Pline2Segment`] already contains its segment index and
+    /// should only be accepted or rejected; a
+    /// [`TwoPlinesIntersectFilterItem::Pline1AabbItem`] may require mapping when the spatial index
+    /// contains a compact subset of segments. The default implementation treats the item ID as its
+    /// segment index and includes it.
+    #[inline]
+    fn filter(&self, item: TwoPlinesIntersectFilterItem) -> Option<usize> {
+        Some(item.index())
+    }
+
+    /// Visits the detailed intersection result and contexts for the resolved segment pair.
     fn visit(
         &mut self,
         intersect: PlineSegIntr<T>,
@@ -541,48 +620,6 @@ where
         pline2_context: &PlineIntersectVisitContext<T>,
     ) -> C {
         self(intersect, pline1_context, pline2_context)
-    }
-}
-
-/// Trait for visiting polyline vertexes.
-pub trait PlineVertexVisitor<T, C>
-where
-    T: Real,
-    C: ControlFlow,
-{
-    fn visit_vertex(&mut self, vertex: PlineVertex<T>) -> C;
-}
-
-impl<T, C, F> PlineVertexVisitor<T, C> for F
-where
-    T: Real,
-    C: ControlFlow,
-    F: FnMut(PlineVertex<T>) -> C,
-{
-    #[inline]
-    fn visit_vertex(&mut self, vertex: PlineVertex<T>) -> C {
-        self(vertex)
-    }
-}
-
-/// Trait for visiting polyline segments (two consecutive vertexes).
-pub trait PlineSegVisitor<T, C>
-where
-    T: Real,
-    C: ControlFlow,
-{
-    fn visit_seg(&mut self, v1: PlineVertex<T>, v2: PlineVertex<T>) -> C;
-}
-
-impl<T, C, F> PlineSegVisitor<T, C> for F
-where
-    T: Real,
-    C: ControlFlow,
-    F: FnMut(PlineVertex<T>, PlineVertex<T>) -> C,
-{
-    #[inline]
-    fn visit_seg(&mut self, v1: PlineVertex<T>, v2: PlineVertex<T>) -> C {
-        self(v1, v2)
     }
 }
 
@@ -637,6 +674,16 @@ where
     T: Real,
 {
     #[inline]
+    #[must_use]
+    pub fn view<'a, P>(&self, source: &'a P) -> PlineView<'a, P>
+    where
+        P: PlineSource<Num = T> + ?Sized,
+    {
+        self.view_data.view(source)
+    }
+
+    #[inline]
+    #[must_use]
     pub fn from_open_pline_slice(
         data: &PlineViewData<T>,
         source_is_pline1: bool,
@@ -657,6 +704,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn from_overlapping<P>(
         source: &P,
         overlapping_slice: &OverlappingSlice<T>,
@@ -682,13 +730,5 @@ where
             ViewDataValidation::IsValid
         );
         result
-    }
-
-    #[inline]
-    pub fn view<'a, P>(&self, source: &'a P) -> PlineView<'a, P>
-    where
-        P: PlineSource<Num = T> + ?Sized,
-    {
-        self.view_data.view(source)
     }
 }

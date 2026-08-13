@@ -822,6 +822,87 @@ fn repeat_position_real_world_input_is_sanitized_before_offset() {
     assert!(property_sets_match(&actual, &expected));
 }
 
+#[test]
+fn offset_does_not_self_intersect() {
+    // Regression test for issue #79: https://github.com/jbuckmccready/cavalier_contours/issues/79
+    use cavalier_contours::pline_open;
+
+    let input = pline_open![
+        (-450.5191502893827, -43.535303351368704, 0.0),
+        (-451.1680760707164, -42.2734516183154, 0.0),
+        (-451.4356541957931, -41.81449767755251, 0.0),
+        (-451.52354482078823, -41.663725063291785, 0.0),
+        (-451.9166112272101, -41.09344423983177, 0.0),
+        (-452.0787206022149, -40.854568155450046, 0.0)
+    ];
+    let result = input.parallel_offset(11.0);
+
+    assert_eq!(result.len(), 1);
+    assert!(result.iter().all(|pline| !pline.scan_for_self_intersect()));
+}
+
+#[test]
+fn closed_inward_offset_collapsed_returns_no_result() {
+    use cavalier_contours::pline_closed;
+
+    let input = pline_closed![
+        (0.0, 0.0, 0.0),
+        (2.0, 0.0, 0.0),
+        (2.0, 4.0, 0.0),
+        (0.0, 4.0, 0.0)
+    ];
+    // The offset crosses the narrow dimension. Local invalidity must reject the collapsed path
+    // even when the global distance tolerance would allow parts of its inverted raw loop.
+    let options = PlineOffsetOptions {
+        offset_dist_eps: 0.3,
+        ..Default::default()
+    };
+
+    let result = input.parallel_offset_opt(1.1, &options);
+    assert!(result.is_empty());
+}
+
+#[test]
+fn exact_zero_offset_returns_an_unchanged_copy() {
+    use cavalier_contours::{pline_closed_userdata, pline_open_userdata};
+
+    let inputs = [
+        pline_open_userdata![
+            [4, 8],
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.5),
+            (1.0, 0.0, 0.0),
+            (2.0, 1.0, 0.0)
+        ],
+        pline_closed_userdata![
+            [4, 8],
+            (0.0, 0.0, 0.5),
+            (2.0, 0.0, 0.0),
+            (2.0, 2.0, -0.5),
+            (0.0, 2.0, 0.0)
+        ],
+    ];
+
+    for input in inputs {
+        for handle_self_intersects in [false, true] {
+            let options = PlineOffsetOptions {
+                handle_self_intersects,
+                ..Default::default()
+            };
+            for offset in [0.0, -0.0] {
+                let result = input.parallel_offset_opt(offset, &options);
+                assert_eq!(result.len(), 1);
+                assert_eq!(
+                    result[0].iter_vertexes().collect::<Vec<_>>(),
+                    input.iter_vertexes().collect::<Vec<_>>()
+                );
+                assert_eq!(result[0].is_closed(), input.is_closed());
+                assert_eq!(result[0].get_userdata_values().collect::<Vec<_>>(), [4, 8]);
+            }
+        }
+    }
+}
+
 // To be revisited:
 
 // Offset fails due distance check - goes away if input is scaled up first

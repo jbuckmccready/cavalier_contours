@@ -1,7 +1,7 @@
 use super::PlineVertex;
 use crate::core::{
     math::{
-        Vector2, angle, angle_is_within_sweep, bulge_from_angle, delta_angle, delta_angle_signed,
+        Vector2, angle, arc_sweep_extents, bulge_from_angle, delta_angle, delta_angle_signed,
         dist_squared, line_seg_closest_point, midpoint, min_max, point_on_circle,
         point_within_arc_sweep,
     },
@@ -179,19 +179,8 @@ where
     }
 
     let (_, arc_center) = seg_arc_radius_and_center(v1, v2);
-    if v1.bulge_is_pos() {
-        // ccw, rotate vector from center to point_on_seg 90 degrees
-        return Vector2::new(
-            -(point_on_seg.y - arc_center.y),
-            point_on_seg.x - arc_center.x,
-        );
-    }
-
-    // cw, rotate vector from center to point_on_seg -90 degrees
-    Vector2::new(
-        point_on_seg.y - arc_center.y,
-        -(point_on_seg.x - arc_center.x),
-    )
+    let tangent = (point_on_seg - arc_center).perp();
+    if v1.bulge_is_pos() { tangent } else { -tangent }
 }
 
 /// Find the closest point on a polyline segment defined by `v1` to `v2` to `point` given.
@@ -258,6 +247,17 @@ where
     v2.pos()
 }
 
+/// Returns the axis-aligned bounding box of a line segment.
+#[inline]
+pub(crate) fn line_seg_bounding_box<T>(start: Vector2<T>, end: Vector2<T>) -> AABB<T>
+where
+    T: Real,
+{
+    let (min_x, max_x) = min_max(start.x, end.x);
+    let (min_y, max_y) = min_max(start.y, end.y);
+    AABB::new(min_x, min_y, max_x, max_y)
+}
+
 /// Computes a fast approximate axis aligned bounding box of a polyline segment defined by `v1` to `v2`.
 ///
 /// The bounding box may be larger than the true bounding box for the segment (but is never smaller).
@@ -268,10 +268,7 @@ where
     T: Real,
 {
     if v1.bulge_is_zero() {
-        // line segment
-        let (min_x, max_x) = min_max(v1.x, v2.x);
-        let (min_y, max_y) = min_max(v1.y, v2.y);
-        return AABB::new(min_x, min_y, max_x, max_y);
+        return line_seg_bounding_box(v1.pos(), v2.pos());
     }
 
     // For arcs we don't compute the actual extents which is slower, instead we create an approximate
@@ -310,38 +307,16 @@ where
     let start_angle = angle(arc_center, v1.pos());
     let end_angle = angle(arc_center, v2.pos());
     let sweep_angle = delta_angle_signed(start_angle, end_angle, v1.bulge_is_neg());
+    let (min_point, max_point) = arc_sweep_extents(
+        v1.pos(),
+        v2.pos(),
+        arc_center,
+        arc_radius,
+        start_angle,
+        sweep_angle,
+    );
 
-    let crosses_angle = |angle| angle_is_within_sweep(angle, start_angle, sweep_angle);
-
-    let min_x = if crosses_angle(T::pi()) {
-        // crosses PI
-        arc_center.x - arc_radius
-    } else {
-        num_traits::real::Real::min(v1.x, v2.x)
-    };
-
-    let min_y = if crosses_angle(T::from(1.5).unwrap() * T::pi()) {
-        // crosses 3PI/2
-        arc_center.y - arc_radius
-    } else {
-        num_traits::real::Real::min(v1.y, v2.y)
-    };
-
-    let max_x = if crosses_angle(T::zero()) {
-        // crosses 2PI
-        arc_center.x + arc_radius
-    } else {
-        num_traits::real::Real::max(v1.x, v2.x)
-    };
-
-    let max_y = if crosses_angle(T::from(0.5).unwrap() * T::pi()) {
-        // crosses PI/2
-        arc_center.y + arc_radius
-    } else {
-        num_traits::real::Real::max(v1.y, v2.y)
-    };
-
-    AABB::new(min_x, min_y, max_x, max_y)
+    AABB::new(min_point.x, min_point.y, max_point.x, max_point.y)
 }
 
 /// Computes the axis aligned bounding box of a polyline segment defined by `v1` to `v2`.
@@ -352,10 +327,7 @@ where
     T: Real,
 {
     if v1.bulge_is_zero() {
-        // line segment
-        let (min_x, max_x) = min_max(v1.x, v2.x);
-        let (min_y, max_y) = min_max(v1.y, v2.y);
-        AABB::new(min_x, min_y, max_x, max_y)
+        line_seg_bounding_box(v1.pos(), v2.pos())
     } else {
         arc_seg_bounding_box(v1, v2)
     }

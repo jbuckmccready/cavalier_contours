@@ -1,16 +1,21 @@
 use crate::{
     core::{
         math::{
-            CircleCircleIntr, LineCircleIntr, LineLineIntr, Vector2, angle, bulge_from_angle,
-            circle_circle_intr, delta_angle, delta_angle_signed, dist_squared, line_circle_intr,
-            line_line_intr, point_from_parametric, point_within_arc_sweep,
+            CircleCircleIntr, LineCircleIntr, Vector2, circle_circle_intr, dist_squared,
+            line_circle_intr, point_from_parametric, point_within_arc_sweep,
         },
         traits::Real,
     },
     polyline::{
-        FindIntersectsOptions, PlineCreation, PlineOffsetOptions, PlineSegIntr, PlineSource,
-        PlineSourceMut, PlineVertex, PlineViewData,
-        internal::pline_intersects::{all_self_intersects_as_basic, find_intersects},
+        FindIntersectsOptions, PlineCreation, PlineIntersectFilterItem, PlineOffsetOptions,
+        PlineSegIntr, PlineSource, PlineVertex, PlineViewData, TwoPlinesIntersectFilterItem,
+        internal::{
+            pline_intersects::{
+                all_self_intersects_as_basic, all_self_intersects_as_basic_filtered,
+                find_intersects, find_intersects_filtered,
+            },
+            raw_pline_offset::{RawOffsetResult, create_raw_offset},
+        },
         pline_seg_intr, seg_arc_radius_and_center, seg_closest_point, seg_fast_approx_bounding_box,
         seg_midpoint,
     },
@@ -18,635 +23,8 @@ use crate::{
 use static_aabb2d_index::{Control, StaticAABB2DIndex, StaticAABB2DIndexBuilder};
 use std::collections::BTreeMap;
 
-/// A raw offset segment representing line or arc that has been parallel offset.
-#[derive(Debug, Copy, Clone)]
-pub struct RawPlineOffsetSeg<T>
-where
-    T: Real,
-{
-    pub v1: PlineVertex<T>,
-    pub v2: PlineVertex<T>,
-    pub orig_v2_pos: Vector2<T>,
-    pub collapsed_arc: bool,
-}
-
-/// Create all the raw parallel offset segments of a polyline using the `offset` value given.
-pub fn create_untrimmed_raw_offset_segs<P, T>(polyline: &P, offset: T) -> Vec<RawPlineOffsetSeg<T>>
-where
-    P: PlineSource<Num = T> + ?Sized,
-    T: Real,
-{
-    let process_line_seg = |v1: PlineVertex<T>, v2: PlineVertex<T>| -> RawPlineOffsetSeg<T> {
-        let line_v = v2.pos() - v1.pos();
-        let offset_v = line_v.unit_perp().scale(offset);
-        RawPlineOffsetSeg {
-            v1: PlineVertex::from_vector2(v1.pos() + offset_v, T::zero()),
-            v2: PlineVertex::from_vector2(v2.pos() + offset_v, T::zero()),
-            orig_v2_pos: v2.pos(),
-            collapsed_arc: false,
-        }
-    };
-
-    let process_arc_seg = |v1: PlineVertex<T>, v2: PlineVertex<T>| -> RawPlineOffsetSeg<T> {
-        let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-        let offs = if v1.bulge_is_neg() { offset } else { -offset };
-        let radius_after_offset = arc_radius + offs;
-        let v1_to_center = (v1.pos() - arc_center).normalize();
-        let v2_to_center = (v2.pos() - arc_center).normalize();
-
-        let (new_v1_bulge, collapsed_arc) = if radius_after_offset.fuzzy_lt(T::zero()) {
-            // collapsed arc, offset arc start and end points towards arc center and turn into line
-            // handles case where offset vertexes are equal and simplifies path for clipping
-            // algorithm
-            (T::zero(), true)
-        } else {
-            (v1.bulge, false)
-        };
-
-        RawPlineOffsetSeg {
-            v1: PlineVertex::from_vector2(v1_to_center.scale(offs) + v1.pos(), new_v1_bulge),
-            v2: PlineVertex::from_vector2(v2_to_center.scale(offs) + v2.pos(), v2.bulge),
-            orig_v2_pos: v2.pos(),
-            collapsed_arc,
-        }
-    };
-
-    // Note: using with_capacity to ensure exact allocation required for the end result (avoids
-    // over allocating and resize allocations)
-    let mut result = Vec::with_capacity(polyline.segment_count());
-    result.extend(polyline.iter_segments().map(|(v1, v2)| {
-        if v1.bulge_is_zero() {
-            process_line_seg(v1, v2)
-        } else {
-            process_arc_seg(v1, v2)
-        }
-    }));
-
-    debug_assert_eq!(
-        result.capacity(),
-        polyline.segment_count(),
-        "ensure exact allocation"
-    );
-
-    result
-}
-
-/// Test if parametric value `t` represents a false intersect or not. False intersect is defined as
-/// requiring the segment to be extended to actually intersect.
-#[inline]
-fn is_false_intersect<T>(t: T) -> bool
-where
-    T: Real,
-{
-    t < T::zero() || t > T::one()
-}
-
-/// Compute the bulge for connecting two raw offset segments.
-#[inline]
-fn bulge_for_connection<T>(
-    arc_center: Vector2<T>,
-    start_point: Vector2<T>,
-    end_point: Vector2<T>,
-    is_ccw: bool,
-) -> T
-where
-    T: Real,
-{
-    let a1 = angle(arc_center, start_point);
-    let a2 = angle(arc_center, end_point);
-    bulge_from_angle(delta_angle_signed(a1, a2, !is_ccw))
-}
-
-/// Connect two raw offset segments by joining them with an arc and push the vertexes to the
-/// `result` output parameter.
-#[inline]
-fn connect_using_arc<T, O>(
-    s1: &RawPlineOffsetSeg<T>,
-    s2: &RawPlineOffsetSeg<T>,
-    connection_arcs_ccw: bool,
-    result: &mut O,
-    pos_equal_eps: T,
-) where
-    T: Real,
-    O: PlineSourceMut<Num = T>,
-{
-    let arc_center = s1.orig_v2_pos;
-    let sp = s1.v2.pos();
-    let ep = s2.v1.pos();
-    let bulge = bulge_for_connection(arc_center, sp, ep, connection_arcs_ccw);
-    result.add_or_replace(sp.x, sp.y, bulge, pos_equal_eps);
-    result.add_or_replace(ep.x, ep.y, s2.v1.bulge, pos_equal_eps);
-}
-
-/// Parameters passed to segment join functions used to form raw offset polyline.
-struct JoinParams<T> {
-    /// If true then connection arcs should be counter clockwise, otherwise clockwise.
-    connection_arcs_ccw: bool,
-    /// Epsilon to use for testing if positions are fuzzy equal.
-    pos_equal_eps: T,
-}
-
-/// Join two adjacent raw offset segments where both segments are lines.
-fn line_line_join<T, O>(
-    s1: &RawPlineOffsetSeg<T>,
-    s2: &RawPlineOffsetSeg<T>,
-    params: &JoinParams<T>,
-    result: &mut O,
-) where
-    T: Real,
-    O: PlineSourceMut<Num = T>,
-{
-    let connection_arcs_ccw = params.connection_arcs_ccw;
-    let pos_equal_eps = params.pos_equal_eps;
-    let v1 = &s1.v1;
-    let v2 = &s1.v2;
-    let u1 = &s2.v1;
-    let u2 = &s2.v2;
-
-    debug_assert!(
-        v1.bulge_is_zero() && u1.bulge_is_zero(),
-        "both segments should be lines"
-    );
-
-    if s1.collapsed_arc || s2.collapsed_arc {
-        // connecting to/from collapsed arc, always connect using arc
-        connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
-    } else {
-        match line_line_intr(v1.pos(), v2.pos(), u1.pos(), u2.pos(), pos_equal_eps) {
-            LineLineIntr::NoIntersect => {
-                // parallel lines, join with half circle
-                let sp = s1.v2.pos();
-                let ep = s2.v1.pos();
-                let bulge = if connection_arcs_ccw {
-                    T::one()
-                } else {
-                    -T::one()
-                };
-                result.add_or_replace(sp.x, sp.y, bulge, pos_equal_eps);
-                result.add_or_replace(ep.x, ep.y, s2.v1.bulge, pos_equal_eps);
-            }
-            LineLineIntr::TrueIntersect { seg1_t, .. } => {
-                let intr_point = point_from_parametric(v1.pos(), v2.pos(), seg1_t);
-                result.add_or_replace(intr_point.x, intr_point.y, T::zero(), pos_equal_eps);
-            }
-            LineLineIntr::Overlapping { .. } => {
-                result.add_or_replace(v2.x, v2.y, T::zero(), pos_equal_eps);
-            }
-            LineLineIntr::FalseIntersect { seg1_t, seg2_t } => {
-                if seg1_t > T::one() && is_false_intersect(seg2_t) {
-                    // extend and join the lines together using arc
-                    connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
-                } else {
-                    result.add_or_replace(v2.x, v2.y, T::zero(), pos_equal_eps);
-                    result.add_or_replace(u1.x, u1.y, u1.bulge, pos_equal_eps);
-                }
-            }
-        }
-    }
-}
-
-/// Join two adjacent raw offset segments where the first segment is a line and the second is a arc.
-fn line_arc_join<T, O>(
-    s1: &RawPlineOffsetSeg<T>,
-    s2: &RawPlineOffsetSeg<T>,
-    params: &JoinParams<T>,
-    result: &mut O,
-) where
-    T: Real,
-    O: PlineSourceMut<Num = T>,
-{
-    let connection_arcs_ccw = params.connection_arcs_ccw;
-    let pos_equal_eps = params.pos_equal_eps;
-    let v1 = &s1.v1;
-    let v2 = &s1.v2;
-    let u1 = &s2.v1;
-    let u2 = &s2.v2;
-
-    debug_assert!(
-        v1.bulge_is_zero() && !u1.bulge_is_zero(),
-        "first segment should be line, second segment should be arc"
-    );
-
-    let (arc_radius, arc_center) = seg_arc_radius_and_center(*u1, *u2);
-
-    let mut process_intersect = |t: T, intersect: Vector2<T>| {
-        let true_line_intr = !is_false_intersect(t);
-        let true_arc_intr = point_within_arc_sweep(
-            arc_center,
-            u1.pos(),
-            u2.pos(),
-            u1.bulge_is_neg(),
-            intersect,
-            pos_equal_eps,
-        );
-
-        if true_line_intr && true_arc_intr {
-            // trim at intersect
-            let a = angle(arc_center, intersect);
-            let arc_end_angle = angle(arc_center, u2.pos());
-            let theta = delta_angle(a, arc_end_angle);
-            // ensure sign matches (may get flipped if intersect is at the very end of the arc,
-            // in which case we do not want to update the bulge)
-            if (theta > T::zero()) == u1.bulge_is_pos() {
-                result.add_or_replace(
-                    intersect.x,
-                    intersect.y,
-                    bulge_from_angle(theta),
-                    pos_equal_eps,
-                );
-            } else {
-                result.add_or_replace(intersect.x, intersect.y, u1.bulge, pos_equal_eps);
-            }
-            return;
-        }
-
-        if t > T::one() && !true_arc_intr {
-            connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
-            return;
-        }
-
-        if s1.collapsed_arc {
-            connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
-            return;
-        }
-
-        // connect using line
-        result.add_or_replace(v2.x, v2.y, T::zero(), pos_equal_eps);
-        result.add_or_replace_vertex(*u1, pos_equal_eps);
-    };
-
-    match line_circle_intr(v1.pos(), v2.pos(), arc_radius, arc_center, pos_equal_eps) {
-        LineCircleIntr::NoIntersect => {
-            connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
-        }
-        LineCircleIntr::TangentIntersect { t0 } => {
-            process_intersect(t0, point_from_parametric(v1.pos(), v2.pos(), t0));
-        }
-        LineCircleIntr::TwoIntersects { t0, t1 } => {
-            // always use intersect closest to original point
-            let intr1 = point_from_parametric(v1.pos(), v2.pos(), t0);
-            let dist1 = dist_squared(intr1, s1.orig_v2_pos);
-            let intr2 = point_from_parametric(v1.pos(), v2.pos(), t1);
-            let dist2 = dist_squared(intr2, s1.orig_v2_pos);
-
-            if dist1 < dist2 {
-                process_intersect(t0, intr1);
-            } else {
-                process_intersect(t1, intr2);
-            }
-        }
-    }
-}
-
-/// Join two adjacent raw offset segments where the first segment is a arc and the second is a line.
-fn arc_line_join<T, O>(
-    s1: &RawPlineOffsetSeg<T>,
-    s2: &RawPlineOffsetSeg<T>,
-    params: &JoinParams<T>,
-    result: &mut O,
-) where
-    T: Real,
-    O: PlineSourceMut<Num = T>,
-{
-    let connection_arcs_ccw = params.connection_arcs_ccw;
-    let pos_equal_eps = params.pos_equal_eps;
-    let v1 = &s1.v1;
-    let v2 = &s1.v2;
-    let u1 = &s2.v1;
-    let u2 = &s2.v2;
-
-    debug_assert!(
-        !v1.bulge_is_zero() && u1.bulge_is_zero(),
-        "first segment should be arc, second segment should be line"
-    );
-
-    let (arc_radius, arc_center) = seg_arc_radius_and_center(*v1, *v2);
-
-    let mut process_intersect = |t: T, intersect: Vector2<T>| {
-        let true_line_intr = !is_false_intersect(t);
-        let true_arc_intr = point_within_arc_sweep(
-            arc_center,
-            v1.pos(),
-            v2.pos(),
-            v1.bulge_is_neg(),
-            intersect,
-            pos_equal_eps,
-        );
-
-        if true_line_intr && true_arc_intr {
-            let prev_vertex = result.last().unwrap();
-            if !prev_vertex.bulge_is_zero()
-                && !prev_vertex.pos().fuzzy_eq_eps(v2.pos(), pos_equal_eps)
-            {
-                // modify previous bulge and trim at intersect
-                let a = angle(arc_center, intersect);
-                let (_, prev_arc_center) = seg_arc_radius_and_center(prev_vertex, *v2);
-                let prev_arc_start_angle = angle(prev_arc_center, prev_vertex.pos());
-                let updated_prev_theta = delta_angle(prev_arc_start_angle, a);
-                // ensure the sign matches (may get flipped if intersect is at the very end of the
-                // arc, in which case we do not want to update the bulge)
-                if (updated_prev_theta > T::zero()) == prev_vertex.bulge_is_pos() {
-                    let last = result.last().unwrap();
-                    result.set_last(last.with_bulge(bulge_from_angle(updated_prev_theta)));
-                }
-            }
-
-            result.add_or_replace(intersect.x, intersect.y, T::zero(), pos_equal_eps);
-            return;
-        }
-
-        connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
-    };
-
-    match line_circle_intr(u1.pos(), u2.pos(), arc_radius, arc_center, pos_equal_eps) {
-        LineCircleIntr::NoIntersect => {
-            connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
-        }
-        LineCircleIntr::TangentIntersect { t0 } => {
-            process_intersect(t0, point_from_parametric(u1.pos(), u2.pos(), t0));
-        }
-        LineCircleIntr::TwoIntersects { t0, t1 } => {
-            // always use intersect closest to original point
-            let orig_point = if s2.collapsed_arc {
-                u1.pos()
-            } else {
-                s1.orig_v2_pos
-            };
-            let intr1 = point_from_parametric(u1.pos(), u2.pos(), t0);
-            let dist1 = dist_squared(intr1, orig_point);
-            let intr2 = point_from_parametric(u1.pos(), u2.pos(), t1);
-            let dist2 = dist_squared(intr2, orig_point);
-
-            if dist1 < dist2 {
-                process_intersect(t0, intr1);
-            } else {
-                process_intersect(t1, intr2);
-            }
-        }
-    }
-}
-
-/// Join two adjacent raw offset segments where both segments are arcs.
-fn arc_arc_join<T, O>(
-    s1: &RawPlineOffsetSeg<T>,
-    s2: &RawPlineOffsetSeg<T>,
-    params: &JoinParams<T>,
-    result: &mut O,
-) where
-    T: Real,
-    O: PlineSourceMut<Num = T>,
-{
-    let connection_arcs_ccw = params.connection_arcs_ccw;
-    let pos_equal_eps = params.pos_equal_eps;
-    let v1 = &s1.v1;
-    let v2 = &s1.v2;
-    let u1 = &s2.v1;
-    let u2 = &s2.v2;
-
-    debug_assert!(
-        !v1.bulge_is_zero() && !u1.bulge_is_zero(),
-        "both segments should be arcs"
-    );
-
-    let (arc1_radius, arc1_center) = seg_arc_radius_and_center(*v1, *v2);
-    let (arc2_radius, arc2_center) = seg_arc_radius_and_center(*u1, *u2);
-
-    let both_arcs_sweep_point = |point: Vector2<T>| {
-        point_within_arc_sweep(
-            arc1_center,
-            v1.pos(),
-            v2.pos(),
-            v1.bulge_is_neg(),
-            point,
-            pos_equal_eps,
-        ) && point_within_arc_sweep(
-            arc2_center,
-            u1.pos(),
-            u2.pos(),
-            u1.bulge_is_neg(),
-            point,
-            pos_equal_eps,
-        )
-    };
-
-    let mut process_intersect = |intersect: Vector2<T>, true_intersect: bool| {
-        if true_intersect {
-            let prev_vertex = result.last().unwrap();
-
-            if !prev_vertex.bulge_is_zero()
-                && !prev_vertex.pos().fuzzy_eq_eps(v2.pos(), pos_equal_eps)
-            {
-                // modify previous bulge and trim at intersect
-                let a1 = angle(arc1_center, intersect);
-                let (_, prev_arc_center) = seg_arc_radius_and_center(prev_vertex, *v2);
-                let prev_arc_start_angle = angle(prev_arc_center, prev_vertex.pos());
-                let updated_prev_theta = delta_angle(prev_arc_start_angle, a1);
-                // ensure the sign matches (may get flipped if intersect is at the very end of the
-                // arc, in which case we do not want to update the bulge)
-                if (updated_prev_theta > T::zero()) == prev_vertex.bulge_is_pos() {
-                    let last = result.last().unwrap();
-                    result.set_last(last.with_bulge(bulge_from_angle(updated_prev_theta)));
-                }
-            }
-
-            // add the vertex at our current trim/join point
-            let a2 = angle(arc2_center, intersect);
-            let end_angle = angle(arc2_center, u2.pos());
-            let theta = delta_angle(a2, end_angle);
-
-            // again ensure sign matches before updating bulge
-            if (theta > T::zero()) == u1.bulge_is_pos() {
-                result.add_or_replace(
-                    intersect.x,
-                    intersect.y,
-                    bulge_from_angle(theta),
-                    pos_equal_eps,
-                );
-            } else {
-                result.add_or_replace(intersect.x, intersect.y, u1.bulge, pos_equal_eps);
-            }
-        } else {
-            connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
-        }
-    };
-
-    match circle_circle_intr(
-        arc1_radius,
-        arc1_center,
-        arc2_radius,
-        arc2_center,
-        pos_equal_eps,
-    ) {
-        CircleCircleIntr::NoIntersect => {
-            connect_using_arc(s1, s2, connection_arcs_ccw, result, pos_equal_eps);
-        }
-        CircleCircleIntr::TangentIntersect { point } => {
-            process_intersect(point, both_arcs_sweep_point(point));
-        }
-        CircleCircleIntr::TwoIntersects { point1, point2 } => {
-            // always use intersect closest to original point
-            let dist1 = dist_squared(point1, s1.orig_v2_pos);
-            let dist2 = dist_squared(point2, s1.orig_v2_pos);
-            if dist1.fuzzy_eq_eps(dist2, pos_equal_eps) {
-                // catch case where both points are equal distance (occurs if input arcs connect at
-                // tangent point), prioritize true intersect (eliminates intersect in raw offset
-                // polyline that must be processed later and prevents false creation of segments if
-                // using dual offset clipping)
-                if both_arcs_sweep_point(point1) {
-                    process_intersect(point1, true);
-                } else {
-                    process_intersect(point2, both_arcs_sweep_point(point2));
-                }
-            } else if dist1 < dist2 {
-                process_intersect(point1, both_arcs_sweep_point(point1));
-            } else {
-                process_intersect(point2, both_arcs_sweep_point(point2));
-            }
-        }
-        CircleCircleIntr::Overlapping => {
-            // same arc radius and center, just add the vertex (nothing to trim/extend)
-            result.add_or_replace_vertex(*u1, pos_equal_eps);
-        }
-    }
-}
-
-pub fn create_raw_offset_polyline<P, T, O>(polyline: &P, offset: T, pos_equal_eps: T) -> O
-where
-    P: PlineSource<Num = T> + ?Sized,
-    T: Real,
-    O: PlineCreation<Num = T>,
-{
-    let vc = polyline.vertex_count();
-    if vc < 2 {
-        return O::empty();
-    }
-
-    let raw_offset_segs = create_untrimmed_raw_offset_segs(polyline, offset);
-    if raw_offset_segs.is_empty() {
-        return O::empty();
-    }
-
-    // detect single collapsed arc segment
-    if raw_offset_segs.len() == 1 && raw_offset_segs[0].collapsed_arc {
-        return O::empty();
-    }
-
-    let connection_arcs_ccw = offset < T::zero();
-    let join_params = JoinParams {
-        connection_arcs_ccw,
-        pos_equal_eps,
-    };
-
-    let join_seg_pair = |s1: &RawPlineOffsetSeg<T>, s2: &RawPlineOffsetSeg<T>, result: &mut O| {
-        let s1_is_line = s1.v1.bulge_is_zero();
-        let s2_is_line = s2.v1.bulge_is_zero();
-        match (s1_is_line, s2_is_line) {
-            (true, true) => line_line_join(s1, s2, &join_params, result),
-            (true, false) => line_arc_join(s1, s2, &join_params, result),
-            (false, true) => arc_line_join(s1, s2, &join_params, result),
-            (false, false) => arc_arc_join(s1, s2, &join_params, result),
-        }
-    };
-
-    let mut result = O::with_capacity(vc, polyline.is_closed());
-
-    // add the very first vertex
-    result.add_vertex(raw_offset_segs.first().unwrap().v1);
-
-    // join first two segments and determine if first vertex was replaced (to know how to handle
-    // last two segment joins for closed polyline)
-    let mut offset_seg_pairs = raw_offset_segs.windows(2);
-    if let Some([s1, s2]) = offset_seg_pairs.next() {
-        join_seg_pair(s1, s2, &mut result);
-    }
-
-    let first_vertex_replaced = result.vertex_count() == 1;
-
-    while let Some([s1, s2]) = offset_seg_pairs.next() {
-        join_seg_pair(s1, s2, &mut result);
-    }
-
-    if polyline.is_closed() && result.vertex_count() > 1 {
-        // join closing segments at vertex indexes (n, 0) and (0, 1)
-        let s1 = &raw_offset_segs.last().unwrap();
-        let s2 = &raw_offset_segs[0];
-
-        // temp polyline to capture results of joining (to avoid mutating result)
-        let mut closing_part_result = O::empty();
-        closing_part_result.add_vertex(result.last().unwrap());
-        join_seg_pair(s1, s2, &mut closing_part_result);
-
-        // update last vertexes
-        result.set_last(closing_part_result.at(0));
-        for v in closing_part_result.iter_vertexes().skip(1) {
-            result.add_vertex(v);
-        }
-
-        // update first vertex (only if it has not already been updated/replaced)
-        if !first_vertex_replaced {
-            let updated_first_pos = closing_part_result.last().unwrap().pos();
-            if result.at(0).bulge_is_zero() {
-                // just update position
-                let b = result.at(0).bulge;
-                result.set(0, updated_first_pos.x, updated_first_pos.y, b);
-            } else if result.vertex_count() > 1 {
-                // update position and bulge
-                let (_, arc_center) = seg_arc_radius_and_center(result.at(0), result.at(1));
-                let a1 = angle(arc_center, updated_first_pos);
-                let a2 = angle(arc_center, result.at(1).pos());
-                let updated_theta = delta_angle(a1, a2);
-                if (updated_theta < T::zero() && result.at(0).bulge_is_pos())
-                    || (updated_theta > T::zero() && result.at(0).bulge_is_neg())
-                {
-                    // first vertex not valid, just update its position (it will be removed later)
-                    let b = result.at(0).bulge;
-                    result.set(0, updated_first_pos.x, updated_first_pos.y, b);
-                } else {
-                    // update position and bulge
-                    result.set(
-                        0,
-                        updated_first_pos.x,
-                        updated_first_pos.y,
-                        bulge_from_angle(updated_theta),
-                    );
-                }
-            }
-        }
-
-        // must do final singularity prune between last, first, and second vertex because after
-        // joining segments (n, 0) and (0, 1) they may have been introduced
-        if result.vertex_count() > 1 {
-            if result
-                .at(0)
-                .pos()
-                .fuzzy_eq_eps(result.last().unwrap().pos(), pos_equal_eps)
-            {
-                result.remove_last();
-            }
-
-            if result.vertex_count() > 1
-                && result
-                    .at(0)
-                    .pos()
-                    .fuzzy_eq_eps(result.at(1).pos(), pos_equal_eps)
-            {
-                result.remove(0);
-            }
-        }
-    } else {
-        // not closed polyline or less than 2 vertexes
-        let last_raw_offset_vertex = raw_offset_segs.last().unwrap().v2;
-        result.add_or_replace_vertex(last_raw_offset_vertex, pos_equal_eps);
-    }
-
-    // if due to joining of segments we are left with only 1 vertex then return empty polyline
-    if result.vertex_count() == 1 {
-        result.clear();
-    }
-
-    result
-}
-
+/// Tests global distance interference. Local folds are rejected separately through raw source-span
+/// validity so `offset_tol` can remain a relaxed global distance tolerance.
 #[inline]
 pub fn point_valid_for_offset<P, T>(
     polyline: &P,
@@ -687,18 +65,81 @@ where
     point_valid
 }
 
+fn slice_contains_invalid_segment<T>(
+    slice: &PlineViewData<T>,
+    raw_is_closed: bool,
+    segment_count: usize,
+    invalid_segments: &[usize],
+) -> bool {
+    if invalid_segments.is_empty() {
+        return false;
+    }
+
+    let range_contains_invalid = |start: usize, end: usize| {
+        let first = invalid_segments.partition_point(|&index| index < start);
+        invalid_segments
+            .get(first)
+            .is_some_and(|&index| index <= end)
+    };
+
+    let end = slice.start_index + slice.end_index_offset;
+    if !raw_is_closed || end < segment_count {
+        return range_contains_invalid(slice.start_index, end);
+    }
+
+    debug_assert!(end < 2 * segment_count);
+    range_contains_invalid(slice.start_index, segment_count - 1)
+        || range_contains_invalid(0, end - segment_count)
+}
+
+/// Creates a spatial index for offset segments and, when useful, a mapping from its compact item
+/// IDs to polyline segment indexes.
+///
+/// Sparse invalidity keeps the normal full index so rebuilding it costs less than the extra AABB
+/// candidates. Dense invalidity omits invalid segment boxes and returns the mapping required to
+/// resolve compact item IDs.
+fn create_segment_index<P, T>(
+    polyline: &P,
+    invalid_segments: &[bool],
+    invalid_count: usize,
+) -> (StaticAABB2DIndex<T>, Option<Vec<usize>>)
+where
+    P: PlineSource<Num = T> + ?Sized,
+    T: Real,
+{
+    let segment_count = invalid_segments.len();
+    if invalid_count * 4 < segment_count {
+        return (polyline.create_approx_aabb_index(), None);
+    }
+
+    let valid_count = segment_count - invalid_count;
+    let mut builder = StaticAABB2DIndexBuilder::new(valid_count);
+    let mut item_to_segment = Vec::with_capacity(valid_count);
+    for (index, (v1, v2)) in polyline.iter_segments().enumerate() {
+        if invalid_segments[index] {
+            continue;
+        }
+        let bb = seg_fast_approx_bounding_box(v1, v2);
+        builder.add(bb.min_x, bb.min_y, bb.max_x, bb.max_y);
+        item_to_segment.push(index);
+    }
+    (builder.build().unwrap(), Some(item_to_segment))
+}
+
 pub fn slices_from_raw_offset<P, R, T>(
     original_polyline: &P,
-    raw_offset_polyline: &R,
+    raw_offset: &RawOffsetResult<R>,
     orig_polyline_index: &StaticAABB2DIndex<T>,
     offset: T,
     options: &PlineOffsetOptions<T>,
 ) -> Vec<PlineViewData<T>>
 where
     P: PlineSource<Num = T> + ?Sized,
-    R: PlineSource<Num = T> + ?Sized,
+    R: PlineSource<Num = T>,
     T: Real,
 {
+    let raw_offset_polyline = &raw_offset.polyline;
+    let invalid_segments = &raw_offset.invalid_segments;
     debug_assert!(
         raw_offset_polyline.is_closed(),
         "only supports closed polylines, use slices_from_dual_raw_offsets for open polylines"
@@ -712,12 +153,58 @@ where
     let pos_equal_eps = options.pos_equal_eps;
     let offset_dist_eps = options.offset_dist_eps;
 
-    let raw_offset_index = raw_offset_polyline.create_approx_aabb_index();
-    let self_intrs =
-        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, false, pos_equal_eps);
+    let invalid_segment_indexes = &raw_offset.invalid_segment_indexes;
+    let has_invalid = !invalid_segment_indexes.is_empty();
+    if invalid_segment_indexes.len() == invalid_segments.len() {
+        return result;
+    }
+    let raw_offset_index;
+    let self_intrs = if has_invalid {
+        let raw_index_to_segment;
+        (raw_offset_index, raw_index_to_segment) = create_segment_index(
+            raw_offset_polyline,
+            invalid_segments,
+            invalid_segment_indexes.len(),
+        );
+        all_self_intersects_as_basic_filtered(
+            raw_offset_polyline,
+            &raw_offset_index,
+            |item| {
+                let index = match item {
+                    PlineIntersectFilterItem::LocalSegment(index) => index,
+                    PlineIntersectFilterItem::GlobalAabbItem(item) => raw_index_to_segment
+                        .as_deref()
+                        .map_or(item, |mapping| mapping[item]),
+                };
+                (!invalid_segments[index]).then_some(index)
+            },
+            false,
+            pos_equal_eps,
+        )
+    } else {
+        raw_offset_index = raw_offset_polyline.create_approx_aabb_index();
+        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, false, pos_equal_eps)
+    };
 
+    let mut intersects_lookup = BTreeMap::<usize, Vec<Vector2<T>>>::new();
+    for si in &self_intrs {
+        intersects_lookup
+            .entry(si.start_index1)
+            .or_default()
+            .push(si.point);
+        intersects_lookup
+            .entry(si.start_index2)
+            .or_default()
+            .push(si.point);
+    }
     let mut query_stack = Vec::new();
-    if self_intrs.is_empty() {
+    if intersects_lookup.is_empty() {
+        if has_invalid {
+            return result;
+        }
+
+        let slice = PlineViewData::from_entire_pline(raw_offset_polyline);
+
         // no self intersects, test point on polyline is valid
         if !point_valid_for_offset(
             original_polyline,
@@ -733,24 +220,8 @@ where
         }
 
         // is valid
-        let slice = PlineViewData::from_entire_pline(raw_offset_polyline);
         result.push(slice);
         return result;
-    }
-
-    // using BTreeMap as it is faster than HashMap in testing (note: sorted iteration order is not
-    // required)
-    let mut intersects_lookup = BTreeMap::<usize, Vec<Vector2<T>>>::new();
-
-    for si in &self_intrs {
-        intersects_lookup
-            .entry(si.start_index1)
-            .or_default()
-            .push(si.point);
-        intersects_lookup
-            .entry(si.start_index2)
-            .or_default()
-            .push(si.point);
     }
 
     // sort intersects by distance from segment start vertex
@@ -811,6 +282,15 @@ where
     };
 
     let slice_is_valid = |slice: &PlineViewData<T>, query_stack: &mut Vec<usize>| -> bool {
+        if slice_contains_invalid_segment(
+            slice,
+            true,
+            raw_offset_polyline.segment_count(),
+            invalid_segment_indexes,
+        ) {
+            return false;
+        }
+
         if slice.end_index_offset == 0 {
             // slice all on one segment, test start, end, midpoint, and if it intersects the
             // original
@@ -871,13 +351,12 @@ where
     };
 
     for (&start_index, intr_list) in &intersects_lookup {
-        let mut intr_list_iter = intr_list.windows(2);
-        while let Some(&[intr1, intr2]) = intr_list_iter.next() {
+        for intrs in intr_list.windows(2) {
             let slice = PlineViewData::from_slice_points(
                 raw_offset_polyline,
-                intr1,
+                intrs[0],
                 start_index,
-                intr2,
+                intrs[1],
                 start_index,
                 pos_equal_eps,
             );
@@ -919,24 +398,40 @@ where
     result
 }
 
-/// Adds circle intersects to the `intersect_lookups` given.
-fn visit_circle_intersects<P, T, F>(
+/// Circle query geometry and spatial index.
+struct CircleIntersectQuery<'a, T>
+where
+    T: Real,
+{
+    center: Vector2<T>,
+    radius: T,
+    aabb_index: &'a StaticAABB2DIndex<T>,
+    pos_equal_eps: T,
+}
+
+/// Visits circle intersections after resolving each spatial-index item with `filter`.
+///
+/// `filter` returns the corresponding polyline segment index or `None` to reject the item before
+/// the detailed line-circle or circle-circle test.
+fn visit_circle_intersects<P, T, F, V>(
     pline: &P,
-    circle_center: Vector2<T>,
-    circle_radius: T,
-    aabb_index: &StaticAABB2DIndex<T>,
-    visitor: &mut F,
-    options: &PlineOffsetOptions<T>,
+    query: &CircleIntersectQuery<'_, T>,
+    filter: &F,
+    visitor: &mut V,
 ) where
     P: PlineSource<Num = T> + ?Sized,
     T: Real,
-    F: FnMut(usize, Vector2<T>),
+    F: Fn(usize) -> Option<usize>,
+    V: FnMut(usize, Vector2<T>),
 {
-    let pos_equal_eps = options.pos_equal_eps;
+    let circle_center = query.center;
+    let circle_radius = query.radius;
+    let aabb_index = query.aabb_index;
+    let pos_equal_eps = query.pos_equal_eps;
 
     let is_valid_line_intr = |t: T| -> bool {
         // skip false intersects and intersects at start of seg
-        !is_false_intersect(t) && t.abs() > pos_equal_eps
+        t >= T::zero() && t <= T::one() && t.abs() > pos_equal_eps
     };
 
     let is_valid_arc_intr = |arc_center: Vector2<T>,
@@ -964,7 +459,10 @@ fn visit_circle_intersects<P, T, F>(
         circle_center.y + circle_radius,
     );
 
-    for start_index in query_results {
+    for item in query_results {
+        let Some(start_index) = filter(item) else {
+            continue;
+        };
         let v1 = pline.at(start_index);
         let v2 = pline.at(pline.next_wrapping_index(start_index));
         if v1.bulge_is_zero() {
@@ -1020,17 +518,22 @@ fn visit_circle_intersects<P, T, F>(
 
 pub fn slices_from_dual_raw_offsets<P, R, T>(
     original_polyline: &P,
-    raw_offset_polyline: &R,
-    dual_raw_offset_polyline: &R,
+    raw_offset: &RawOffsetResult<R>,
+    dual_raw_offset: &RawOffsetResult<R>,
     orig_polyline_index: &StaticAABB2DIndex<T>,
     offset: T,
     options: &PlineOffsetOptions<T>,
 ) -> Vec<PlineViewData<T>>
 where
     P: PlineSource<Num = T> + ?Sized,
-    R: PlineSource<Num = T> + ?Sized,
+    R: PlineSource<Num = T>,
     T: Real,
 {
+    let raw_offset_polyline = &raw_offset.polyline;
+    let invalid_segments = &raw_offset.invalid_segments;
+    let dual_raw_offset_polyline = &dual_raw_offset.polyline;
+    let dual_invalid_segments = &dual_raw_offset.invalid_segments;
+
     let mut result = Vec::new();
     if raw_offset_polyline.vertex_count() < 2 {
         return result;
@@ -1039,19 +542,68 @@ where
     let pos_equal_eps = options.pos_equal_eps;
     let offset_dist_eps = options.offset_dist_eps;
 
-    let raw_offset_index = raw_offset_polyline.create_approx_aabb_index();
+    let invalid_segment_indexes = &raw_offset.invalid_segment_indexes;
+    let has_invalid = !invalid_segment_indexes.is_empty();
+    let dual_has_invalid = !dual_raw_offset.invalid_segment_indexes.is_empty();
+    if invalid_segment_indexes.len() == invalid_segments.len() {
+        return result;
+    }
+    let (raw_offset_index, raw_index_to_segment);
+    let self_intrs = if has_invalid {
+        (raw_offset_index, raw_index_to_segment) = create_segment_index(
+            raw_offset_polyline,
+            invalid_segments,
+            invalid_segment_indexes.len(),
+        );
+        all_self_intersects_as_basic_filtered(
+            raw_offset_polyline,
+            &raw_offset_index,
+            |item| {
+                let index = match item {
+                    PlineIntersectFilterItem::LocalSegment(index) => index,
+                    PlineIntersectFilterItem::GlobalAabbItem(item) => raw_index_to_segment
+                        .as_deref()
+                        .map_or(item, |mapping| mapping[item]),
+                };
+                (!invalid_segments[index]).then_some(index)
+            },
+            false,
+            pos_equal_eps,
+        )
+    } else {
+        raw_offset_index = raw_offset_polyline.create_approx_aabb_index();
+        raw_index_to_segment = None;
+        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, false, pos_equal_eps)
+    };
 
-    let self_intrs =
-        all_self_intersects_as_basic(raw_offset_polyline, &raw_offset_index, false, pos_equal_eps);
-
-    let dual_intrs = find_intersects(
-        raw_offset_polyline,
-        dual_raw_offset_polyline,
-        &FindIntersectsOptions {
-            pline1_aabb_index: Some(&raw_offset_index),
-            pos_equal_eps: options.pos_equal_eps,
-        },
-    );
+    let dual_intrs = if has_invalid || dual_has_invalid {
+        find_intersects_filtered(
+            raw_offset_polyline,
+            dual_raw_offset_polyline,
+            &raw_offset_index,
+            |item| match item {
+                TwoPlinesIntersectFilterItem::Pline1AabbItem(item) => {
+                    let index = raw_index_to_segment
+                        .as_deref()
+                        .map_or(item, |mapping| mapping[item]);
+                    (!invalid_segments[index]).then_some(index)
+                }
+                TwoPlinesIntersectFilterItem::Pline2Segment(index) => {
+                    (!dual_invalid_segments[index]).then_some(index)
+                }
+            },
+            pos_equal_eps,
+        )
+    } else {
+        find_intersects(
+            raw_offset_polyline,
+            dual_raw_offset_polyline,
+            &FindIntersectsOptions {
+                pline1_aabb_index: Some(&raw_offset_index),
+                pos_equal_eps,
+            },
+        )
+    };
 
     // using BTreeMap rather than  HashMap since we want to construct the slices in vertex index
     // order and we do so by looping through all intersects (required later when slices are stitched
@@ -1059,7 +611,7 @@ where
     // indexes to ensure longest stitched results are formed)
     let mut intersects_lookup = BTreeMap::<usize, Vec<Vector2<T>>>::new();
 
-    // helper function to add intersects to the lookup
+    // Invalid requested spans cannot own geometric slice boundaries.
     let mut add_intr = |start_index: usize, intr: Vector2<T>| {
         intersects_lookup.entry(start_index).or_default().push(intr);
     };
@@ -1068,33 +620,50 @@ where
         // add intersects between circles generated at original open polyline end points and raw
         // offset polyline
         let circle_radius = offset.abs();
-        visit_circle_intersects(
-            raw_offset_polyline,
+        let include_segment = |item: usize| {
+            let index = raw_index_to_segment
+                .as_deref()
+                .map_or(item, |mapping| mapping[item]);
+            (!invalid_segments[index]).then_some(index)
+        };
+        for center in [
             original_polyline.at(0).pos(),
-            circle_radius,
-            &raw_offset_index,
-            &mut add_intr,
-            options,
-        );
-        visit_circle_intersects(
-            raw_offset_polyline,
             original_polyline.last().unwrap().pos(),
-            circle_radius,
-            &raw_offset_index,
-            &mut add_intr,
-            options,
-        );
+        ] {
+            let query = CircleIntersectQuery {
+                center,
+                radius: circle_radius,
+                aabb_index: &raw_offset_index,
+                pos_equal_eps,
+            };
+            if has_invalid {
+                visit_circle_intersects(
+                    raw_offset_polyline,
+                    &query,
+                    &include_segment,
+                    &mut add_intr,
+                );
+            } else {
+                visit_circle_intersects(
+                    raw_offset_polyline,
+                    &query,
+                    &Some,
+                    &mut add_intr,
+                );
+            }
+        }
     }
 
-    // add all self intersects
+    // Add all self intersects.
     for &si in &self_intrs {
         add_intr(si.start_index1, si.point);
         add_intr(si.start_index2, si.point);
     }
 
-    // only add intersects with start_index1 from dual intersects (corresponds to the the raw offset
-    // polyline)
+    // Only add intersects using start_index1 (corresponds to the the raw offset polyline).
     for &intr in &dual_intrs.basic_intersects {
+        debug_assert!(intr.start_index1 < raw_offset_polyline.segment_count());
+        debug_assert!(intr.start_index2 < dual_raw_offset_polyline.segment_count());
         add_intr(intr.start_index1, intr.point);
     }
     // Note not adding any overlapping intersects (they can only arise due to collapsing regions)
@@ -1102,6 +671,11 @@ where
     let mut query_stack = Vec::with_capacity(8);
 
     if intersects_lookup.is_empty() {
+        if has_invalid {
+            return result;
+        }
+
+        let slice = PlineViewData::from_entire_pline(raw_offset_polyline);
         // test a point on raw offset polyline
         if !point_valid_for_offset(
             original_polyline,
@@ -1116,7 +690,6 @@ where
         }
 
         // is valid
-        let slice = PlineViewData::from_entire_pline(raw_offset_polyline);
         result.push(slice);
         return result;
     }
@@ -1179,6 +752,15 @@ where
     };
 
     let slice_is_valid = |slice: &PlineViewData<T>, query_stack: &mut Vec<usize>| -> bool {
+        if slice_contains_invalid_segment(
+            slice,
+            raw_offset_polyline.is_closed(),
+            raw_offset_polyline.segment_count(),
+            invalid_segment_indexes,
+        ) {
+            return false;
+        }
+
         if slice.end_index_offset == 0 {
             // slice all on one segment, test start, end, midpoint, and if it intersects the
             // original
@@ -1260,13 +842,12 @@ where
     }
 
     for (&start_index, intr_list) in &intersects_lookup {
-        let mut intr_list_iter = intr_list.windows(2);
-        while let Some(&[intr1, intr2]) = intr_list_iter.next() {
+        for intrs in intr_list.windows(2) {
             let slice = PlineViewData::from_slice_points(
                 raw_offset_polyline,
-                intr1,
+                intrs[0],
                 start_index,
-                intr2,
+                intrs[1],
                 start_index,
                 pos_equal_eps,
             );
@@ -1499,20 +1080,21 @@ where
         &constructed_index
     };
 
-    let raw_offset: O = create_raw_offset_polyline(polyline, offset, options.pos_equal_eps);
-    if raw_offset.is_empty() {
+    let raw_offset: RawOffsetResult<O> = create_raw_offset(polyline, offset, options.pos_equal_eps);
+    if raw_offset.polyline.is_empty() {
         Vec::new()
     } else if polyline.is_closed() && !options.handle_self_intersects {
         let slices = slices_from_raw_offset(polyline, &raw_offset, index, offset, options);
         stitch_slices_together(
-            &raw_offset,
+            &raw_offset.polyline,
             &slices,
             true,
-            raw_offset.vertex_count() - 1,
+            raw_offset.polyline.vertex_count() - 1,
             options,
         )
     } else {
-        let dual_raw_offset = create_raw_offset_polyline(polyline, -offset, options.pos_equal_eps);
+        let dual_raw_offset: RawOffsetResult<O> =
+            create_raw_offset(polyline, -offset, options.pos_equal_eps);
         let slices = slices_from_dual_raw_offsets(
             polyline,
             &raw_offset,
@@ -1523,10 +1105,10 @@ where
         );
 
         stitch_slices_together(
-            &raw_offset,
+            &raw_offset.polyline,
             &slices,
             polyline.is_closed(),
-            raw_offset.vertex_count(),
+            raw_offset.polyline.vertex_count(),
             options,
         )
     }
@@ -1540,6 +1122,10 @@ where
 {
     if polyline.vertex_count() < 2 {
         return Vec::new();
+    }
+
+    if offset == T::zero() {
+        return vec![O::create_from(polyline)];
     }
 
     // Sanitize repeat positions to prevent unstable/degenerate segments.
@@ -1559,4 +1145,65 @@ where
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::polyline::{PlineSourceMut, Polyline};
+
+    fn open(vertexes: &[(f64, f64, f64)]) -> Polyline<f64> {
+        let mut result = Polyline::new();
+        for &(x, y, bulge) in vertexes {
+            result.add(x, y, bulge);
+        }
+        result
+    }
+
+    #[test]
+    fn slices_with_invalid_indexes_are_rejected() {
+        let source = open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]);
+        let slice = PlineViewData::from_entire_pline(&source);
+        assert!(slice_contains_invalid_segment(&slice, false, 1, &[0]));
+
+        let wrapped_slice = PlineViewData {
+            start_index: 3,
+            end_index_offset: 1,
+            ..slice
+        };
+        assert!(slice_contains_invalid_segment(
+            &wrapped_slice,
+            true,
+            4,
+            &[0]
+        ));
+        assert!(!slice_contains_invalid_segment(
+            &wrapped_slice,
+            true,
+            4,
+            &[1, 2]
+        ));
+    }
+
+    #[test]
+    fn segment_index_compacts_only_for_dense_invalidity() {
+        let polyline = open(&[
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            (3.0, 0.0, 0.0),
+            (4.0, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+        ]);
+
+        let (sparse_index, sparse_mapping) =
+            create_segment_index(&polyline, &[false, true, false, false, false], 1);
+        assert_eq!(sparse_index.item_indices().len(), 5);
+        assert!(sparse_mapping.is_none());
+
+        let (dense_index, dense_mapping) =
+            create_segment_index(&polyline, &[true, false, true, false, true], 3);
+        assert_eq!(dense_index.item_indices().len(), 2);
+        assert_eq!(dense_mapping.unwrap(), [1, 3]);
+    }
 }

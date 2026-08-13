@@ -1,9 +1,12 @@
 use std::hint::black_box;
 
 use cavalier_contours::polyline::{
-    PlineSource, Polyline, internal::pline_offset::create_raw_offset,
+    PlineSource, PlineSourceMut, Polyline, internal::raw_pline_offset::create_raw_offset,
 };
-use criterion::{Bencher, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{
+    Bencher, BenchmarkGroup, BenchmarkId, Criterion, criterion_group, criterion_main,
+    measurement::WallTime,
+};
 
 mod test_polylines;
 
@@ -27,6 +30,37 @@ fn polyline_area_group(c: &mut Criterion) {
     }
 
     group.finish();
+}
+
+fn invalid_line_zigzag(vertex_count: u32) -> Polyline<f64> {
+    let mut result = Polyline::new();
+    result.reserve(usize::try_from(vertex_count).unwrap());
+    for i in 0..vertex_count {
+        result.add(f64::from(i), f64::from(i % 2), 0.0);
+    }
+    result
+}
+
+fn invalid_line_arc_zigzag(vertex_count: u32) -> Polyline<f64> {
+    let mut result = Polyline::new();
+    result.reserve(usize::try_from(vertex_count).unwrap());
+    for i in 0..vertex_count {
+        let bulge = if i % 2 == 0 { 0.0 } else { 0.5 };
+        result.add(f64::from(i), f64::from(i % 2), bulge);
+    }
+    result
+}
+
+fn closed_invalid_runs(vertex_count: u32) -> Polyline<f64> {
+    let mut result = Polyline::new_closed();
+    result.reserve(usize::try_from(vertex_count).unwrap());
+    for i in 0..vertex_count {
+        let angle = f64::from(i) * std::f64::consts::TAU / f64::from(vertex_count);
+        let radius = if i % 4 == 0 { 4.0 } else { 20.0 };
+        let (sin, cos) = angle.sin_cos();
+        result.add(radius * cos, radius * sin, 0.0);
+    }
+    result
 }
 
 fn repeat_offsets(polyline: &Polyline<f64>, offset: f64, count: u32) {
@@ -53,132 +87,96 @@ fn repeat_raw_offsets(polyline: &Polyline<f64>, offset: f64, count: u32) {
     }
 }
 
-fn raw_offset_creation_group(c: &mut Criterion) {
-    let mut group = c.benchmark_group("raw_offset_creation");
-
+fn add_offset_benchmarks(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    repeat: fn(&Polyline<f64>, f64, u32),
+) {
     let profile1 = profile1();
     group.bench_function("profile1", |b| {
-        b.iter(|| repeat_raw_offsets(&profile1, 0.1, 40));
+        b.iter(|| repeat(&profile1, 0.1, 40));
     });
 
     let profile2 = profile2();
     group.bench_function("profile2", |b| {
-        b.iter(|| repeat_raw_offsets(&profile2, 0.1, 40));
+        b.iter(|| repeat(&profile2, 0.1, 40));
     });
 
     let profile1_no_arcs = profile1_no_arcs();
     group.bench_function("profile1_no_arcs", |b| {
-        b.iter(|| repeat_raw_offsets(&profile1_no_arcs, 0.1, 40));
+        b.iter(|| repeat(&profile1_no_arcs, 0.1, 40));
     });
 
     let profile2_no_arcs = profile2_no_arcs();
     group.bench_function("profile2_no_arcs", |b| {
-        b.iter(|| repeat_raw_offsets(&profile2_no_arcs, 0.1, 40));
+        b.iter(|| repeat(&profile2_no_arcs, 0.1, 40));
     });
 
     let floor_plan = floor_plan();
     group.bench_function("floor_plan", |b| {
-        b.iter(|| repeat_raw_offsets(&floor_plan, 0.25, 12));
+        b.iter(|| repeat(&floor_plan, 0.25, 12));
     });
 
     let mechanical_bracket = mechanical_bracket();
     group.bench_function("mechanical_bracket", |b| {
-        b.iter(|| repeat_raw_offsets(&mechanical_bracket, 0.2, 10));
+        b.iter(|| repeat(&mechanical_bracket, 0.2, 10));
     });
 
     let road_centerline = road_centerline();
     group.bench_function("road_centerline", |b| {
-        b.iter(|| repeat_raw_offsets(&road_centerline, 0.5, 8));
+        b.iter(|| repeat(&road_centerline, 0.5, 8));
     });
 
     let bezier_enclosure = bezier_enclosure();
     group.bench_function("bezier_enclosure", |b| {
-        b.iter(|| repeat_raw_offsets(&bezier_enclosure, 0.25, 8));
+        b.iter(|| repeat(&bezier_enclosure, 0.25, 8));
     });
 
     let involute_gear = involute_gear();
     group.bench_function("involute_gear", |b| {
-        b.iter(|| repeat_raw_offsets(&involute_gear, 0.2, 4));
+        b.iter(|| repeat(&involute_gear, 0.2, 4));
     });
 
     let involute_gear_with_arcs = involute_gear_with_arcs();
     group.bench_function("involute_gear_with_arcs", |b| {
-        b.iter(|| repeat_raw_offsets(&involute_gear_with_arcs, 0.2, 4));
+        b.iter(|| repeat(&involute_gear_with_arcs, 0.2, 4));
     });
 
     let pathological1 = pathological1(100);
     group.bench_function("pathological1", |b| {
-        b.iter(|| repeat_raw_offsets(&pathological1, 1.0, 30));
+        b.iter(|| repeat(&pathological1, 1.0, 30));
     });
 
     let pathological1_no_arcs = pathological1_no_arcs(100);
     group.bench_function("pathological1_no_arcs", |b| {
-        b.iter(|| repeat_raw_offsets(&pathological1_no_arcs, 1.0, 30));
+        b.iter(|| repeat(&pathological1_no_arcs, 1.0, 30));
     });
 
+    let invalid_line_zigzag = invalid_line_zigzag(200);
+    group.bench_function("invalid_line_zigzag", |b| {
+        b.iter(|| repeat(&invalid_line_zigzag, 5.0, 3));
+    });
+
+    let invalid_line_arc_zigzag = invalid_line_arc_zigzag(200);
+    group.bench_function("invalid_line_arc_zigzag", |b| {
+        b.iter(|| repeat(&invalid_line_arc_zigzag, 5.0, 3));
+    });
+
+    let closed_invalid_runs = closed_invalid_runs(200);
+    group.bench_function("closed_invalid_runs", |b| {
+        b.iter(|| repeat(&closed_invalid_runs, 3.0, 3));
+    });
+}
+
+fn raw_offset_creation_group(c: &mut Criterion) {
+    let mut group = c.benchmark_group("raw_offset_creation");
+    add_offset_benchmarks(&mut group, repeat_raw_offsets);
     group.finish();
 }
 
 fn polyline_offset_group(c: &mut Criterion) {
-    let profile1 = profile1();
-    c.bench_function("profile1", |b| {
-        b.iter(|| repeat_offsets(&profile1, 0.1, 40));
-    });
-
-    let profile2 = profile2();
-    c.bench_function("profile2", |b| {
-        b.iter(|| repeat_offsets(&profile2, 0.1, 40));
-    });
-
-    let profile1_no_arcs = profile1_no_arcs();
-    c.bench_function("profile1_no_arcs", |b| {
-        b.iter(|| repeat_offsets(&profile1_no_arcs, 0.1, 40));
-    });
-
-    let profile2_no_arcs = profile2_no_arcs();
-    c.bench_function("profile2_no_arcs", |b| {
-        b.iter(|| repeat_offsets(&profile2_no_arcs, 0.1, 40));
-    });
-
-    let floor_plan = floor_plan();
-    c.bench_function("floor_plan", |b| {
-        b.iter(|| repeat_offsets(&floor_plan, 0.25, 12));
-    });
-
-    let mechanical_bracket = mechanical_bracket();
-    c.bench_function("mechanical_bracket", |b| {
-        b.iter(|| repeat_offsets(&mechanical_bracket, 0.2, 10));
-    });
-
-    let road_centerline = road_centerline();
-    c.bench_function("road_centerline", |b| {
-        b.iter(|| repeat_offsets(&road_centerline, 0.5, 8));
-    });
-
-    let bezier_enclosure = bezier_enclosure();
-    c.bench_function("bezier_enclosure", |b| {
-        b.iter(|| repeat_offsets(&bezier_enclosure, 0.25, 8));
-    });
-
-    let involute_gear = involute_gear();
-    c.bench_function("involute_gear", |b| {
-        b.iter(|| repeat_offsets(&involute_gear, 0.2, 4));
-    });
-
-    let involute_gear_with_arcs = involute_gear_with_arcs();
-    c.bench_function("involute_gear_with_arcs", |b| {
-        b.iter(|| repeat_offsets(&involute_gear_with_arcs, 0.2, 4));
-    });
-
-    let pathological1 = pathological1(100);
-    c.bench_function("pathological1", |b| {
-        b.iter(|| repeat_offsets(&pathological1, 1.0, 30));
-    });
-
-    let pathological1_no_arcs = pathological1_no_arcs(100);
-    c.bench_function("pathological1_no_arcs", |b| {
-        b.iter(|| repeat_offsets(&pathological1_no_arcs, 1.0, 30));
-    });
+    let mut group = c.benchmark_group("polyline_offset");
+    add_offset_benchmarks(&mut group, repeat_offsets);
+    group.finish();
 }
 
 criterion_group!(

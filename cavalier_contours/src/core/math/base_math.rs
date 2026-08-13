@@ -177,6 +177,49 @@ where
     angle_is_within_sweep_eps(test_angle, start_angle, sweep_angle, T::fuzzy_epsilon())
 }
 
+/// Returns the exact axis-aligned minimum and maximum points for an arc sweep.
+///
+/// `start_angle` and `sweep_angle` define the sweep from `arc_start` to `arc_end` around
+/// `arc_center` with the given `arc_radius`.
+#[inline]
+pub fn arc_sweep_extents<T>(
+    arc_start: Vector2<T>,
+    arc_end: Vector2<T>,
+    arc_center: Vector2<T>,
+    arc_radius: T,
+    start_angle: T,
+    sweep_angle: T,
+) -> (Vector2<T>, Vector2<T>)
+where
+    T: Real,
+{
+    let crosses = |test_angle| angle_is_within_sweep(test_angle, start_angle, sweep_angle);
+    let (end_min_x, end_max_x) = min_max(arc_start.x, arc_end.x);
+    let (end_min_y, end_max_y) = min_max(arc_start.y, arc_end.y);
+    let min_x = if crosses(T::pi()) {
+        arc_center.x - arc_radius
+    } else {
+        end_min_x
+    };
+    let min_y = if crosses(T::from(1.5).unwrap() * T::pi()) {
+        arc_center.y - arc_radius
+    } else {
+        end_min_y
+    };
+    let max_x = if crosses(T::zero()) {
+        arc_center.x + arc_radius
+    } else {
+        end_max_x
+    };
+    let max_y = if crosses(T::from(0.5).unwrap() * T::pi()) {
+        arc_center.y + arc_radius
+    } else {
+        end_max_y
+    };
+
+    (Vector2::new(min_x, min_y), Vector2::new(max_x, max_y))
+}
+
 /// Returns the solutions to the quadratic equation.
 ///
 /// Quadratic equation is `-b +/- sqrt(b * b - 4 * a * c) / (2 * a)`.
