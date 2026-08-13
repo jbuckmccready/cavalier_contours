@@ -26,3 +26,10 @@ unsafe_optimizations = ["static_aabb2d_index/unsafe_optimizations"]
 num-traits = "0.2"
 serde = {version = "1.0", optional = true, features = ["derive"]}
 static_aabb2d_index = "2.1"
+
+[dev-dependencies]
+criterion = "0.8.2"
+
+[[bench]]
+harness = false
+name = "benches"
