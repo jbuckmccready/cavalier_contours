@@ -23,6 +23,7 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 - Added Criterion benchmarks for polyline area and raw and final parallel offset creation.
 - Added initial AGENTS.md.
 - Refactored raw offset slice validation to share common logic between single and dual raw offsets.
+- Marked workspace-only algorithm APIs as hidden from generated documentation.
 
 ## 0.8.0 - 2026-08-09
 

@@ -1,3 +1,8 @@
+//! Internal stages of the polyline Boolean algorithm.
+//!
+//! The public items in this module are exposed only so workspace visualization and tests can
+//! inspect intermediate algorithm results.
+
 use crate::{
     core::math::dist_squared,
     polyline::{

@@ -1,3 +1,8 @@
+//! Internal implementation of polyline containment tests.
+//!
+//! The public function in this module is exposed only as part of the workspace-internal polyline
+//! implementation API.
+
 use crate::polyline::{
     FindIntersectsOptions, PlineContainsOptions, PlineContainsResult, PlineSource,
     internal::pline_intersects::scan_for_intersect,

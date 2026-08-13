@@ -611,8 +611,11 @@ where
     /// are fuzzy equal.
     const VALIDATION_POINT_ON_SEG_EPS: f64 = 1e-3;
 
-    /// Function mostly used for debugging and asserts, checks that this slice's properties are
-    /// valid for the source polyline provided.
+    /// Checks that this slice's properties are valid for the source polyline provided.
+    ///
+    /// This method is public only so tests and debugging tools can validate manually constructed
+    /// view data.
+    #[doc(hidden)]
     pub fn validate_for_source<P>(&self, source: &P) -> ViewDataValidation<T>
     where
         P: PlineSource<Num = T> + ?Sized,
@@ -685,7 +688,10 @@ where
     }
 }
 
-/// Enum used for view data validation debugging and asserting.
+/// Result of validating view data for debugging and assertions.
+///
+/// This type is public only as the result of [`PlineViewData::validate_for_source`].
+#[doc(hidden)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ViewDataValidation<T> {
     SourceHasNoSegments,

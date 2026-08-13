@@ -24,6 +24,7 @@ use crate::{
 ///
 /// This struct is made public for visualization and testing purposes, allowing
 /// intermediate offset results to be inspected during algorithm execution.
+#[doc(hidden)]
 pub struct OffsetLoop<T: Real> {
     /// Index of the parent loop in the original input shape
     pub parent_loop_idx: usize,
@@ -49,11 +50,6 @@ where
 /// This structure combines a polyline with a spatial index (AABB tree) that enables
 /// fast intersection testing, nearest neighbor queries, and other spatial operations.
 /// The spatial index is automatically built from the polyline's segment bounding boxes.
-///
-/// # Public Visibility
-///
-/// This struct is made public for visualization and testing purposes, allowing
-/// access to both the polyline geometry and its spatial acceleration structure.
 #[derive(Debug, Clone)]
 pub struct IndexedPolyline<T: Real> {
     /// The polyline geometry
@@ -66,6 +62,7 @@ impl<T> IndexedPolyline<T>
 where
     T: Real,
 {
+    /// Creates an indexed polyline and builds its spatial index.
     #[must_use]
     pub fn new(polyline: Polyline<T>) -> Self {
         let spatial_index = polyline.create_approx_aabb_index();
@@ -75,6 +72,7 @@ where
         }
     }
 
+    /// Computes parallel offsets for use in a shape offset operation.
     pub fn parallel_offset_for_shape(
         &self,
         offset: T,
@@ -253,6 +251,7 @@ where
     ///
     /// This method is made public for visualization and testing purposes, allowing intermediate
     /// results to be inspected during the offset algorithm execution.
+    #[doc(hidden)]
     pub fn create_offset_loops_with_index(
         &self,
         offset: T,
@@ -348,6 +347,7 @@ where
     ///
     /// This method is made public for visualization and testing purposes, allowing intersection
     /// points to be displayed and the intersection detection logic to be independently tested.
+    #[doc(hidden)]
     pub fn find_intersects_between_offset_loops(
         &self,
         ccw_offset_loops: &[OffsetLoop<T>],
@@ -468,6 +468,7 @@ where
     ///
     /// This method is made public for visualization and testing purposes, allowing individual
     /// slices to be displayed and the slice validation logic to be independently tested.
+    #[doc(hidden)]
     pub fn create_valid_slices_from_intersects(
         &self,
         ccw_offset_loops: &[OffsetLoop<T>],
@@ -734,6 +735,7 @@ where
     ///
     /// This method is made public for visualization and testing purposes, allowing the stitching
     /// process to be observed and the final assembly logic to be independently tested.
+    #[doc(hidden)]
     #[must_use]
     pub fn stitch_slices_together(
         &self,
@@ -893,6 +895,7 @@ where
 ///
 /// This struct is made public for visualization and testing purposes, allowing
 /// intersection data to be inspected and displayed during algorithm execution.
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct SlicePointSet<T> {
     /// Index of the first offset loop in the intersection pair
@@ -913,6 +916,7 @@ pub struct SlicePointSet<T> {
 ///
 /// This struct is made public for visualization and testing purposes, allowing
 /// individual slices to be displayed before the final stitching step.
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
 pub struct DissectedSlice<T: Real> {
     /// Index of the source offset loop this slice comes from

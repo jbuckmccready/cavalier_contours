@@ -1,3 +1,8 @@
+//! Internal polyline intersection implementation and intermediate types.
+//!
+//! The public items in this module are exposed only so workspace visualization and tests can
+//! inspect intermediate algorithm results.
+
 use crate::{
     core::{
         Control,

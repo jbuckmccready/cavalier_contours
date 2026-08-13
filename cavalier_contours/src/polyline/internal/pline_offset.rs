@@ -1,3 +1,8 @@
+//! Internal stages and intermediate types for the polyline offset algorithm.
+//!
+//! The public items in this module are exposed only so workspace visualization, benchmarks, and
+//! tests can inspect intermediate algorithm results.
+
 use crate::{
     core::{
         math::{
