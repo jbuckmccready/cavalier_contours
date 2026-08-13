@@ -14,6 +14,7 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 ### Internal
 
 - Added Criterion benchmarks for polyline area and raw and final parallel offset creation.
+- Added initial AGENTS.md.
 
 ## 0.8.0 - 2026-08-09
 
