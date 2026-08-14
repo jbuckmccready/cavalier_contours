@@ -10,6 +10,8 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   global distance checks to produce invalid outputs (this is also a significant optimization).
   This fixes the "wifi leaking" pattern with repeated offsets reported
   ([#79](https://github.com/jbuckmccready/cavalier_contours/issues/79)).
+- Fixed visible arc distortion in the UI at high zoom by using a more accurate shared arc
+  approximation for polyline and raw offset rendering.
 
 ### Optimizations ⚡
 

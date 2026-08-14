@@ -8,7 +8,7 @@ use cavalier_contours::{core::math::Vector2, static_aabb2d_index::AABB};
 use egui::epaint;
 use egui_plot::PlotTransform;
 use lyon::{
-    path::{Path, PathEvent},
+    path::{BuilderImpl, Path, PathEvent, builder::WithSvg},
     tessellation::{FillVertexConstructor, StrokeVertexConstructor},
 };
 
@@ -17,6 +17,69 @@ pub const PLOT_VERTEX_RADIUS: f32 = 4.0;
 
 /// Minimum plot width/height for drawing. This avoids degenerate behavior when super zoomed in.
 const MIN_PLOT_SIZE: f64 = 1e-5;
+
+#[derive(Clone, Copy)]
+struct ArcPathData {
+    start: Vector2,
+    end: Vector2,
+    center: Vector2,
+    radius: f64,
+    start_angle: f64,
+    sweep: f64,
+}
+
+fn visit_arc_cubic_beziers<F>(arc: ArcPathData, mut visitor: F)
+where
+    F: FnMut(Vector2, Vector2, Vector2),
+{
+    // Keep each cubic at 45 degrees or less. Coarser quadratic arc conversion has visible radial
+    // error at high zoom, especially when a sweep crosses its subdivision threshold.
+    let max_step = std::f64::consts::FRAC_PI_4.copysign(arc.sweep);
+    let mut remaining = arc.sweep;
+    let mut cubic_start_angle = arc.start_angle;
+    let mut cubic_start = arc.start;
+
+    while remaining.abs() > std::f64::consts::FRAC_PI_4 {
+        let cubic_end_angle = cubic_start_angle + max_step;
+        let cubic_end = arc.center
+            + Vector2::new(
+                arc.radius * cubic_end_angle.cos(),
+                arc.radius * cubic_end_angle.sin(),
+            );
+        let control_scale = arc.radius * 4.0 / 3.0 * (max_step / 4.0).tan();
+        let control1 = cubic_start
+            + Vector2::new(-cubic_start_angle.sin(), cubic_start_angle.cos()).scale(control_scale);
+        let control2 = cubic_end
+            - Vector2::new(-cubic_end_angle.sin(), cubic_end_angle.cos()).scale(control_scale);
+        visitor(control1, control2, cubic_end);
+
+        cubic_start = cubic_end;
+        cubic_start_angle = cubic_end_angle;
+        remaining -= max_step;
+    }
+
+    let cubic_end_angle = cubic_start_angle + remaining;
+    let control_scale = arc.radius * 4.0 / 3.0 * (remaining / 4.0).tan();
+    let control1 = cubic_start
+        + Vector2::new(-cubic_start_angle.sin(), cubic_start_angle.cos()).scale(control_scale);
+    let control2 =
+        arc.end - Vector2::new(-cubic_end_angle.sin(), cubic_end_angle.cos()).scale(control_scale);
+    visitor(control1, control2, arc.end);
+}
+
+fn add_arc_to_path(
+    builder: &mut WithSvg<BuilderImpl>,
+    transform: &PlotTransform,
+    arc: ArcPathData,
+) {
+    visit_arc_cubic_beziers(arc, |control1, control2, end| {
+        builder.cubic_bezier_to(
+            lyon_point(control1, transform),
+            lyon_point(control2, transform),
+            lyon_point(end, transform),
+        );
+    });
+}
 
 fn plot_bounds_valid(bounds: &egui_plot::PlotBounds) -> bool {
     bounds.width() >= MIN_PLOT_SIZE && bounds.height() >= MIN_PLOT_SIZE
@@ -152,6 +215,60 @@ impl StrokeVertexConstructor<epaint::Vertex> for VertexConstructor {
             pos,
             uv: epaint::WHITE_UV,
             color: self.color,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arc_cubics_stay_close_to_circle_across_quadrant_threshold() {
+        // Regression coverage for visible mid-arc bulges when a rendered sweep crosses a curve
+        // subdivision threshold. The approximation must stay close to the circle on either side.
+        let radius = 1000.0;
+        for sweep in [
+            std::f64::consts::FRAC_PI_2 - 1e-3,
+            std::f64::consts::FRAC_PI_2 + 1e-3,
+            -std::f64::consts::FRAC_PI_2 - 1e-3,
+            1.8 * std::f64::consts::PI,
+        ] {
+            let start = Vector2::new(radius, 0.0);
+            let end = Vector2::new(radius * sweep.cos(), radius * sweep.sin());
+            let mut cubic_start = start;
+            let mut final_end = None;
+
+            visit_arc_cubic_beziers(
+                ArcPathData {
+                    start,
+                    end,
+                    center: Vector2::zero(),
+                    radius,
+                    start_angle: 0.0,
+                    sweep,
+                },
+                |control1, control2, cubic_end| {
+                    for i in 0..=100 {
+                        let t = f64::from(i) / 100.0;
+                        let one_minus_t = 1.0 - t;
+                        let point = cubic_start.scale(one_minus_t.powi(3))
+                            + control1.scale(3.0 * one_minus_t.powi(2) * t)
+                            + control2.scale(3.0 * one_minus_t * t.powi(2))
+                            + cubic_end.scale(t.powi(3));
+                        let radial_error = (point.length() - radius).abs();
+                        assert!(
+                            radial_error < radius * 5e-6,
+                            "radial error {radial_error} for sweep {sweep}"
+                        );
+                    }
+
+                    cubic_start = cubic_end;
+                    final_end = Some(cubic_end);
+                },
+            );
+
+            assert_eq!(final_end, Some(end));
         }
     }
 }

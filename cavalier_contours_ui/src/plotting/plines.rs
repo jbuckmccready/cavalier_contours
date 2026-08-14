@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use cavalier_contours::{
-    core::math::angle_from_bulge,
+    core::math::{angle, angle_from_bulge},
     polyline::{PlineSource, Polyline, seg_arc_radius_and_center},
     shape_algorithms::Shape,
     static_aabb2d_index::AABB,
@@ -19,8 +19,8 @@ use lyon::{
 use crate::plotting::plotbounds_to_aabb;
 
 use super::{
-    PLOT_VERTEX_RADIUS, VertexConstructor, aabb_to_plotbounds, cull_path, empty_aabb, lyon_point,
-    plot_bounds_valid,
+    ArcPathData, PLOT_VERTEX_RADIUS, VertexConstructor, aabb_to_plotbounds, add_arc_to_path,
+    cull_path, empty_aabb, lyon_point, plot_bounds_valid,
 };
 
 /// Core trait for plotting polylines data, supports plotting multiple polylines.
@@ -163,10 +163,6 @@ impl<T> PlotItem for PlinesPlotItem<T>
 where
     T: PlinesPlotData,
 {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "lyon drawing types use f32"
-    )]
     fn shapes(&self, _ui: &egui::Ui, transform: &PlotTransform, shapes: &mut Vec<egui::Shape>) {
         if !plot_bounds_valid(transform.bounds()) {
             return;
@@ -175,9 +171,6 @@ where
         if !plot_bounds.overlaps_aabb(&self.data.bounds()) {
             return;
         }
-
-        // scale using x value (assuming uniform scaling)
-        let scaling = transform.dpos_dvalue_x();
 
         let mut builder = Path::svg_builder();
 
@@ -202,19 +195,18 @@ where
                     if v1.bulge_is_zero() {
                         builder.line_to(p2);
                     } else {
-                        let (r, c) = seg_arc_radius_and_center(v1, v2);
-
-                        let radius = (scaling * r) as f32;
-                        let sweep_angle = angle_from_bulge(v1.bulge) as f32;
-
-                        builder.arc(
-                            lyon_point(c, transform),
-                            lyon::path::math::vector(radius, radius),
-                            lyon::geom::Angle {
-                                // negate the sweep angle because y axis is flipped
-                                radians: -sweep_angle,
+                        let (radius, center) = seg_arc_radius_and_center(v1, v2);
+                        add_arc_to_path(
+                            &mut builder,
+                            transform,
+                            ArcPathData {
+                                start: v1.pos(),
+                                end: v2.pos(),
+                                center,
+                                radius,
+                                start_angle: angle(center, v1.pos()),
+                                sweep: angle_from_bulge(v1.bulge),
                             },
-                            lyon::geom::Angle { radians: 0.0 },
                         );
                     }
                 }

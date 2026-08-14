@@ -4,11 +4,14 @@ use cavalier_contours::polyline::internal::raw_pline_offset::RawOffsetSeg;
 use egui::epaint;
 use egui_plot::PlotItem;
 use lyon::{
-    path::builder::WithSvg,
+    path::Path,
     tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, VertexBuffers},
 };
 
-use super::{VertexConstructor, aabb_to_plotbounds, cull_path, lyon_point, plot_bounds_valid};
+use super::{
+    ArcPathData, VertexConstructor, aabb_to_plotbounds, add_arc_to_path, cull_path, lyon_point,
+    plot_bounds_valid,
+};
 
 pub struct RawOffsetSegsPlotItem<'a> {
     pub segs: &'a [RawOffsetSeg<f64>],
@@ -42,10 +45,6 @@ impl<'a> RawOffsetSegsPlotItem<'a> {
 }
 
 impl PlotItem for RawOffsetSegsPlotItem<'_> {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "lyon drawing types use f32"
-    )]
     fn shapes(
         &self,
         _ui: &egui::Ui,
@@ -62,7 +61,6 @@ impl PlotItem for RawOffsetSegsPlotItem<'_> {
             return;
         }
 
-        let scaling = transform.dpos_dvalue_x();
         let mut lyon_mesh: VertexBuffers<_, u32> = VertexBuffers::new();
         let mut stroke_tess = StrokeTessellator::new();
 
@@ -76,7 +74,7 @@ impl PlotItem for RawOffsetSegsPlotItem<'_> {
                 continue;
             }
 
-            let mut builder = WithSvg::<lyon::path::Builder>::new(lyon::path::Builder::new());
+            let mut builder = Path::svg_builder();
             builder.move_to(lyon_point(segment.start(), transform));
             match segment {
                 RawOffsetSeg::Line(line) => {
@@ -86,14 +84,17 @@ impl PlotItem for RawOffsetSegsPlotItem<'_> {
                     builder.line_to(lyon_point(arc.end, transform));
                 }
                 RawOffsetSeg::Arc(arc) => {
-                    let radius = (scaling * arc.radius) as f32;
-                    builder.arc(
-                        lyon_point(arc.center, transform),
-                        lyon::path::math::vector(radius, radius),
-                        lyon::geom::Angle {
-                            radians: -arc.sweep as f32,
+                    add_arc_to_path(
+                        &mut builder,
+                        transform,
+                        ArcPathData {
+                            start: arc.start,
+                            end: arc.end,
+                            center: arc.center,
+                            radius: arc.radius,
+                            start_angle: arc.start_angle,
+                            sweep: arc.sweep,
                         },
-                        lyon::geom::Angle { radians: 0.0 },
                     );
                 }
             }
