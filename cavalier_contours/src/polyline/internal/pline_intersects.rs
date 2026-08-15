@@ -186,7 +186,8 @@ where
         let v1 = polyline.at(i);
         let v2 = polyline.at(j);
         let mut query_visitor = |hit_item: usize| {
-            let Some(hit_i) = visitor.filter_map(PlineIntersectFilterItem::GlobalAabbItem(hit_item))
+            let Some(hit_i) =
+                visitor.filter_map(PlineIntersectFilterItem::GlobalAabbItem(hit_item))
             else {
                 return aabb_index::Control::Continue;
             };
