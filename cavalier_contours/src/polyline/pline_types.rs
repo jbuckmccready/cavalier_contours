@@ -41,6 +41,25 @@ where
     pub distance: T,
 }
 
+/// Controls how tangent contacts between offset loops are handled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TouchingLoopBehavior {
+    /// Preserve the raw traversal through tangent contacts, allowing one result to contain
+    /// multiple loops that touch at a point.
+    Preserve,
+    /// Pair opposite sides of tangent contacts so touching loops become separate results.
+    Separate,
+}
+
+/// Controls how coincident raw offset spans are handled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoincidentSegmentBehavior {
+    /// Retain raw spans that overlap another raw span.
+    Preserve,
+    /// Remove every raw span that overlaps another raw span over a nonzero length.
+    Discard,
+}
+
 /// Struct to hold options parameters when performing polyline offset.
 #[derive(Debug, Clone)]
 pub struct PlineOffsetOptions<'a, T = f64>
@@ -54,18 +73,20 @@ where
     /// restriction is that the spatial index bounding boxes must be at least big enough to contain
     /// the segments.
     pub aabb_index: Option<&'a StaticAABB2DIndex<T>>,
-    /// If true then self intersects will be properly handled by the offset algorithm, if false then
-    /// self intersecting polylines may not offset correctly. Handling self intersects of closed
-    /// polylines requires more memory and computation.
+    /// If true then self intersects in the source polyline will be handled by the offset algorithm.
+    /// If false then self intersecting source polylines may not offset correctly. Handling self
+    /// intersects of closed polylines requires more memory and computation. This option does not
+    /// control whether contacts in the offset output are retained.
     pub handle_self_intersects: bool,
     /// Fuzzy comparison epsilon used for determining if two positions are equal.
     pub pos_equal_eps: T,
-    /// Fuzzy comparison epsilon used for determining if two positions are equal when stitching
-    /// polyline slices together.
-    pub slice_join_eps: T,
     /// Fuzzy comparison epsilon used when testing distance of slices to original polyline for
     /// validity.
     pub offset_dist_eps: T,
+    /// Controls whether loops that meet at tangent contacts remain in one result.
+    pub touching_loop_behavior: TouchingLoopBehavior,
+    /// Controls whether spans that coincide with other raw offset spans are retained.
+    pub coincident_segment_behavior: CoincidentSegmentBehavior,
 }
 
 impl<T> PlineOffsetOptions<'_, T>
@@ -79,8 +100,9 @@ where
             aabb_index: None,
             handle_self_intersects: false,
             pos_equal_eps: T::from(1e-5).unwrap(),
-            slice_join_eps: T::from(1e-4).unwrap(),
             offset_dist_eps: T::from(1e-4).unwrap(),
+            touching_loop_behavior: TouchingLoopBehavior::Preserve,
+            coincident_segment_behavior: CoincidentSegmentBehavior::Preserve,
         }
     }
 }

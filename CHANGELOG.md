@@ -4,8 +4,25 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ## Unreleased
 
+### Added ⭐
+
+- Added `TouchingLoopBehavior` and `CoincidentSegmentBehavior` to polyline offset options. The
+  defaults preserve tangent-touching loops and coincident spans. Callers can instead separate
+  tangent-touching loops or discard every coincident raw span. The C FFI exposes matching constants
+  and option fields.
+
+### Changed 🔧
+
+- ⚠️ BREAKING: Removed `PlineOffsetOptions::slice_join_eps` and the matching
+  `cavc_pline_parallel_offset_o` field. Polyline offset slices now connect through explicit
+  intersection topology and use `pos_equal_eps` only to clean repeated positions. The separate
+  `ShapeOffsetOptions::slice_join_eps` field remains unchanged.
+
 ### Fixed 🐛
 
+- Fixed repeated polyline offsets dropping a valid small-loop span when two loops touch at a
+  tangent point. The default result keeps the full self-touching path, while separate-touch mode
+  returns the two closed loops.
 - Fixed parallel offsets containing locally inverted source spans, which could pass the
   global distance checks to produce invalid outputs (this is also a significant optimization).
   This fixes the "wifi leaking" pattern with repeated offsets reported
@@ -15,8 +32,11 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ### Optimizations ⚡
 
-- Improved parallel offset slice stitching by selecting the next candidate without sorting all
-  candidates.
+- Replaced the polyline offset stitcher's slice-start spatial index and endpoint queries with
+  direct contact-topology lookup. Coincident spans share the basic-contact traversal, and their
+  interval storage and coverage checks run only in discard mode.
+- Improved parallel offset slice stitching by selecting the next candidate without allocating or
+  sorting candidate lists.
 - Reuse the AABB query stack when finding open-offset end-circle intersections (avoids small
   allocation).
 - Optimized arc winding-number checks to avoid calculating circle centers and radii.

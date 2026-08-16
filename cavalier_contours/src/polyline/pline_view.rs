@@ -489,6 +489,8 @@ where
     /// Construct view that is contiguous between two points on a source polyline (start and end of
     /// source polyline are trimmed).
     ///
+    /// Returns `None` when the selected span collapses to zero length within `pos_equal_eps`.
+    ///
     /// # Panics
     ///
     /// This function panics if `source` has less than 2 vertexes or indexes out of range for

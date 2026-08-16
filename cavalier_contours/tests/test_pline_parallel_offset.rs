@@ -1,6 +1,8 @@
 mod test_utils;
 
-use cavalier_contours::polyline::{PlineOffsetOptions, PlineSource, Polyline};
+use cavalier_contours::polyline::{
+    CoincidentSegmentBehavior, PlineOffsetOptions, PlineSource, Polyline, TouchingLoopBehavior,
+};
 use test_utils::{
     ModifiedPlineSet, ModifiedPlineSetVisitor, ModifiedPlineState, PlineProperties,
     create_property_set, property_sets_match,
@@ -10,14 +12,10 @@ fn offset_into_properties_set(
     polyline: &Polyline<f64>,
     offset: f64,
     inverted: bool,
-    handle_self_intersects: bool,
+    options: &PlineOffsetOptions<'_, f64>,
 ) -> Vec<PlineProperties> {
     let offset = if inverted { -offset } else { offset };
-    let options = PlineOffsetOptions {
-        handle_self_intersects,
-        ..Default::default()
-    };
-    let offset_results = polyline.parallel_offset_opt(offset, &options);
+    let offset_results = polyline.parallel_offset_opt(offset, options);
     for r in &offset_results {
         assert!(
             r.remove_repeat_pos(PlineProperties::POS_EQ_EPS).is_none(),
@@ -27,19 +25,19 @@ fn offset_into_properties_set(
     create_property_set(&offset_results, inverted)
 }
 
-struct PlineOffsetTestVisitor<'a> {
+struct PlineOffsetTestVisitor<'a, 'b> {
     offset: f64,
     expected_properties_set: &'a [PlineProperties],
-    handle_self_intersects: bool,
+    options: PlineOffsetOptions<'b, f64>,
 }
 
-impl ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'_> {
+impl ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'_, '_> {
     fn visit(&mut self, modified_pline: Polyline<f64>, pline_state: ModifiedPlineState) {
         let offset_results = offset_into_properties_set(
             &modified_pline,
             self.offset,
             pline_state.inverted_direction,
-            self.handle_self_intersects,
+            &self.options,
         );
         assert!(
             property_sets_match(&offset_results, self.expected_properties_set),
@@ -48,12 +46,14 @@ impl ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'_> {
 
         // For closed polylines, also test with handle_self_intersects=true since it uses a
         // different code path (open polylines always use the same path regardless of this flag)
-        if modified_pline.is_closed() {
+        if modified_pline.is_closed() && !self.options.handle_self_intersects {
+            let mut options = self.options.clone();
+            options.handle_self_intersects = true;
             let offset_results = offset_into_properties_set(
                 &modified_pline,
                 self.offset,
                 pline_state.inverted_direction,
-                true,
+                &options,
             );
             assert!(
                 property_sets_match(&offset_results, self.expected_properties_set),
@@ -63,29 +63,82 @@ impl ModifiedPlineSetVisitor for PlineOffsetTestVisitor<'_> {
     }
 }
 
-fn run_pline_offset_tests(
+fn run_pline_offset_tests_with_direction_inversion(
     input: &Polyline<f64>,
     offset: f64,
     expected_properties_set: &[PlineProperties],
-    handle_self_intersects: bool,
+    options: PlineOffsetOptions<'_, f64>,
+    invert_direction: bool,
 ) {
     let mut visitor = PlineOffsetTestVisitor {
         offset,
         expected_properties_set,
-        handle_self_intersects,
+        options,
     };
 
-    let test_set = ModifiedPlineSet::new(input, true, true);
+    let test_set = ModifiedPlineSet::new(input, invert_direction, true);
     test_set.accept(&mut visitor);
 }
 
+fn run_pline_offset_tests(
+    input: &Polyline<f64>,
+    offset: f64,
+    expected_properties_set: &[PlineProperties],
+    options: PlineOffsetOptions<'_, f64>,
+) {
+    run_pline_offset_tests_with_direction_inversion(
+        input,
+        offset,
+        expected_properties_set,
+        options,
+        true,
+    );
+}
+
+fn run_pline_offset_tests_without_direction_inversion(
+    input: &Polyline<f64>,
+    offset: f64,
+    expected_properties_set: &[PlineProperties],
+    options: PlineOffsetOptions<'_, f64>,
+) {
+    run_pline_offset_tests_with_direction_inversion(
+        input,
+        offset,
+        expected_properties_set,
+        options,
+        false,
+    );
+}
+
+macro_rules! pline_offset_test_options {
+    ($handle_self_intersects:expr) => {{
+        let mut options = PlineOffsetOptions::default();
+        options.handle_self_intersects = $handle_self_intersects;
+        options
+    }};
+    ($handle_self_intersects:expr, $options:expr) => {{
+        let mut options = $options;
+        if $handle_self_intersects {
+            options.handle_self_intersects = true;
+        }
+        options
+    }};
+}
+
 macro_rules! declare_offset_tests {
-    ($($name:ident { $($value:expr => $expected:expr),+ $(,)? })*) => {
+    ($($name:ident {
+        $(($input:expr, $offset:expr $(, $options:expr)?) => $expected:expr),+ $(,)?
+    })*) => {
         $(
             #[test]
             fn $name() {
                 $(
-                    run_pline_offset_tests(&$value.0, $value.1, &$expected, false);
+                    run_pline_offset_tests(
+                        &$input,
+                        $offset,
+                        &$expected,
+                        pline_offset_test_options!(false $(, $options)?),
+                    );
                 )+
             }
         )+
@@ -93,12 +146,19 @@ macro_rules! declare_offset_tests {
 }
 
 macro_rules! declare_self_intersecting_offset_tests {
-    ($($name:ident { $($value:expr => $expected:expr),+ $(,)? })*) => {
+    ($($name:ident {
+        $(($input:expr, $offset:expr $(, $options:expr)?) => $expected:expr),+ $(,)?
+    })*) => {
         $(
             #[test]
             fn $name() {
                 $(
-                    run_pline_offset_tests(&$value.0, $value.1, &$expected, true);
+                    run_pline_offset_tests(
+                        &$input,
+                        $offset,
+                        &$expected,
+                        pline_offset_test_options!(true $(, $options)?),
+                    );
                 )+
             }
         )+
@@ -641,19 +701,6 @@ mod test_past_failures {
                             (30.512933651613217, -0.729_541_510_402_689_9, -0.439_446_060_182_688_7)], 0.1) =>
             [PlineProperties::new(9,195.40133874861155, 61.346378550776606,10.023725045710194, -3.0000000085491503,  30.399051687627463,  14.069231422671779, vec![4])]
         }
-        small_bulge_arc_line_transition {
-            (pline_open_userdata![[4], (-736.0355179644317, 8182.4047193246215, 0.0),
-                         (-736.0355071942802, 8182.404719972044, 0.0),
-                         (-736.0354497945418, 8182.4047234225045, -0.0000000280872245462),
-                         (-736.035438579896, 8182.404724096647, -0.0000000028133819718),
-                         (-736.0353453440823, 8182.404729701303, -0.17144715353094436),
-                         (4578.805065246941, 6656.67568798969, 0.0),
-                         (4578.8050878621025, 6656.675671873701, 0.0),
-                         (4578.805231182584, 6656.675569740822, 0.0)], 3.0) =>
-            [PlineProperties::new(4, 0.0, 5639.266054391041, -736.2155311168141,
-                                  6659.118694762635, 4580.546248163486,
-                                  8200.360349202138, vec![4])]
-        }
         issue77_repeated_offset {
             // Regression test for issue #77: offset should work correctly when the input has vertices
             // that are close together (this input is the result of a previous offset operation).
@@ -685,6 +732,41 @@ mod test_past_failures {
                                   54.766299981736054, 24.126885959158443, vec![4])]
         }
     );
+
+    #[test]
+    fn small_bulge_arc_line_transition() {
+        let input = pline_open_userdata![
+            [4],
+            (-736.0355179644317, 8182.4047193246215, 0.0),
+            (-736.0355071942802, 8182.404719972044, 0.0),
+            (
+                -736.0354497945418,
+                8182.4047234225045,
+                -0.0000000280872245462
+            ),
+            (-736.035438579896, 8182.404724096647, -0.0000000028133819718),
+            (-736.0353453440823, 8182.404729701303, -0.17144715353094436),
+            (4578.805065246941, 6656.67568798969, 0.0),
+            (4578.8050878621025, 6656.675671873701, 0.0),
+            (4578.805231182584, 6656.675569740822, 0.0)
+        ];
+        // Tested without direction inversion because its output is not symmetric.
+        run_pline_offset_tests_without_direction_inversion(
+            &input,
+            3.0,
+            &[PlineProperties::new(
+                4,
+                0.0,
+                5639.266054391041,
+                -736.2155311168141,
+                6659.118694762635,
+                4580.546248163486,
+                8200.360349202138,
+                vec![4],
+            )],
+            PlineOffsetOptions::default(),
+        );
+    }
 }
 
 #[test]
@@ -914,6 +996,1091 @@ fn exact_zero_offset_returns_an_unchanged_copy() {
             }
         }
     }
+}
+
+fn tangent_touching_small_loop_source() -> Polyline<f64> {
+    use cavalier_contours::pline_closed;
+
+    pline_closed![
+        (16.124151571198702, 7.574464011109273, 0.20034828404404934),
+        (20.28700931229173, 6.3601607117462855, -0.02791638180668303),
+        (20.999999999999776, 6.399999999999991, 0.0),
+        (23.0, 6.399999999999993, -0.1034994961613444),
+        (
+            25.565936525389354,
+            5.863102399555457,
+            -0.0052613388474810245
+        ),
+        (25.646796216841157, 6.048325281492069, -0.11047524450583684),
+        (23.335372338598518, 7.618077045350104, 0.43622875539166206),
+    ]
+}
+
+#[test]
+fn default_behavior_preserves_tangent_touching_small_loop() {
+    let options = PlineOffsetOptions {
+        handle_self_intersects: true,
+        ..Default::default()
+    };
+    let result = tangent_touching_small_loop_source().parallel_offset_opt(0.1, &options);
+
+    assert_eq!(result.len(), 1);
+    let result = &result[0];
+    assert!(result.is_closed());
+    assert_eq!(result.vertex_count(), 9);
+    assert!(result.scan_for_self_intersect());
+
+    let expected_small_loop_points = [
+        (25.5, 6.0),
+        (25.513536043139947, 5.994342045615725),
+        (25.513549288435023, 5.994372400909494),
+    ];
+    for (vertex, expected) in result
+        .iter_vertexes()
+        .take(3)
+        .zip(expected_small_loop_points)
+    {
+        assert!((vertex.x - expected.0).abs() <= options.pos_equal_eps);
+        assert!((vertex.y - expected.1).abs() <= options.pos_equal_eps);
+    }
+}
+
+#[test]
+fn next_offset_removes_collapsed_small_loop() {
+    let options = PlineOffsetOptions {
+        handle_self_intersects: true,
+        ..Default::default()
+    };
+    let result = tangent_touching_small_loop_source().parallel_offset_opt(0.1, &options);
+    assert_eq!(result.len(), 1);
+
+    let next = result[0].parallel_offset_opt(0.1, &options);
+    assert_eq!(next.len(), 1);
+    assert!(next[0].is_closed());
+    assert!(!next[0].scan_for_self_intersect());
+}
+
+#[test]
+fn separate_behavior_splits_tangent_touching_small_loop() {
+    let options = PlineOffsetOptions {
+        handle_self_intersects: true,
+        touching_loop_behavior: TouchingLoopBehavior::Separate,
+        ..Default::default()
+    };
+    let source = tangent_touching_small_loop_source();
+    let mut result = source.parallel_offset_opt(0.1, &options);
+    result.sort_unstable_by_key(PlineSource::vertex_count);
+
+    assert_eq!(result.len(), 2);
+    let small_loop = &result[0];
+    let main_loop = &result[1];
+    assert_eq!(small_loop.vertex_count(), 3);
+    assert!(small_loop.is_closed());
+    assert!(small_loop.area() > 0.0);
+    assert!(!small_loop.scan_for_self_intersect());
+    assert_eq!(main_loop.vertex_count(), 6);
+    assert!(main_loop.is_closed());
+    assert!(!main_loop.scan_for_self_intersect());
+    assert!(small_loop.parallel_offset_opt(0.1, &options).is_empty());
+
+    // Tested without direction inversion because its output is not symmetric.
+    run_pline_offset_tests_without_direction_inversion(
+        &source,
+        0.1,
+        &[
+            PlineProperties::new(
+                2,
+                -8.097509205523545e-8,
+                0.029343018249873468,
+                25.500000000000032,
+                5.994372400909494,
+                25.513549288435023,
+                6.000000000000008,
+                vec![],
+            ),
+            PlineProperties::new(
+                6,
+                14.529218970271227,
+                20.12021057393036,
+                16.27146956732631,
+                6.000000000000008,
+                25.500000000000032,
+                9.069231422671798,
+                vec![],
+            ),
+        ],
+        options,
+    );
+}
+
+#[test]
+fn touching_loop_behavior_does_not_change_crossing_routing() {
+    use cavalier_contours::pline_closed;
+
+    let source: Polyline<f64> = pline_closed![
+        (0.0, 0.0, 0.0),
+        (4.0, 4.0, 0.0),
+        (0.0, 4.0, 0.0),
+        (4.0, 0.0, 0.0)
+    ];
+    let preserve = source.parallel_offset_opt(
+        0.1,
+        &PlineOffsetOptions {
+            handle_self_intersects: true,
+            ..Default::default()
+        },
+    );
+    let separate = source.parallel_offset_opt(
+        0.1,
+        &PlineOffsetOptions {
+            handle_self_intersects: true,
+            touching_loop_behavior: TouchingLoopBehavior::Separate,
+            ..Default::default()
+        },
+    );
+
+    let preserve_properties = create_property_set(&preserve, false);
+    let separate_properties = create_property_set(&separate, false);
+    assert!(
+        property_sets_match(&preserve_properties, &separate_properties),
+        "touching-loop behavior must not change true crossing results"
+    );
+}
+
+mod test_topology_stitching {
+    use super::*;
+    use cavalier_contours::{
+        pline_closed_userdata, pline_open_userdata,
+        polyline::{CoincidentSegmentBehavior as Coincident, TouchingLoopBehavior as Touching},
+    };
+
+    fn behavior_options(
+        touching_loop_behavior: Touching,
+        coincident_segment_behavior: Coincident,
+    ) -> PlineOffsetOptions<'static, f64> {
+        PlineOffsetOptions {
+            touching_loop_behavior,
+            coincident_segment_behavior,
+            ..Default::default()
+        }
+    }
+
+    fn run_topology_offset_test(
+        input: &Polyline<f64>,
+        offset: f64,
+        touching_loop_behavior: Touching,
+        coincident_segment_behavior: Coincident,
+        expected: &[PlineProperties],
+    ) {
+        run_pline_offset_tests(
+            input,
+            offset,
+            expected,
+            behavior_options(touching_loop_behavior, coincident_segment_behavior),
+        );
+    }
+
+    /// Declares topology tests where only coincident-segment behavior changes the expected
+    /// result. Each expectation runs with both touching-loop behaviors.
+    macro_rules! topology_tests_by_coincident_behavior {
+        ($($name:ident {
+            ($input:expr, $offset:expr) => {
+                Preserve => $preserve:expr,
+                Discard => $discard:expr $(,)?
+            }
+        })*) => {
+            $(
+                #[test]
+                fn $name() {
+                    let input = $input;
+                    let preserve = $preserve;
+                    let discard = $discard;
+
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Preserve, Coincident::Preserve, &preserve,
+                    );
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Separate, Coincident::Preserve, &preserve,
+                    );
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Preserve, Coincident::Discard, &discard,
+                    );
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Separate, Coincident::Discard, &discard,
+                    );
+                }
+            )*
+        };
+    }
+
+    /// Declares topology tests where only touching-loop behavior changes the expected result.
+    /// Each expectation runs with both coincident-segment behaviors.
+    macro_rules! topology_tests_by_touching_behavior {
+        ($($name:ident {
+            ($input:expr, $offset:expr) => {
+                Preserve => $preserve:expr,
+                Separate => $separate:expr $(,)?
+            }
+        })*) => {
+            $(
+                #[test]
+                fn $name() {
+                    let input = $input;
+                    let preserve = $preserve;
+                    let separate = $separate;
+
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Preserve, Coincident::Preserve, &preserve,
+                    );
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Preserve, Coincident::Discard, &preserve,
+                    );
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Separate, Coincident::Preserve, &separate,
+                    );
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Separate, Coincident::Discard, &separate,
+                    );
+                }
+            )*
+        };
+    }
+
+    /// Declares topology tests whose expected result is the same for all four behavior
+    /// combinations.
+    macro_rules! topology_tests_for_all_behaviors {
+        ($($name:ident {
+            ($input:expr, $offset:expr) => $expected:expr
+        })*) => {
+            $(
+                #[test]
+                fn $name() {
+                    let input = $input;
+                    let expected = $expected;
+
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Preserve, Coincident::Preserve, &expected,
+                    );
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Preserve, Coincident::Discard, &expected,
+                    );
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Separate, Coincident::Preserve, &expected,
+                    );
+                    run_topology_offset_test(
+                        &input, $offset, Touching::Separate, Coincident::Discard, &expected,
+                    );
+                }
+            )*
+        };
+    }
+
+    /// Declares mixed topology tests with one explicit expectation for each behavior
+    /// combination.
+    macro_rules! topology_tests_by_behavior_combination {
+        ($($name:ident {
+            ($input:expr, $offset:expr) => {
+                (Touching::Preserve, Coincident::Preserve) => $preserve_preserve:expr,
+                (Touching::Separate, Coincident::Preserve) => $separate_preserve:expr,
+                (Touching::Preserve, Coincident::Discard) => $preserve_discard:expr,
+                (Touching::Separate, Coincident::Discard) => $separate_discard:expr $(,)?
+            }
+        })*) => {
+            $(
+                #[test]
+                fn $name() {
+                    let input = $input;
+                    run_topology_offset_test(
+                        &input,
+                        $offset,
+                        Touching::Preserve,
+                        Coincident::Preserve,
+                        &$preserve_preserve,
+                    );
+                    run_topology_offset_test(
+                        &input,
+                        $offset,
+                        Touching::Preserve,
+                        Coincident::Discard,
+                        &$preserve_discard,
+                    );
+                    run_topology_offset_test(
+                        &input,
+                        $offset,
+                        Touching::Separate,
+                        Coincident::Preserve,
+                        &$separate_preserve,
+                    );
+                    run_topology_offset_test(
+                        &input,
+                        $offset,
+                        Touching::Separate,
+                        Coincident::Discard,
+                        &$separate_discard,
+                    );
+                }
+            )*
+        };
+    }
+
+    fn coincident_line_dumbbell_source() -> Polyline<f64> {
+        pline_closed_userdata![
+            [4],
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+            (10.0, 4.0, 0.0),
+            (20.0, 4.0, 0.0),
+            (20.0, 0.0, 0.0),
+            (30.0, 0.0, 0.0),
+            (30.0, 10.0, 0.0),
+            (20.0, 10.0, 0.0),
+            (20.0, 6.0, 0.0),
+            (10.0, 6.0, 0.0),
+            (10.0, 10.0, 0.0),
+            (0.0, 10.0, 0.0)
+        ]
+    }
+
+    fn partial_coincident_line_dumbbell_source() -> Polyline<f64> {
+        pline_closed_userdata![
+            [4],
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+            (10.0, 4.0, 0.0),
+            (20.0, 4.0, 0.0),
+            (20.0, 0.0, 0.0),
+            (30.0, 0.0, 0.0),
+            (30.0, 10.0, 0.0),
+            (20.0, 10.0, 0.0),
+            (18.0, 6.0, 0.0),
+            (12.0, 6.0, 0.0),
+            (12.0, 10.0, 0.0),
+            (0.0, 10.0, 0.0)
+        ]
+    }
+
+    fn same_direction_coincident_open_source() -> Polyline<f64> {
+        pline_open_userdata![
+            [4],
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+            (15.0, 0.0, 0.0)
+        ]
+    }
+
+    fn opposing_coincident_arc_source() -> Polyline<f64> {
+        pline_closed_userdata![
+            [4],
+            (4.0, 0.0, 0.0),
+            (6.0, 0.0, 1.0),
+            (-6.0, 0.0, 0.0),
+            (-4.0, 0.0, -1.0)
+        ]
+    }
+
+    fn same_direction_coincident_open_arc_source() -> Polyline<f64> {
+        pline_open_userdata![
+            [4],
+            (-5.0, 0.0, -1.0),
+            (5.0, 0.0, 0.5773502691896257),
+            (-2.5, 4.330127018922193, -1.0),
+            (2.5, -4.330127018922193, 0.0)
+        ]
+    }
+
+    fn same_direction_coincident_open_line_arc_source() -> Polyline<f64> {
+        pline_open_userdata![
+            [4],
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.41421356237309503),
+            (15.0, 5.0, -0.41421356237309503),
+            (10.0, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+            (10.0, 0.0, 0.41421356237309503),
+            (15.0, 5.0, 0.0),
+            (15.0, 10.0, 0.0)
+        ]
+    }
+
+    fn tangent_arc_arc_segment_interiors_source() -> Polyline<f64> {
+        pline_closed_userdata![
+            [4],
+            (0.0, 0.0, 0.0),
+            (12.0, 0.0, 0.0),
+            (12.0, 10.0, 0.0),
+            (22.0, 10.0, 0.0),
+            (22.0, 22.0, 0.0),
+            (10.0, 22.0, 0.0),
+            (10.0, 12.0, 0.0),
+            (0.0, 12.0, 0.0)
+        ]
+    }
+
+    fn tangent_line_arc_segment_interiors_source() -> Polyline<f64> {
+        pline_closed_userdata![
+            [4],
+            (0.0, 0.0, 0.0),
+            (20.0, 0.0, 0.0),
+            (20.0, 20.0, 0.0),
+            (12.0, 20.0, 0.0),
+            (10.0, 2.0, 0.0),
+            (8.0, 20.0, 0.0),
+            (0.0, 20.0, 0.0)
+        ]
+    }
+
+    fn opposing_coincident_arcs_segment_interior_source() -> Polyline<f64> {
+        pline_closed_userdata![
+            [4],
+            (6.0, 0.0, 1.0),
+            (-6.0, 0.0, 0.0),
+            (-4.0, 0.0, 0.0),
+            (-4.0, 2.309401076758503, 0.0),
+            (-2.0, 3.4641016151377544, -0.2679491924311227),
+            (2.0, 3.4641016151377544, 0.0),
+            (4.0, 2.309401076758503, 0.0),
+            (4.0, 0.0, 0.0)
+        ]
+    }
+
+    fn tangent_line_endpoints_source() -> Polyline<f64> {
+        pline_closed_userdata![
+            [4],
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+            (10.0, 4.0, 0.0),
+            (15.0, 4.0, 0.0),
+            (20.0, 0.0, 0.0),
+            (30.0, 0.0, 0.0),
+            (30.0, 10.0, 0.0),
+            (20.0, 10.0, 0.0),
+            (20.0, 6.0, 0.0),
+            (15.0, 6.0, 0.0),
+            (10.0, 10.0, 0.0),
+            (0.0, 10.0, 0.0)
+        ]
+    }
+
+    fn non_tangent_open_endpoint_clip_source() -> Polyline<f64> {
+        pline_open_userdata![
+            [4],
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+            (10.0, 10.0, 0.0),
+            (0.0, 10.0, 0.0),
+            (0.0, 1.0, 0.0)
+        ]
+    }
+
+    fn disjoint_same_direction_coincident_spans_source() -> Polyline<f64> {
+        pline_open_userdata![
+            [4],
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+            (15.0, 0.0, 0.0),
+            (20.0, 5.0, 0.0),
+            (20.0, 10.0, 0.0),
+            (30.0, 10.0, 0.0),
+            (25.0, 10.0, 0.0),
+            (35.0, 10.0, 0.0)
+        ]
+    }
+
+    fn three_way_coincident_lines_source() -> Polyline<f64> {
+        pline_open_userdata![
+            [4],
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+            (15.0, 0.0, 0.0)
+        ]
+    }
+
+    fn three_way_point_contact_source() -> Polyline<f64> {
+        pline_closed_userdata![
+            [4],
+            (20.0, 0.0, 0.0),
+            (12.5, 4.330127018922193, 0.0),
+            (0.5, 0.8660254037844386, 0.0),
+            (-2.5, 12.990381056766578, 0.0),
+            (-10.0, 17.32050807568877, 0.0),
+            (-10.0, 8.660254037844386, 0.0),
+            (-1.0, 0.0, 0.0),
+            (-10.0, -8.660254037844386, 0.0),
+            (-10.0, -17.32050807568877, 0.0),
+            (-2.5, -12.990381056766578, 0.0),
+            (0.5, -0.8660254037844386, 0.0),
+            (12.5, -4.330127018922193, 0.0)
+        ]
+    }
+
+    fn touch_at_coincident_overlap_boundary_source() -> Polyline<f64> {
+        pline_open_userdata![
+            [4],
+            (14.0, 6.0, -1.0),
+            (6.0, 6.0, 0.0),
+            (-10.0, 6.0, 0.0),
+            (-10.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+            (5.0, 0.0, 0.0),
+            (15.0, 0.0, 0.0)
+        ]
+    }
+
+    topology_tests_by_coincident_behavior!(
+        // Tests an opposing line overlap whose boundaries land on vertices of both raw copies.
+        // Preserving coincidence must retain one closed traversal through both lobes, while
+        // discarding coincidence must remove the connecting span and return two closed loops.
+        coincident_line_dumbbell_vertex_boundaries {
+            (coincident_line_dumbbell_source(), 1.0) => {
+                Preserve => [PlineProperties::new(
+                    16, 128.85840734641022, 86.2831853071796, 1.0, 1.0, 29.0, 9.0, vec![4],
+                )],
+                Discard => [
+                PlineProperties::new(
+                    7, 64.42920367320511, 33.1415926535898, 1.0, 1.0, 10.0, 9.0, vec![4],
+                ),
+                PlineProperties::new(
+                    7, 64.42920367320511, 33.1415926535898, 20.0, 1.0, 29.0, 9.0, vec![4],
+                ),
+                ],
+            }
+        }
+        // Tests a partial opposing line overlap whose boundaries land on vertices of the short
+        // raw copy and in the middle of the longer raw segment. This exercises segment-interior
+        // dissection and must otherwise follow the same preserve/discard behavior as the
+        // vertex-boundary case.
+        coincident_line_dumbbell_segment_interior_boundaries {
+            (partial_coincident_line_dumbbell_source(), 1.0) => {
+                Preserve => [PlineProperties::new(
+                    16, 142.23612918466094, 85.05560567567858, 1.0, 1.0, 29.0, 9.0, vec![4],
+                )],
+                Discard => [
+                PlineProperties::new(
+                    8, 72.42920367320511, 37.1415926535898, 1.0, 1.0, 12.0, 9.0, vec![4],
+                ),
+                PlineProperties::new(
+                    8, 69.80692551145582, 35.91401302208877, 18.0, 1.0, 29.0, 9.0, vec![4],
+                ),
+                ],
+            }
+        }
+        // Tests a same-direction overlap in an open offset. Each overlap boundary is a vertex on
+        // one raw copy and lies in the middle of the other. Discarding coincidence must remove
+        // both copies and leave two open remnants without bridging the removed span.
+        same_direction_coincident_open_lines {
+            (same_direction_coincident_open_source(), 1.0) => {
+                Preserve => [
+                PlineProperties::new(
+                    2, 0.0, 15.0, 0.0, 1.0, 15.0, 1.0, vec![],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 5.0, 1.0, 10.0, 1.0, vec![4],
+                ),
+                ],
+                Discard => [
+                PlineProperties::new(
+                    2, 0.0, 5.0, 0.0, 1.0, 5.0, 1.0, vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 10.0, 1.0, 15.0, 1.0, vec![4],
+                ),
+                ],
+            }
+        }
+        // Tests a full opposing arc overlap whose boundaries land on raw-offset vertices.
+        // Preserve must retain both directions as one closed zero-area result, while Discard must
+        // remove the entire collapsed arc path.
+        opposing_coincident_arcs_vertex_boundaries {
+            (opposing_coincident_arc_source(), 1.0) => {
+                Preserve => [PlineProperties::new(
+                    2,
+                    0.0,
+                    27.388768120091314,
+                    -4.898979485566356,
+                    1.0,
+                    4.898979485566356,
+                    5.0,
+                    vec![4],
+                )],
+                Discard => [],
+            }
+        }
+        // Tests a partial same-direction arc overlap inherited from coincident source arcs. Each
+        // overlap boundary is a vertex on one raw copy and lies in the middle of the other.
+        // Discard must remove both copies and leave two open arc remnants without bridging them.
+        same_direction_coincident_open_arcs {
+            (same_direction_coincident_open_arc_source(), 1.0) => {
+                Preserve => [
+                PlineProperties::new(
+                    3,
+                    0.0,
+                    25.132741228718345,
+                    -6.0,
+                    -5.196152422706632,
+                    6.0,
+                    6.0,
+                    vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 12.566370614359172, -3.0, 0.0, 6.0, 6.0, vec![4],
+                ),
+                ],
+                Discard => [
+                PlineProperties::new(
+                    2,
+                    0.0,
+                    std::f64::consts::TAU,
+                    -6.0,
+                    0.0,
+                    -3.0,
+                    5.196152422706632,
+                    vec![4],
+                ),
+                PlineProperties::new(
+                    2,
+                    0.0,
+                    std::f64::consts::TAU,
+                    3.0,
+                    -5.196152422706632,
+                    6.0,
+                    0.0,
+                    vec![4],
+                ),
+                ],
+            }
+        }
+        // Tests one inherited same-direction overlap made from a line followed by an arc. The
+        // overlap starts inside a raw line, crosses a line-to-arc vertex, and ends at an arc
+        // endpoint. Discard must remove both segment types without bridging the removed path.
+        same_direction_coincident_open_line_arc {
+            (same_direction_coincident_open_line_arc_source(), 1.0) => {
+                Preserve => [
+                PlineProperties::new(
+                    4, 0.0, 21.283185307179586, 0.0, 1.0, 14.0, 10.0, vec![4],
+                ),
+                PlineProperties::new(
+                    3, 0.0, 11.283185307179588, 5.0, 1.0, 14.0, 5.0, vec![4],
+                ),
+                ],
+                Discard => [
+                PlineProperties::new(
+                    2, 0.0, 5.0, 0.0, 1.0, 5.0, 1.0, vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 14.0, 5.0, 14.0, 10.0, vec![4],
+                ),
+                ],
+            }
+        }
+    );
+
+    topology_tests_by_touching_behavior!(
+        // Tests one point-only tangent contact in the middle of two raw joining arcs. Preserve
+        // must retain one self-touching traversal, while Separate must split it into two closed
+        // loops. Coincident-span behavior must not affect the point-only contact.
+        tangent_arc_arc_segment_interiors {
+            (tangent_arc_arc_segment_interiors_source(), std::f64::consts::SQRT_2) => {
+                Preserve => [
+                PlineProperties::new(
+                    10,
+                    168.40761385757776,
+                    75.47232018968123,
+                    std::f64::consts::SQRT_2,
+                    std::f64::consts::SQRT_2,
+                    22.0 - std::f64::consts::SQRT_2,
+                    22.0 - std::f64::consts::SQRT_2,
+                    vec![4],
+                ),
+                ],
+                Separate => [
+                PlineProperties::new(
+                    6,
+                    84.20380692878892,
+                    37.73616001054691,
+                    11.000000029802322,
+                    11.000000029802322,
+                    22.0 - std::f64::consts::SQRT_2,
+                    22.0 - std::f64::consts::SQRT_2,
+                    vec![4],
+                ),
+                PlineProperties::new(
+                    6,
+                    84.20380692878891,
+                    37.73616017913431,
+                    std::f64::consts::SQRT_2,
+                    std::f64::consts::SQRT_2,
+                    11.000000029802322,
+                    11.000000029802322,
+                    vec![4],
+                ),
+                ],
+            }
+        }
+        // Tests one point-only tangent contact in the middle of a raw line and a raw joining arc.
+        // Preserve must retain one self-touching traversal, while Separate must split it into two
+        // closed loops. Coincident-span behavior must not affect the point-only contact.
+        tangent_line_arc_segment_interiors {
+            (tangent_line_arc_segment_interiors_source(), 1.0) => {
+                Preserve => [
+                PlineProperties::new(
+                    8, 256.1084059280821, 103.56164759128615, 1.0, 1.0, 19.0, 19.0, vec![4],
+                ),
+                ],
+                Separate => [
+                PlineProperties::new(
+                    5, 128.05420296404103, 51.78082379564307, 10.0, 1.0, 19.0, 19.0, vec![4],
+                ),
+                PlineProperties::new(
+                    5, 128.05420296404105, 51.78082379564307, 1.0, 1.0, 10.0, 19.0, vec![4],
+                ),
+                ],
+            }
+        }
+    );
+
+    topology_tests_by_coincident_behavior!(
+        // Tests a partial opposing arc overlap whose boundaries are vertices of the short raw arc
+        // and lie in the middle of the longer raw arc. Preserve must retain both copies as one
+        // closed zero-area result, while Discard must remove the entire coincident result.
+        opposing_coincident_arcs_segment_interior_boundaries {
+            (opposing_coincident_arcs_segment_interior_source(), 1.0) => {
+                Preserve => [
+                PlineProperties::new(
+                    2,
+                    0.0,
+                    10.471975511965981,
+                    -2.5,
+                    4.330127018922193,
+                    2.5,
+                    5.0,
+                    vec![4],
+                ),
+                ],
+                Discard => [],
+            }
+        }
+    );
+
+    topology_tests_by_touching_behavior!(
+        // Tests a point-only contact where two opposing raw lines meet at their endpoints and the
+        // adjacent joining arcs start at the same point. Duplicate line/arc reports must merge
+        // into one node. Preserve keeps one traversal; Separate returns the two closed lobes.
+        tangent_line_endpoints {
+            (tangent_line_endpoints_source(), 1.0) => {
+                Preserve => [
+                PlineProperties::new(
+                    16, 153.64977637483233, 81.89419877546973, 1.0, 1.0, 29.0, 9.0, vec![4],
+                ),
+                ],
+                Separate => [
+                PlineProperties::new(
+                    8, 76.82488818741615, 40.94709938773487, 15.0, 1.0, 29.0, 9.0, vec![4],
+                ),
+                PlineProperties::new(
+                    8, 76.82488818741614, 40.94709938773487, 1.0, 1.0, 15.0, 9.0, vec![4],
+                ),
+                ],
+            }
+        }
+    );
+
+    topology_tests_for_all_behaviors!(
+        // Tests a nonparallel contact between the interior of the first raw line and the final raw
+        // endpoint, at the same point where the open-end clipping circle removes the raw prefix.
+        // All policies must retain the sole valid open path without closing or adding a stitch.
+        non_tangent_open_endpoint_clip {
+            (non_tangent_open_endpoint_clip_source(), 1.0) =>
+            [
+                PlineProperties::new(
+                    5, 0.0, 32.0, 1.0, 1.0, 9.0, 9.0, vec![4],
+                ),
+            ]
+        }
+    );
+
+    topology_tests_by_coincident_behavior!(
+        // Tests two disjoint same-direction overlap intervals in one raw offset. Discard must
+        // remove both intervals without merging coverage across the valid path between them,
+        // bridging either removed span, or leaking routing state from one overlap to the other.
+        disjoint_same_direction_coincident_spans {
+            (disjoint_same_direction_coincident_spans_source(), 1.0) => {
+                Preserve => [
+                PlineProperties::new(
+                    6, 0.0, 41.985009889168, 0.0, 1.0, 35.0, 11.0, vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 5.0, 1.0, 10.0, 1.0, vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 25.0, 11.0, 30.0, 11.0, vec![4],
+                ),
+                ],
+                Discard => [
+                PlineProperties::new(
+                    2, 0.0, 5.0, 0.0, 1.0, 5.0, 1.0, vec![4],
+                ),
+                PlineProperties::new(
+                    6, 0.0, 21.985009889167994, 10.0, 1.0, 25.0, 11.0, vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 30.0, 11.0, 35.0, 11.0, vec![4],
+                ),
+                ],
+            }
+        }
+        // Tests three same-direction copies of one raw span, plus the two coincident reverse
+        // copies needed to retrace the source. Preserve must keep every copy. Discard must merge
+        // duplicate coverage intervals, remove all copies, and leave only the two outer remnants.
+        three_way_coincident_lines {
+            (three_way_coincident_lines_source(), 1.0) => {
+                Preserve => [
+                PlineProperties::new(
+                    2, 0.0, 15.0, 0.0, 1.0, 15.0, 1.0, vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 5.0, -1.0, 10.0, -1.0, vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 5.0, 1.0, 10.0, 1.0, vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 5.0, -1.0, 10.0, -1.0, vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 5.0, 1.0, 10.0, 1.0, vec![4],
+                ),
+                ],
+                Discard => [
+                PlineProperties::new(
+                    2, 0.0, 5.0, 0.0, 1.0, 5.0, 1.0, vec![4],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 10.0, 1.0, 15.0, 1.0, vec![4],
+                ),
+                ],
+            }
+        }
+    );
+
+    topology_tests_for_all_behaviors!(
+        // Tests three distinct raw paths meeting at one point. All pairwise reports must merge
+        // into one contact node without creating a route between unrelated occurrences. Touch
+        // separation and coincident-span discard must both leave the three valid loops unchanged.
+        three_way_point_contact_keeps_paths_separate {
+            (three_way_point_contact_source(), 1.0) =>
+            [
+                PlineProperties::new(
+                    4,
+                    54.929566049431315,
+                    36.451085684955316,
+                    1.1055512754639878,
+                    -3.2513381729737314,
+                    18.0,
+                    3.251338172973732,
+                    vec![4],
+                ),
+                PlineProperties::new(
+                    4,
+                    54.929566049431294,
+                    36.451085684955316,
+                    -9.0,
+                    0.9574354897381006,
+                    -0.5527756377319942,
+                    15.588457268119894,
+                    vec![4],
+                ),
+                PlineProperties::new(
+                    4,
+                    54.929566049431315,
+                    36.451085684955316,
+                    -9.0,
+                    -15.588457268119896,
+                    -0.5527756377319942,
+                    -0.9574354897381019,
+                    vec![4],
+                ),
+            ]
+        }
+    );
+
+    topology_tests_by_behavior_combination!(
+        // Tests a raw arc tangent at the same node where a same-direction line overlap ends. The
+        // node must retain the arc/line Touch relations and the line/line OverlapBoundary relation
+        // so touch separation and coincident-span discard can act independently.
+        touch_at_coincident_overlap_boundary {
+            (touch_at_coincident_overlap_boundary_source(), 1.0) => {
+                (Touching::Preserve, Coincident::Preserve) => [
+                PlineProperties::new(
+                    5,
+                    0.0,
+                    56.80219417843096,
+                    -9.0,
+                    1.0,
+                    15.0,
+                    6.0,
+                    vec![],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 5.0, 1.0, 10.0, 1.0, vec![4],
+                ),
+                ],
+                (Touching::Separate, Coincident::Preserve) => [
+                PlineProperties::new(
+                    3,
+                    0.0,
+                    12.853981633974485,
+                    10.0,
+                    1.0,
+                    15.0,
+                    6.0,
+                    vec![4],
+                ),
+                PlineProperties::new(
+                    5,
+                    0.0,
+                    43.948212544456474,
+                    -9.0,
+                    1.0,
+                    10.0,
+                    5.0,
+                    vec![],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 5.0, 1.0, 10.0, 1.0, vec![4],
+                ),
+                ],
+                (Touching::Preserve, Coincident::Discard) => [
+                PlineProperties::new(
+                    5,
+                    0.0,
+                    46.80219417843096,
+                    -9.0,
+                    1.0,
+                    15.0,
+                    6.0,
+                    vec![],
+                ),
+                PlineProperties::new(
+                    2, 0.0, 5.0, 10.0, 1.0, 15.0, 1.0, vec![4],
+                ),
+                ],
+                (Touching::Separate, Coincident::Discard) => [
+                PlineProperties::new(
+                    3,
+                    0.0,
+                    12.853981633974485,
+                    10.0,
+                    1.0,
+                    15.0,
+                    6.0,
+                    vec![4],
+                ),
+                PlineProperties::new(
+                    5,
+                    0.0,
+                    38.948212544456474,
+                    -9.0,
+                    1.0,
+                    10.0,
+                    5.0,
+                    vec![],
+                ),
+                ],
+            }
+        }
+    );
+}
+
+#[test]
+fn collapsed_rectangle_preserves_or_discards_coincident_centerline() {
+    use cavalier_contours::pline_closed;
+
+    let source: Polyline<f64> = pline_closed![
+        (0.0, 0.0, 0.0),
+        (20.0, 0.0, 0.0),
+        (20.0, 10.0, 0.0),
+        (0.0, 10.0, 0.0)
+    ];
+    let preserve = source.parallel_offset(5.0);
+    assert_eq!(preserve.len(), 1);
+    assert!(preserve[0].is_closed());
+    assert_eq!(preserve[0].vertex_count(), 2);
+    assert!(preserve[0].area().abs() <= 1e-10);
+    assert!((preserve[0].path_length() - 20.0).abs() <= 1e-10);
+
+    let discard = source.parallel_offset_opt(
+        5.0,
+        &PlineOffsetOptions {
+            coincident_segment_behavior: CoincidentSegmentBehavior::Discard,
+            ..Default::default()
+        },
+    );
+    assert!(discard.is_empty());
+}
+
+#[test]
+fn coincident_discard_removes_same_direction_and_opposing_partial_spans() {
+    use cavalier_contours::pline_closed;
+
+    // The first three source segments double back so two raw offset spans run in the same
+    // direction over five units.
+    let same_direction: Polyline<f64> = pline_closed![
+        (0.0, 0.0, 0.0),
+        (10.0, 0.0, 0.0),
+        (5.0, 0.0, 0.0),
+        (15.0, 0.0, 0.0),
+        (15.0, 10.0, 0.0),
+        (0.0, 10.0, 0.0)
+    ];
+    let preserve_options = PlineOffsetOptions::default();
+    let discard_options = PlineOffsetOptions {
+        coincident_segment_behavior: CoincidentSegmentBehavior::Discard,
+        ..Default::default()
+    };
+    let preserve = same_direction.parallel_offset_opt(1.0, &preserve_options);
+    let discard = same_direction.parallel_offset_opt(1.0, &discard_options);
+    assert_eq!(preserve.len(), 1);
+    assert_eq!(discard.len(), 1);
+    assert!((preserve[0].path_length() - discard[0].path_length() - 10.0).abs() <= 1e-10);
+    assert!(!discard[0].is_closed());
+
+    // Offsetting this narrow ledge by one unit puts its opposing horizontal raw spans on top of
+    // each other while leaving the rest of the boundary valid.
+    let opposing: Polyline<f64> = pline_closed![
+        (0.0, 0.0, 0.0),
+        (10.0, 0.0, 0.0),
+        (10.0, 2.0, 0.0),
+        (5.0, 2.0, 0.0),
+        (5.0, 10.0, 0.0),
+        (0.0, 10.0, 0.0)
+    ];
+    let preserve = opposing.parallel_offset_opt(1.0, &preserve_options);
+    let discard = opposing.parallel_offset_opt(1.0, &discard_options);
+    assert_eq!(preserve.len(), 1);
+    assert_eq!(discard.len(), 1);
+    assert!(discard[0].path_length() < preserve[0].path_length());
+    assert!(discard[0].is_closed());
+}
+
+#[test]
+fn coincident_discard_does_not_remove_a_point_only_tangent() {
+    let options = PlineOffsetOptions {
+        handle_self_intersects: true,
+        coincident_segment_behavior: CoincidentSegmentBehavior::Discard,
+        ..Default::default()
+    };
+    let result = tangent_touching_small_loop_source().parallel_offset_opt(0.1, &options);
+
+    assert_eq!(result.len(), 1);
+    assert!(result[0].is_closed());
+    assert_eq!(result[0].vertex_count(), 9);
+    assert!(result[0].scan_for_self_intersect());
 }
 
 // TODO: fails symmetry under direction inversion

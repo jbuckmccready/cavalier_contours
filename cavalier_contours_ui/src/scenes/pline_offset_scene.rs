@@ -1,13 +1,14 @@
 use cavalier_contours::{
     pline_closed,
     polyline::{
-        PlineOffsetOptions, PlineSource, PlineSourceMut, Polyline,
+        CoincidentSegmentBehavior, PlineOffsetOptions, PlineSource, PlineSourceMut, Polyline,
+        TouchingLoopBehavior,
         internal::raw_pline_offset::{
             RawOffsetSeg, create_raw_offset, create_untrimmed_raw_offset_segs,
         },
     },
 };
-use egui::{CentralPanel, Id, Rect, ScrollArea, Slider, Ui, Vec2};
+use egui::{CentralPanel, DragValue, Rect, ScrollArea, Slider, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint};
 use std::borrow::Cow;
 
@@ -33,6 +34,8 @@ enum Mode {
     Offset {
         handle_self_intersects: bool,
         max_offset_count: usize,
+        touching_loop_behavior: TouchingLoopBehavior,
+        coincident_segment_behavior: CoincidentSegmentBehavior,
     },
     RawOffset {
         show_invalid_segments: bool,
@@ -53,6 +56,8 @@ impl Mode {
         Mode::Offset {
             handle_self_intersects: true,
             max_offset_count: 10,
+            touching_loop_behavior: TouchingLoopBehavior::Preserve,
+            coincident_segment_behavior: CoincidentSegmentBehavior::Preserve,
         }
     }
 
@@ -72,6 +77,7 @@ struct InteractionState {
 enum SceneState {
     Offset {
         all_offset_plines: Vec<(Polyline, bool)>,
+        first_offset_count: usize,
     },
     RawOffset {
         raw_offset_pline: Polyline,
@@ -104,6 +110,8 @@ impl Default for PlineOffsetScene {
             mode: Mode::Offset {
                 handle_self_intersects: true,
                 max_offset_count: 10,
+                touching_loop_behavior: TouchingLoopBehavior::Preserve,
+                coincident_segment_behavior: CoincidentSegmentBehavior::Preserve,
             },
             offset: 1.0,
             interaction_state: InteractionState {
@@ -130,15 +138,23 @@ impl Scene for PlineOffsetScene {
             polyline_editor,
         } = self;
 
-        controls_panel(ui, mode, offset, interaction_state, polyline_editor);
+        let scene_state = controls_panel(
+            ui,
+            pline
+                .first()
+                .expect("PlineOffsetScene should always have at least one polyline"),
+            mode,
+            offset,
+            interaction_state,
+            polyline_editor,
+        );
 
         interaction_state.zoom_to_fit |= init;
         plot_area(
             ui,
             settings,
             pline,
-            mode,
-            *offset,
+            &scene_state,
             interaction_state,
             polyline_editor,
         );
@@ -147,11 +163,14 @@ impl Scene for PlineOffsetScene {
 
 fn controls_panel(
     ui: &mut Ui,
+    pline: &Polyline,
     mode: &mut Mode,
     offset: &mut f64,
     interaction_state: &mut InteractionState,
     polyline_editor: &mut PolylineEditor,
-) {
+) -> SceneState {
+    let mut scene_state = None;
+
     controls_side_panel("pline_offset_controls")
         .show(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
@@ -168,24 +187,23 @@ fn controls_panel(
                         });
                 });
 
-                // state used to fill available width within the scroll area
-                let last_others_width_id = Id::new("panel_width_state");
-                let this_init_max_width = ui.max_rect().width();
-                let last_others_width = ui.data(|data| {
-                    data.get_temp(last_others_width_id)
-                        .unwrap_or(this_init_max_width)
-                });
-
-                let this_target_width = this_init_max_width - last_others_width;
-                ui.style_mut().spacing.slider_width = this_target_width;
-
                 egui::Frame::default()
                     .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
                     .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
                     .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
                     .show(ui, |ui| {
                         ui.label("Offset").on_hover_text("Parallel offset distance, positive value will offset to the left of curve direction");
-                        ui.add(Slider::new(offset, -100.0..=100.0));
+                        ui.style_mut().spacing.slider_width = ui.available_width().max(0.0);
+                        ui.add(Slider::new(offset, -100.0..=100.0).show_value(false));
+                        ui.label("Exact value:");
+                        ui.add_sized(
+                            [ui.available_width(), ui.spacing().interact_size.y],
+                            DragValue::new(offset)
+                                .range(-100.0..=100.0)
+                                .speed(0.01)
+                                .custom_formatter(|value, _| value.to_string()),
+                        )
+                        .on_hover_text("Exact parallel offset distance");
                     });
 
                 if let Mode::RawOffset {
@@ -201,6 +219,8 @@ fn controls_panel(
                 if let Mode::Offset {
                     handle_self_intersects,
                     max_offset_count,
+                    touching_loop_behavior,
+                    coincident_segment_behavior,
                 } = mode
                 {
                     egui::Frame::default()
@@ -209,6 +229,10 @@ fn controls_panel(
                         .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
                         .show(ui, |ui| {
                             ui.label("Max Offset Count").on_hover_text("Maximum number of parallel offsets to generate (stops early when orientation changes)");
+                            let value_width =
+                                ui.spacing().interact_size.x + ui.spacing().item_spacing.x;
+                            ui.style_mut().spacing.slider_width =
+                                (ui.available_width() - value_width).max(0.0);
                             ui.add(
                                 Slider::new(max_offset_count, 0..=100)
                                     .integer()
@@ -218,6 +242,58 @@ fn controls_panel(
 
                     ui.add_space(ui.spacing().item_spacing.y);
                     ui.checkbox(handle_self_intersects, "Handle Self Intersects").on_hover_text("Handle self-intersecting polylines or not (small performance hit)");
+
+                    egui::Frame::default()
+                        .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                        .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
+                        .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
+                        .show(ui, |ui| {
+                        ui.label("Touching Loops");
+                        egui::ComboBox::from_id_salt("touching_loop_behavior")
+                            .width(ui.available_width())
+                            .selected_text(match touching_loop_behavior {
+                                TouchingLoopBehavior::Preserve => "Preserve",
+                                TouchingLoopBehavior::Separate => "Separate",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    touching_loop_behavior,
+                                    TouchingLoopBehavior::Preserve,
+                                    "Preserve",
+                                );
+                                ui.selectable_value(
+                                    touching_loop_behavior,
+                                    TouchingLoopBehavior::Separate,
+                                    "Separate",
+                                );
+                            });
+                    });
+
+                    egui::Frame::default()
+                        .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                        .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
+                        .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
+                        .show(ui, |ui| {
+                        ui.label("Coincident Segments");
+                        egui::ComboBox::from_id_salt("coincident_segment_behavior")
+                            .width(ui.available_width())
+                            .selected_text(match coincident_segment_behavior {
+                                CoincidentSegmentBehavior::Preserve => "Preserve",
+                                CoincidentSegmentBehavior::Discard => "Discard",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    coincident_segment_behavior,
+                                    CoincidentSegmentBehavior::Preserve,
+                                    "Preserve",
+                                );
+                                ui.selectable_value(
+                                    coincident_segment_behavior,
+                                    CoincidentSegmentBehavior::Discard,
+                                    "Discard",
+                                );
+                            });
+                    });
                 }
 
                 interaction_state.zoom_to_fit = ui
@@ -230,22 +306,53 @@ fn controls_panel(
                     polyline_editor.show_window();
                 }
 
-                ui.data_mut(|data| {
-                    data.insert_temp(
-                        last_others_width_id,
-                        ui.min_rect().width() - this_target_width,
-                    );
-                });
+                // TODO: cache scene state to only update when the polyline or controls change.
+                let current_scene_state = build_scene_state(pline, mode, *offset);
+                if let SceneState::Offset {
+                    first_offset_count,
+                    ..
+                } = &current_scene_state
+                {
+                    ui.separator();
+                    ui.label("Offset Results");
+                    ui.label(format!(
+                        "First offset polyline count: {first_offset_count}"
+                    ));
+                }
+                scene_state = Some(current_scene_state);
             })
         });
+
+    scene_state.expect("controls panel contents should always be rendered")
+}
+
+fn build_scene_state(pline: &Polyline, mode: &Mode, offset: f64) -> SceneState {
+    match mode {
+        Mode::Offset {
+            handle_self_intersects,
+            max_offset_count,
+            touching_loop_behavior,
+            coincident_segment_behavior,
+        } => build_offset(
+            pline,
+            offset,
+            *handle_self_intersects,
+            *max_offset_count,
+            *touching_loop_behavior,
+            *coincident_segment_behavior,
+        ),
+        Mode::RawOffset {
+            show_invalid_segments,
+        } => build_raw_offset(pline, offset, *show_invalid_segments),
+        Mode::RawOffsetSegments => build_raw_offset_segments(pline, offset),
+    }
 }
 
 fn plot_area(
     ui: &mut Ui,
     settings: &SceneSettings,
     plines: &mut Vec<Polyline>,
-    mode: &Mode,
-    offset: f64,
+    scene_state: &SceneState,
     interaction_state: &mut InteractionState,
     polyline_editor: &mut PolylineEditor,
 ) {
@@ -259,18 +366,6 @@ fn plot_area(
     let pline = plines
         .get_mut(0)
         .expect("PlineOffsetScene should always have at least one polyline");
-
-    // TODO: cache scene state to only update when necessary due to modified polyline or offset
-    let scene_state = match mode {
-        Mode::Offset {
-            handle_self_intersects,
-            max_offset_count,
-        } => build_offset(pline, offset, *handle_self_intersects, *max_offset_count),
-        Mode::RawOffset {
-            show_invalid_segments,
-        } => build_raw_offset(pline, offset, *show_invalid_segments),
-        Mode::RawOffsetSegments => build_raw_offset_segments(pline, offset),
-    };
 
     CentralPanel::default().show(ui, |ui| {
         let plot = settings
@@ -335,8 +430,10 @@ fn plot_area(
             );
 
             // TODO: color pickers
-            match &scene_state {
-                SceneState::Offset { all_offset_plines } => {
+            match scene_state {
+                SceneState::Offset {
+                    all_offset_plines, ..
+                } => {
                     for (pl, same_orientation) in all_offset_plines {
                         let color = if *same_orientation {
                             colors.primary_stroke
@@ -388,10 +485,21 @@ fn build_offset(
     offset: f64,
     handle_self_intersects: bool,
     max_offset_count: usize,
+    touching_loop_behavior: TouchingLoopBehavior,
+    coincident_segment_behavior: CoincidentSegmentBehavior,
 ) -> SceneState {
     let mut all_offset_plines = Vec::new();
+    if max_offset_count == 0 {
+        return SceneState::Offset {
+            all_offset_plines,
+            first_offset_count: 0,
+        };
+    }
+
     let offset_opt = PlineOffsetOptions {
         handle_self_intersects,
+        touching_loop_behavior,
+        coincident_segment_behavior,
         ..Default::default()
     };
 
@@ -406,6 +514,7 @@ fn build_offset(
 
     // current offset polylines
     let mut offset_plines = pline.parallel_offset_opt(offset, &offset_opt);
+    let first_offset_count = offset_plines.len();
 
     let mut same_orientation = Vec::new();
     let mut diff_orientation = Vec::new();
@@ -439,7 +548,10 @@ fn build_offset(
             all_offset_plines.push((pl, false));
         }
     }
-    SceneState::Offset { all_offset_plines }
+    SceneState::Offset {
+        all_offset_plines,
+        first_offset_count,
+    }
 }
 
 fn build_raw_offset(pline: &Polyline, offset: f64, show_invalid_segments: bool) -> SceneState {
@@ -482,5 +594,67 @@ fn build_raw_offset_segments(pline: &Polyline, offset: f64) -> SceneState {
 
     SceneState::RawOffsetSegments {
         segments: raw_offset_segs,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn partially_coincident_open_arcs() -> Polyline {
+        let mut result = Polyline::new();
+        for (x, y, bulge) in [
+            (-5.0, 0.0, -1.0),
+            (5.0, 0.0, 0.5773502691896257),
+            (-2.5, 4.330127018922193, -1.0),
+            (2.5, -4.330127018922193, 0.0),
+        ] {
+            result.add(x, y, bulge);
+        }
+        result
+    }
+
+    #[test]
+    fn zero_max_offset_count_builds_no_offsets() {
+        let result = build_offset(
+            &partially_coincident_open_arcs(),
+            1.0,
+            true,
+            0,
+            TouchingLoopBehavior::Preserve,
+            CoincidentSegmentBehavior::Preserve,
+        );
+
+        let SceneState::Offset {
+            all_offset_plines,
+            first_offset_count,
+        } = result
+        else {
+            panic!("expected offset scene state");
+        };
+        assert!(all_offset_plines.is_empty());
+        assert_eq!(first_offset_count, 0);
+    }
+
+    #[test]
+    fn first_offset_count_matches_initial_offset_results() {
+        let result = build_offset(
+            &partially_coincident_open_arcs(),
+            1.0,
+            true,
+            1,
+            TouchingLoopBehavior::Preserve,
+            CoincidentSegmentBehavior::Preserve,
+        );
+
+        let SceneState::Offset {
+            all_offset_plines,
+            first_offset_count,
+        } = result
+        else {
+            panic!("expected offset scene state");
+        };
+        assert_eq!(all_offset_plines.len(), 2);
+        assert_eq!(first_offset_count, 2);
     }
 }

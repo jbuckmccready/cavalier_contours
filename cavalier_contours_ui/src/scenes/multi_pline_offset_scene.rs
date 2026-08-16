@@ -3,7 +3,7 @@ use cavalier_contours::{
     polyline::{PlineCreation, PlineSource, PlineSourceMut, Polyline},
     shape_algorithms::{Shape, ShapeOffsetOptions},
 };
-use egui::{Id, Rect, ScrollArea, Slider, Ui, Vec2};
+use egui::{Rect, ScrollArea, Slider, Ui, Vec2};
 use egui_plot::{Plot, PlotPoint, PlotPoints};
 
 use crate::editor::PolylineEditor;
@@ -184,23 +184,16 @@ fn controls_panel(
                         });
                 });
 
-                // state used to fill available width within the scroll area
-                let last_others_width_id = Id::new("panel_width_state");
-                let this_init_max_width = ui.max_rect().width();
-                let last_others_width = ui.data(|data| {
-                    data.get_temp(last_others_width_id)
-                        .unwrap_or(this_init_max_width)
-                });
-
-                let this_target_width = this_init_max_width - last_others_width;
-                ui.style_mut().spacing.slider_width = this_target_width;
-
                 egui::Frame::default()
                     .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
                     .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
                     .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
                     .show(ui, |ui| {
                         ui.label("Offset").on_hover_text("Parallel offset distance, positive value will offset to the left of curve direction");
+                        let value_width =
+                            ui.spacing().interact_size.x + ui.spacing().item_spacing.x;
+                        ui.style_mut().spacing.slider_width =
+                            (ui.available_width() - value_width).max(0.0);
                         ui.add(Slider::new(offset, -100.0..=100.0));
                     });
 
@@ -211,6 +204,10 @@ fn controls_panel(
                         .inner_margin(Vec2::splat(ui.spacing().item_spacing.x))
                         .show(ui, |ui| {
                             ui.label("Max Offset Count").on_hover_text("Maximum number of parallel offsets to generate (stops early when orientation changes)");
+                            let value_width =
+                                ui.spacing().interact_size.x + ui.spacing().item_spacing.x;
+                            ui.style_mut().spacing.slider_width =
+                                (ui.available_width() - value_width).max(0.0);
                             ui.add(
                                 Slider::new(max_offset_count, 0..=100)
                                     .integer()
@@ -228,13 +225,6 @@ fn controls_panel(
                 if ui.button("Edit Polylines").on_hover_text("Edit all polylines vertex data").clicked() {
                     polyline_editor.show_window();
                 }
-
-                ui.data_mut(|data| {
-                    data.insert_temp(
-                        last_others_width_id,
-                        ui.min_rect().width() - this_target_width,
-                    );
-                });
             })
         });
 }

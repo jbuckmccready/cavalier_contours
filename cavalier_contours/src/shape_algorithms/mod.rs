@@ -82,8 +82,8 @@ where
             aabb_index: Some(&self.spatial_index),
             handle_self_intersects: false,
             pos_equal_eps: options.pos_equal_eps,
-            slice_join_eps: options.slice_join_eps,
             offset_dist_eps: options.offset_dist_eps,
+            ..Default::default()
         };
 
         self.polyline.parallel_offset_opt(offset, &opts)
