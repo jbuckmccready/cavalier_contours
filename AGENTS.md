@@ -31,3 +31,8 @@ For faster iteration default to using a 1-second warm-up and a 3-second measurem
 ```sh
 cargo bench -p cavalier_contours --bench benches -- raw_offset_creation --warm-up-time 1 --measurement-time 3
 ```
+
+## API and Code Context
+
+- This is a computational geometry library, floating point numbers will be used, epsilon values are used to deal with floating point math's limited precision and rounding errors. Care must be taken in algorithms to deal with this kind of "fuzzy" geometric processing.
+- Polyline arc segments only support up to half circle sweep, `vertex.bulge = tan(arc.sweep/4)` and `-1 <= vertex.bulge <= 1`, this simplifies algorithmic processing as useful geometric assumptions can be made.
