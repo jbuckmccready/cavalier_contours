@@ -264,6 +264,11 @@ where
         for pline in &self.ccw_plines {
             for offset_pline in pline.parallel_offset_for_shape(offset, options) {
                 let area = offset_pline.area();
+                // check if orientation inverted (due to collapse of very narrow or small input)
+                // skip if inversion happened (ccw became cw while offsetting inward)
+                if offset > T::zero() && area < T::zero() {
+                    continue;
+                }
 
                 let offset_loop = OffsetLoop {
                     parent_loop_idx: parent_idx,
@@ -282,6 +287,11 @@ where
         for pline in &self.cw_plines {
             for offset_pline in pline.parallel_offset_for_shape(offset, options) {
                 let area = offset_pline.area();
+                // check if orientation inverted (due to collapse of very narrow or small input)
+                // skip if inversion happened (cw became ccw while offsetting inward)
+                if offset < T::zero() && area > T::zero() {
+                    continue;
+                }
 
                 let offset_loop = OffsetLoop {
                     parent_loop_idx: parent_idx,
