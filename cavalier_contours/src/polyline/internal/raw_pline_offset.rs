@@ -7,9 +7,9 @@ use crate::{
     core::{
         math::{
             CircleCircleIntr, LineCircleIntr, LineLineIntr, Vector2, angle, angle_from_bulge,
-            arc_sweep_extents, bulge_from_angle, circle_circle_intr, delta_angle_signed,
-            dist_squared, line_circle_intr, line_line_intr, normalize_radians,
-            parametric_from_point, point_from_parametric,
+            arc_sweep_extents, bulge_from_angle, circle_circle_intr, dist_squared,
+            line_circle_intr, line_line_intr, normalize_radians, parametric_from_point,
+            point_from_parametric,
         },
         traits::Real,
     },
@@ -294,19 +294,40 @@ where
         next_start: Vector2<T>,
         shared_source_vertex: Vector2<T>,
     ) -> JoinBoundary<T> {
-        let a1 = angle(shared_source_vertex, current_end);
-        let a2 = angle(shared_source_vertex, next_start);
+        let current_direction = (current_end - shared_source_vertex).normalize();
+        let next_direction = (next_start - shared_source_vertex).normalize();
+        let mut cos_sweep = current_direction.dot(next_direction);
+        if cos_sweep < -T::one() {
+            cos_sweep = -T::one();
+        } else if cos_sweep > T::one() {
+            cos_sweep = T::one();
+        }
+        let mut sin_sweep = current_direction.perp_dot(next_direction).abs();
+        if sin_sweep > T::one() {
+            sin_sweep = T::one();
+        }
+
+        // Both branches equal tan(sweep / 4). For sweeps up to a quarter circle, the first
+        // avoids subtracting cos_sweep from one when they are nearly equal. For larger sweeps,
+        // the second avoids the first form's numerator and denominator both approaching zero as
+        // the sweep approaches a half circle.
+        let connector_bulge_magnitude = if cos_sweep >= T::zero() {
+            sin_sweep / (T::one() + cos_sweep + (T::two() * (T::one() + cos_sweep)).sqrt())
+        } else {
+            (T::one() - cos_sweep) / (sin_sweep + (T::two() * (T::one() - cos_sweep)).sqrt())
+        };
+        let connector_bulge = if self.connector_is_clockwise {
+            -connector_bulge_magnitude
+        } else {
+            connector_bulge_magnitude
+        };
         JoinBoundary {
             class,
             current_end,
             current_param: T::one(),
             next_start,
             next_param: T::zero(),
-            connector_bulge: bulge_from_angle(delta_angle_signed(
-                a1,
-                a2,
-                self.connector_is_clockwise,
-            )),
+            connector_bulge,
         }
     }
 
@@ -1007,6 +1028,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::traits::FuzzyEq;
     use crate::polyline::Polyline;
 
     fn open(vertexes: &[(f64, f64, f64)]) -> Polyline<f64> {
@@ -1056,6 +1078,37 @@ mod tests {
             (segment.span_bulge(0.75, 0.25) - bulge_from_angle(arc.sweep * -0.5)).abs()
                 < f64::EPSILON
         );
+    }
+
+    #[test]
+    fn round_join_bulge_matches_sweep_and_offset_direction() {
+        let source = open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]);
+        for sweep in [
+            1e-12,
+            1e-8,
+            1e-4,
+            std::f64::consts::FRAC_PI_2,
+            std::f64::consts::PI - 1e-8,
+            std::f64::consts::PI,
+        ] {
+            let next = Vector2::new(sweep.cos(), sweep.sin());
+            for offset in [-1.0, 1.0] {
+                let builder =
+                    RawOffsetBuilder::<_, _, Polyline>::new(&source, Vec::new(), offset, 1e-5);
+                let boundary = builder.arc_connection_boundary(
+                    JoinClass::OuterRound,
+                    Vector2::new(1.0, 0.0),
+                    next,
+                    Vector2::zero(),
+                );
+                let expected = (sweep / 4.0).tan().copysign(-offset);
+                assert!(
+                    boundary.connector_bulge.fuzzy_eq_eps(expected, 5e-15),
+                    "{sweep}, {offset}: {} != {expected}",
+                    boundary.connector_bulge
+                );
+            }
+        }
     }
     #[test]
     fn normal_raw_offsets_have_no_invalid_segments() {
