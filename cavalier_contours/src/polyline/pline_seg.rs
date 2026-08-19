@@ -190,9 +190,12 @@ where
         return v2.pos() - v1.pos();
     }
 
-    let (_, arc_center) = seg_arc_radius_and_center(v1, v2);
-    let tangent = (point_on_seg - arc_center).perp();
-    if v1.bulge_is_pos() { tangent } else { -tangent }
+    let bulge = v1.bulge;
+    let chord = v2.pos() - v1.pos();
+    let point_offset = (point_on_seg - v1.pos()).scale(T::two()) - chord;
+    let numerator = chord.scale((T::one() - bulge) * (T::one() + bulge))
+        + point_offset.perp().scale(T::two() * bulge);
+    numerator.scale(T::one() / (T::four() * bulge.abs()))
 }
 
 /// Find the closest point on a polyline segment defined by `v1` to `v2` to `point` given.
@@ -501,6 +504,33 @@ mod tests {
                 Vector2::new(2.0, expected_center_y),
                 expected_radius * 2e-15
             ));
+        }
+    }
+
+    #[test]
+    fn seg_tangent_vector_preserves_arc_radius_magnitude() {
+        for bulge in [
+            -1.0,
+            -std::f64::consts::FRAC_PI_8.tan(),
+            -1e-7,
+            1e-7,
+            std::f64::consts::FRAC_PI_8.tan(),
+            1.0,
+        ] {
+            let sweep = 4.0 * bulge.atan();
+            let v1 = PlineVertex::new(1.0, 0.0, bulge);
+            let v2 = PlineVertex::new(sweep.cos(), sweep.sin(), 0.0);
+            let point = Vector2::new((sweep / 2.0).cos(), (sweep / 2.0).sin());
+            let tangent = seg_tangent_vector(v1, v2, point);
+            let expected = if bulge < 0.0 {
+                -point.perp()
+            } else {
+                point.perp()
+            };
+            assert!(
+                tangent.fuzzy_eq_eps(expected, 2e-9),
+                "{bulge}: {tangent:?} != {expected:?}"
+            );
         }
     }
 
