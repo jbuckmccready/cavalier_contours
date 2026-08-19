@@ -25,6 +25,32 @@ avoid square root and trigonometric functions.
 There was significant improvements in performance for inputs that involve lots of arcs or generate
 raw offsets with many self intersects points.
 
+Some benchmarks collected before (release 0.8.0) and after (this release):
+
+Negative differences mean this release is faster.
+
+| Case                      | Before (`f5fe179`) | After (`277790c`) |  Difference |
+| ------------------------- | -----------------: | ----------------: | ----------: |
+| `profile1`                |          319.45 µs |         221.14 µs | **-30.77%** |
+| `profile2`                |          673.86 µs |         461.33 µs | **-31.54%** |
+| `profile1_no_arcs`        |           4.387 ms |          4.192 ms |  **-4.44%** |
+| `profile2_no_arcs`        |           9.270 ms |          8.768 ms |  **-5.41%** |
+| `floor_plan`              |          157.83 µs |         159.96 µs |  **+1.35%** |
+| `mechanical_bracket`      |          105.23 µs |          92.64 µs | **-11.96%** |
+| `road_centerline`         |          823.36 µs |         818.09 µs |  **-0.64%** |
+| `bezier_enclosure`        |           3.481 ms |          3.402 ms |  **-2.28%** |
+| `involute_gear`           |           4.395 ms |          4.523 ms |  **+2.91%** |
+| `involute_gear_with_arcs` |           3.453 ms |          3.363 ms |  **-2.61%** |
+| `pathological1`           |          62.825 ms |         18.002 ms | **-71.35%** |
+| `pathological1_no_arcs`   |         245.604 ms |         99.504 ms | **-59.49%** |
+| `invalid_line_zigzag`     |           9.851 ms |          4.367 ms | **-55.67%** |
+| `invalid_line_arc_zigzag` |          19.296 ms |          6.087 ms | **-68.45%** |
+| `closed_invalid_runs`     |          12.569 ms |          6.809 ms | **-45.83%** |
+| `tapered_link_strip/128`  |          890.35 µs |         728.91 µs | **-18.13%** |
+| `tapered_link_strip/512`  |           4.710 ms |          3.503 ms | **-25.63%** |
+| `tapered_link_strip/2048` |          20.045 ms |         15.667 ms | **-21.84%** |
+| `tapered_link_strip/4096` |          42.864 ms |         34.156 ms | **-20.32%** |
+
 ### Added ⭐
 
 - Added `TouchingLoopBehavior` and `CoincidentSegmentBehavior` to polyline offset options. The
