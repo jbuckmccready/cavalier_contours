@@ -133,19 +133,26 @@ pub fn property_sets_match(
     result_set: &[PlineProperties],
     expected_set: &[PlineProperties],
 ) -> bool {
-    // using simple N^2 comparisons to compare property sets (sets are always relatively small,
-    // e.g. N < 10)
+    // Use simple N^2 matching because sets are always small (e.g. N < 10). Track consumed
+    // results so identical polylines compare as a multiset rather than making a duplicate match
+    // every identical expected property.
+    let mut consumed = vec![false; result_set.len()];
     let sets_match = result_set.len() == expected_set.len()
         && expected_set.iter().all(|properties_expected| {
-            let match_count = result_set
-                .iter()
-                .filter(|properties_result| {
-                    properties_expected
-                        .fuzzy_eq_eps(properties_result, PlineProperties::PROP_CMP_EPS)
-                })
-                .count();
-
-            match_count == 1
+            let Some(index) =
+                result_set
+                    .iter()
+                    .enumerate()
+                    .position(|(index, properties_result)| {
+                        !consumed[index]
+                            && properties_expected
+                                .fuzzy_eq_eps(properties_result, PlineProperties::PROP_CMP_EPS)
+                    })
+            else {
+                return false;
+            };
+            consumed[index] = true;
+            true
         });
 
     if !sets_match {
@@ -160,19 +167,25 @@ pub fn property_sets_match_abs_a(
     result_set: &[PlineProperties],
     expected_set: &[PlineProperties],
 ) -> bool {
-    // using simple N^2 comparisons to compare property sets (sets are always relatively small,
-    // e.g. N < 10)
+    let mut consumed = vec![false; result_set.len()];
     let sets_match = result_set.len() == expected_set.len()
         && expected_set.iter().all(|properties_expected| {
-            let match_count = result_set
-                .iter()
-                .filter(|properties_result| {
-                    properties_expected
-                        .fuzzy_eq_eps_abs_a(properties_result, PlineProperties::PROP_CMP_EPS)
-                })
-                .count();
-
-            match_count == 1
+            let Some(index) =
+                result_set
+                    .iter()
+                    .enumerate()
+                    .position(|(index, properties_result)| {
+                        !consumed[index]
+                            && properties_expected.fuzzy_eq_eps_abs_a(
+                                properties_result,
+                                PlineProperties::PROP_CMP_EPS,
+                            )
+                    })
+            else {
+                return false;
+            };
+            consumed[index] = true;
+            true
         });
 
     if !sets_match {

@@ -5,6 +5,17 @@
 #include <stdlib.h>
 
 /**
+ * FFI values for [`TouchingLoopBehavior`] and [`CoincidentSegmentBehavior`].
+ */
+#define CAVC_TOUCHING_LOOP_BEHAVIOR_PRESERVE 0
+
+#define CAVC_TOUCHING_LOOP_BEHAVIOR_SEPARATE 1
+
+#define CAVC_COINCIDENT_SEGMENT_BEHAVIOR_PRESERVE 0
+
+#define CAVC_COINCIDENT_SEGMENT_BEHAVIOR_DISCARD 1
+
+/**
  * FFI representation of `SelfIntersectsInclude` enum
  */
 #define CAVC_SELF_INTERSECTS_INCLUDE_ALL 0
@@ -64,9 +75,16 @@ typedef struct cavc_shape cavc_shape;
 typedef struct cavc_pline_parallel_offset_o {
   const struct cavc_aabbindex *aabb_index;
   double pos_equal_eps;
-  double slice_join_eps;
   double offset_dist_eps;
   uint8_t handle_self_intersects;
+  /**
+   * One of the `CAVC_TOUCHING_LOOP_BEHAVIOR_*` constants.
+   */
+  uint32_t touching_loop_behavior;
+  /**
+   * One of the `CAVC_COINCIDENT_SEGMENT_BEHAVIOR_*` constants.
+   */
+  uint32_t coincident_segment_behavior;
 } cavc_pline_parallel_offset_o;
 
 /**
@@ -710,6 +728,7 @@ int32_t cavc_pline_eval_extents(const struct cavc_pline *pline,
  *
  * ## Specific Error Codes
  * * 1 = `pline` is null.
+ * * 2 = `options` contains an unrecognized behavior value.
  *
  * # Safety
  *

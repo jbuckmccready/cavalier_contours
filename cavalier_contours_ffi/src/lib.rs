@@ -3,9 +3,9 @@
 use cavalier_contours::{
     core::math::Vector2,
     polyline::{
-        BooleanOp, PlineBooleanOptions, PlineContainsOptions, PlineOffsetOptions,
-        PlineSelfIntersectOptions, PlineSource, PlineSourceMut, PlineVertex, Polyline,
-        SelfIntersectsInclude,
+        BooleanOp, CoincidentSegmentBehavior, PlineBooleanOptions, PlineContainsOptions,
+        PlineOffsetOptions, PlineSelfIntersectOptions, PlineSource, PlineSourceMut, PlineVertex,
+        Polyline, SelfIntersectsInclude, TouchingLoopBehavior,
     },
     shape_algorithms::{Shape, ShapeOffsetOptions},
     static_aabb2d_index::StaticAABB2DIndex,
@@ -79,15 +79,24 @@ impl cavc_vertex {
 #[derive(Debug, Clone)]
 pub struct cavc_pline(pub Polyline<f64>);
 
+/// FFI values for [`TouchingLoopBehavior`] and [`CoincidentSegmentBehavior`].
+pub const CAVC_TOUCHING_LOOP_BEHAVIOR_PRESERVE: u32 = 0;
+pub const CAVC_TOUCHING_LOOP_BEHAVIOR_SEPARATE: u32 = 1;
+pub const CAVC_COINCIDENT_SEGMENT_BEHAVIOR_PRESERVE: u32 = 0;
+pub const CAVC_COINCIDENT_SEGMENT_BEHAVIOR_DISCARD: u32 = 1;
+
 /// FFI representation of [`PlineOffsetOptions`].
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct cavc_pline_parallel_offset_o {
     pub aabb_index: *const cavc_aabbindex,
     pub pos_equal_eps: f64,
-    pub slice_join_eps: f64,
     pub offset_dist_eps: f64,
     pub handle_self_intersects: u8,
+    /// One of the `CAVC_TOUCHING_LOOP_BEHAVIOR_*` constants.
+    pub touching_loop_behavior: u32,
+    /// One of the `CAVC_COINCIDENT_SEGMENT_BEHAVIOR_*` constants.
+    pub coincident_segment_behavior: u32,
 }
 
 impl cavc_pline_parallel_offset_o {
@@ -97,15 +106,26 @@ impl cavc_pline_parallel_offset_o {
     ///
     /// `aabb_index` field must be null or a valid pointer to a [`cavc_aabbindex`].
     #[must_use]
-    pub unsafe fn to_internal(&self) -> PlineOffsetOptions<'_, f64> {
+    pub unsafe fn to_internal(&self) -> Option<PlineOffsetOptions<'_, f64>> {
         let aabb_index = unsafe { self.aabb_index.as_ref().map(|w| &w.0) };
-        PlineOffsetOptions {
+        let touching_loop_behavior = match self.touching_loop_behavior {
+            CAVC_TOUCHING_LOOP_BEHAVIOR_PRESERVE => TouchingLoopBehavior::Preserve,
+            CAVC_TOUCHING_LOOP_BEHAVIOR_SEPARATE => TouchingLoopBehavior::Separate,
+            _ => return None,
+        };
+        let coincident_segment_behavior = match self.coincident_segment_behavior {
+            CAVC_COINCIDENT_SEGMENT_BEHAVIOR_PRESERVE => CoincidentSegmentBehavior::Preserve,
+            CAVC_COINCIDENT_SEGMENT_BEHAVIOR_DISCARD => CoincidentSegmentBehavior::Discard,
+            _ => return None,
+        };
+        Some(PlineOffsetOptions {
             aabb_index,
             pos_equal_eps: self.pos_equal_eps,
-            slice_join_eps: self.slice_join_eps,
             offset_dist_eps: self.offset_dist_eps,
             handle_self_intersects: self.handle_self_intersects != 0,
-        }
+            touching_loop_behavior,
+            coincident_segment_behavior,
+        })
     }
 }
 
@@ -115,9 +135,10 @@ impl Default for cavc_pline_parallel_offset_o {
         Self {
             aabb_index: std::ptr::null(),
             pos_equal_eps: d.pos_equal_eps,
-            slice_join_eps: d.slice_join_eps,
             offset_dist_eps: d.offset_dist_eps,
             handle_self_intersects: u8::from(d.handle_self_intersects),
+            touching_loop_behavior: CAVC_TOUCHING_LOOP_BEHAVIOR_PRESERVE,
+            coincident_segment_behavior: CAVC_COINCIDENT_SEGMENT_BEHAVIOR_PRESERVE,
         }
     }
 }
@@ -1360,6 +1381,7 @@ pub unsafe extern "C" fn cavc_pline_eval_extents(
 ///
 /// ## Specific Error Codes
 /// * 1 = `pline` is null.
+/// * 2 = `options` contains an unrecognized behavior value.
 ///
 /// # Safety
 ///
@@ -1384,8 +1406,10 @@ pub unsafe extern "C" fn cavc_pline_parallel_offset(
         let results = if options.is_null() {
             pline.parallel_offset(offset)
         } else {
-            let opts = unsafe { &(*options).to_internal() };
-            pline.parallel_offset_opt(offset, opts)
+            let Some(opts) = (unsafe { (*options).to_internal() }) else {
+                return 2;
+            };
+            pline.parallel_offset_opt(offset, &opts)
         };
 
         unsafe {

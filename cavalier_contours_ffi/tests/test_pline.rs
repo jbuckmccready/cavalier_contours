@@ -37,6 +37,24 @@ fn compare_vertexes(actual: &[cavc_vertex], expected: &[cavc_vertex]) {
     }
 }
 
+fn parallel_offset_result_count(
+    pline: *const cavc_pline,
+    offset: f64,
+    options: &cavc_pline_parallel_offset_o,
+) -> (*const cavc_plinelist, usize) {
+    let mut results = ptr::null();
+    assert_eq!(
+        unsafe { cavc_pline_parallel_offset(pline, offset, options, &raw mut results) },
+        0
+    );
+    let mut result_count = usize::MAX;
+    assert_eq!(
+        unsafe { cavc_plinelist_get_count(results, &raw mut result_count) },
+        0
+    );
+    (results, result_count)
+}
+
 #[test]
 fn pline_data_manipulation() {
     let pline = create_pline(&[], true);
@@ -439,17 +457,25 @@ fn pline_eval_parallel_offset() {
         let mut options = cavc_pline_parallel_offset_o {
             aabb_index: std::ptr::null(),
             pos_equal_eps: f64::NAN,
-            slice_join_eps: f64::NAN,
             offset_dist_eps: f64::NAN,
             handle_self_intersects: 0,
+            touching_loop_behavior: u32::MAX,
+            coincident_segment_behavior: u32::MAX,
         };
 
         let mut results = ptr::null();
         unsafe {
             assert_eq!(cavc_pline_parallel_offset_o_init(&raw mut options), 0);
             assert!(!options.pos_equal_eps.is_nan());
-            assert!(!options.slice_join_eps.is_nan());
             assert!(!options.offset_dist_eps.is_nan());
+            assert_eq!(
+                options.touching_loop_behavior,
+                CAVC_TOUCHING_LOOP_BEHAVIOR_PRESERVE
+            );
+            assert_eq!(
+                options.coincident_segment_behavior,
+                CAVC_COINCIDENT_SEGMENT_BEHAVIOR_PRESERVE
+            );
 
             let mut aabb_index = ptr::null();
 
@@ -496,10 +522,88 @@ fn pline_eval_parallel_offset() {
 
             cavc_plinelist_f(results.cast_mut());
 
+            options.touching_loop_behavior = u32::MAX;
+            assert_eq!(
+                cavc_pline_parallel_offset(pline, offset, &raw const options, &raw mut results),
+                2
+            );
+            options.touching_loop_behavior = CAVC_TOUCHING_LOOP_BEHAVIOR_SEPARATE;
+            options.coincident_segment_behavior = u32::MAX;
+            assert_eq!(
+                cavc_pline_parallel_offset(pline, offset, &raw const options, &raw mut results),
+                2
+            );
+
             cavc_aabbindex_f(aabb_index.cast_mut());
 
             cavc_pline_f(pline);
         }
+    }
+}
+
+#[test]
+fn pline_parallel_offset_coincident_segment_behavior() {
+    let rectangle = create_pline(
+        &[
+            (0.0, 0.0, 0.0),
+            (20.0, 0.0, 0.0),
+            (20.0, 10.0, 0.0),
+            (0.0, 10.0, 0.0),
+        ],
+        true,
+    );
+
+    unsafe {
+        let mut options = cavc_pline_parallel_offset_o::default();
+
+        let (results, result_count) = parallel_offset_result_count(rectangle, 5.0, &options);
+        assert_eq!(result_count, 1);
+        cavc_plinelist_f(results.cast_mut());
+
+        options.coincident_segment_behavior = CAVC_COINCIDENT_SEGMENT_BEHAVIOR_DISCARD;
+        let (results, result_count) = parallel_offset_result_count(rectangle, 5.0, &options);
+        assert_eq!(result_count, 0);
+        cavc_plinelist_f(results.cast_mut());
+
+        cavc_pline_f(rectangle);
+    }
+}
+
+#[test]
+fn pline_parallel_offset_touching_loop_behavior() {
+    let source = create_pline(
+        &[
+            (16.124151571198702, 7.574464011109273, 0.20034828404404934),
+            (20.28700931229173, 6.3601607117462855, -0.02791638180668303),
+            (20.999999999999776, 6.399999999999991, 0.0),
+            (23.0, 6.399999999999993, -0.1034994961613444),
+            (
+                25.565936525389354,
+                5.863102399555457,
+                -0.0052613388474810245,
+            ),
+            (25.646796216841157, 6.048325281492069, -0.11047524450583684),
+            (23.335372338598518, 7.618077045350104, 0.43622875539166206),
+        ],
+        true,
+    );
+
+    unsafe {
+        let mut options = cavc_pline_parallel_offset_o {
+            handle_self_intersects: 1,
+            ..Default::default()
+        };
+
+        let (results, result_count) = parallel_offset_result_count(source, 0.1, &options);
+        assert_eq!(result_count, 1);
+        cavc_plinelist_f(results.cast_mut());
+
+        options.touching_loop_behavior = CAVC_TOUCHING_LOOP_BEHAVIOR_SEPARATE;
+        let (results, result_count) = parallel_offset_result_count(source, 0.1, &options);
+        assert_eq!(result_count, 2);
+        cavc_plinelist_f(results.cast_mut());
+
+        cavc_pline_f(source);
     }
 }
 
