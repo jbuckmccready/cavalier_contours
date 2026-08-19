@@ -57,7 +57,7 @@ Negative differences mean this release is faster.
   defaults preserve tangent-touching loops and coincident spans. Callers can instead separate
   tangent-touching loops or discard every coincident raw span. The C FFI exposes matching constants
   and option fields.
-- Two new dependencies: `ahash` and `tinyvec`. These provice meaningful speedups and are very small
+- Two new dependencies: `ahash` and `smallvec`. These provide meaningful speedups and are both small
   and popular crates.
 
 ### Changed 🔧

@@ -48,6 +48,7 @@ See more examples [here](examples/README.md).
 - Multi-polyline parallel offsetting ("shapes" defined with islands)
 - No unsafe code in core crate
 - C FFI for integration with other languages
+- Minimal dependencies (kept to small and popular crates such as `smallvec` and `ahash`)
 - WebAssembly support and interactive web demo
 
 <img src="https://github.com/jbuckmccready/CavalierContoursDoc/blob/master/gifs/PolylineOffsets.gif" width="400"/> <img src="https://github.com/jbuckmccready/CavalierContoursDoc/blob/master/gifs/PolylineCombines.gif" width="400"/>
