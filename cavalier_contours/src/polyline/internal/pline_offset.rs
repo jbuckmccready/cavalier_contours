@@ -22,6 +22,8 @@
 //! geometry. It does not find stitch connections. Connections come only from occurrence identity
 //! and recorded relations.
 
+use std::collections::HashMap;
+
 use crate::{
     core::{
         Control,
@@ -49,6 +51,7 @@ use crate::{
     },
 };
 use static_aabb2d_index::{Control as AabbControl, StaticAABB2DIndex, StaticAABB2DIndexBuilder};
+
 /// Returns whether `point` is farther from every source segment than the allowed offset distance.
 /// Invalid raw segment flags handle local folds, so `offset_tol` applies only to global distance
 /// checks.
@@ -388,6 +391,105 @@ struct ContactNode<T> {
     relations: Vec<ContactRelation>,
 }
 
+/// Epsilon-sized point buckets for contact nodes.
+///
+/// A bucket normally stores one node. Nodes that cannot be bucketed, or that collide with a
+/// non-equal node due to floating point range limits, stay in a fallback list.
+struct ContactNodeLookup {
+    buckets: HashMap<(i64, i64), ContactNodeId>,
+    unbucketed: Vec<ContactNodeId>,
+}
+
+impl ContactNodeLookup {
+    fn new<T>(nodes: &[ContactNode<T>], pos_equal_eps: T) -> Self
+    where
+        T: Real,
+    {
+        let mut result = Self {
+            buckets: HashMap::with_capacity(nodes.len()),
+            unbucketed: Vec::new(),
+        };
+        for (index, node) in nodes.iter().enumerate() {
+            result.insert(ContactNodeId(index), node.point, pos_equal_eps);
+        }
+        result
+    }
+
+    fn find<T>(
+        &self,
+        nodes: &[ContactNode<T>],
+        point: Vector2<T>,
+        pos_equal_eps: T,
+    ) -> Option<ContactNodeId>
+    where
+        T: Real,
+    {
+        let Some((cell_x, cell_y)) = contact_node_bucket(point, pos_equal_eps) else {
+            return nodes
+                .iter()
+                .position(|node| node.point.fuzzy_eq_eps(point, pos_equal_eps))
+                .map(ContactNodeId);
+        };
+
+        let mut result = None;
+        for x in [cell_x.checked_sub(1), Some(cell_x), cell_x.checked_add(1)]
+            .into_iter()
+            .flatten()
+        {
+            for y in [cell_y.checked_sub(1), Some(cell_y), cell_y.checked_add(1)]
+                .into_iter()
+                .flatten()
+            {
+                let Some(&node_id) = self.buckets.get(&(x, y)) else {
+                    continue;
+                };
+                if nodes[node_id.0].point.fuzzy_eq_eps(point, pos_equal_eps)
+                    && result.is_none_or(|current: ContactNodeId| node_id < current)
+                {
+                    result = Some(node_id);
+                }
+            }
+        }
+
+        for &node_id in &self.unbucketed {
+            if nodes[node_id.0].point.fuzzy_eq_eps(point, pos_equal_eps)
+                && result.is_none_or(|current| node_id < current)
+            {
+                result = Some(node_id);
+            }
+        }
+        result
+    }
+
+    fn insert<T>(&mut self, node_id: ContactNodeId, point: Vector2<T>, pos_equal_eps: T)
+    where
+        T: Real,
+    {
+        let Some(bucket) = contact_node_bucket(point, pos_equal_eps) else {
+            self.unbucketed.push(node_id);
+            return;
+        };
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.buckets.entry(bucket) {
+            entry.insert(node_id);
+        } else {
+            self.unbucketed.push(node_id);
+        }
+    }
+}
+
+fn contact_node_bucket<T>(point: Vector2<T>, pos_equal_eps: T) -> Option<(i64, i64)>
+where
+    T: Real,
+{
+    if pos_equal_eps <= T::zero() {
+        return None;
+    }
+    Some((
+        (point.x / pos_equal_eps).floor().to_i64()?,
+        (point.y / pos_equal_eps).floor().to_i64()?,
+    ))
+}
+
 impl<T: Copy> ContactOccurrence<T> {
     fn point(&self, nodes: &[ContactNode<T>]) -> Vector2<T> {
         nodes[self.node_id.0].point
@@ -532,6 +634,7 @@ impl<'a, T> Iterator for DissectionPointsIter<'a, T> {
 /// container per segment. Overlap coverage is stored only in discard mode.
 struct OffsetTopologyBuilder<T> {
     nodes: Vec<ContactNode<T>>,
+    node_lookup: Option<ContactNodeLookup>,
     occurrences: Vec<ContactOccurrence<T>>,
     dissection_points: DissectionPoints,
     /// Overlap coverage for each raw segment. `Some` contains one interval list per segment and is
@@ -551,6 +654,7 @@ where
     fn new(segment_count: usize, collect_overlaps: bool) -> Self {
         Self {
             nodes: Vec::new(),
+            node_lookup: None,
             occurrences: Vec::new(),
             dissection_points: DissectionPoints::new(),
             overlap_intervals: collect_overlaps.then(|| vec![Vec::new(); segment_count]),
@@ -560,6 +664,23 @@ where
     /// Returns the first contact node within `pos_equal_eps` of `point`, or creates one that stores
     /// `point`.
     fn find_or_create_node(&mut self, point: Vector2<T>, pos_equal_eps: T) -> ContactNodeId {
+        const MIN_INDEXED_NODES: usize = 512;
+
+        if let Some(lookup) = &mut self.node_lookup {
+            if let Some(node_id) = lookup.find(&self.nodes, point, pos_equal_eps) {
+                return node_id;
+            }
+
+            let id = ContactNodeId(self.nodes.len());
+            self.nodes.push(ContactNode {
+                point,
+                occurrences: Vec::new(),
+                relations: Vec::new(),
+            });
+            lookup.insert(id, point, pos_equal_eps);
+            return id;
+        }
+
         if let Some(index) = self
             .nodes
             .iter()
@@ -574,6 +695,9 @@ where
             occurrences: Vec::new(),
             relations: Vec::new(),
         });
+        if self.nodes.len() > MIN_INDEXED_NODES && pos_equal_eps > T::zero() {
+            self.node_lookup = Some(ContactNodeLookup::new(&self.nodes, pos_equal_eps));
+        }
         id
     }
 
@@ -2050,6 +2174,63 @@ mod tests {
             result.add(x, y, bulge);
         }
         result
+    }
+
+    fn contact_node(point: Vector2<f64>) -> ContactNode<f64> {
+        ContactNode {
+            point,
+            occurrences: Vec::new(),
+            relations: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn indexed_node_lookup_preserves_first_fuzzy_match() {
+        let eps = 1e-5;
+        let nodes = vec![
+            contact_node(Vector2::new(0.0, 0.0)),
+            contact_node(Vector2::new(1.5 * eps, 0.0)),
+        ];
+        let lookup = ContactNodeLookup::new(&nodes, eps);
+
+        assert_eq!(
+            lookup.find(&nodes, Vector2::new(0.75 * eps, 0.0), eps),
+            Some(ContactNodeId(0))
+        );
+        assert_eq!(
+            lookup.find(&nodes, Vector2::new(eps, 0.0), eps),
+            Some(ContactNodeId(1))
+        );
+    }
+
+    #[test]
+    fn indexed_node_lookup_handles_unbucketed_coordinates() {
+        let eps = 1e-5;
+        let point = Vector2::new(1e30, -1e30);
+        let nodes = vec![contact_node(point)];
+        let lookup = ContactNodeLookup::new(&nodes, eps);
+
+        assert_eq!(lookup.find(&nodes, point, eps), Some(ContactNodeId(0)));
+    }
+
+    #[test]
+    fn topology_builder_indexes_large_contact_sets() {
+        let eps = 1e-5;
+        let mut topology = OffsetTopologyBuilder::<f64>::new(0, false);
+        for i in 0_u32..=512 {
+            let index = usize::try_from(i).unwrap();
+            let point = Vector2::new(f64::from(i), 0.0);
+            assert_eq!(
+                topology.find_or_create_node(point, eps),
+                ContactNodeId(index)
+            );
+        }
+
+        assert!(topology.node_lookup.is_some());
+        assert_eq!(
+            topology.find_or_create_node(Vector2::new(128.0, 0.0), eps),
+            ContactNodeId(128)
+        );
     }
 
     #[test]
