@@ -1,8 +1,8 @@
 use super::PlineVertex;
 use crate::core::{
     math::{
-        Vector2, angle, arc_sweep_extents, bulge_from_angle, delta_angle, delta_angle_signed,
-        dist_squared, line_seg_closest_point, midpoint, min_max, point_within_arc_sweep,
+        Vector2, angle, arc_sweep_extents, delta_angle, delta_angle_signed, dist_squared,
+        line_seg_closest_point, midpoint, min_max, point_within_arc_sweep,
     },
     traits::Real,
 };
@@ -125,17 +125,40 @@ where
         };
     }
 
-    let (_, arc_center) = seg_arc_radius_and_center(v1, v2);
+    let abs_bulge = v1.bulge.abs();
+    let chord_length = (v2.pos() - v1.pos()).length();
+    let diameter = chord_length * (abs_bulge * abs_bulge + T::one()) / (T::two() * abs_bulge);
 
-    let point_pos_angle = angle(arc_center, point_on_seg);
+    // chord / diameter = sin(sweep / 2), and tan(sweep / 4) can then be found
+    // from the half-angle identity. Compute the smaller subarc this way because
+    // chord length becomes ill-conditioned as the sweep approaches a half circle.
+    // Derive the larger subarc with the tangent subtraction identity instead.
+    let bulge_from_chord_length = |sub_chord_length: T| {
+        let sin_half_sweep = if sub_chord_length > diameter {
+            T::one()
+        } else {
+            sub_chord_length / diameter
+        };
+        let cos_half_sweep = ((T::one() - sin_half_sweep) * (T::one() + sin_half_sweep)).sqrt();
+        let magnitude = sin_half_sweep / (T::one() + cos_half_sweep);
+        if v1.bulge_is_neg() {
+            -magnitude
+        } else {
+            magnitude
+        }
+    };
 
-    let arc_start_angle = angle(arc_center, v1.pos());
-    let theta1 = delta_angle_signed(arc_start_angle, point_pos_angle, v1.bulge_is_neg());
-    let bulge1 = bulge_from_angle(theta1);
-
-    let arc_end_angle = angle(arc_center, v2.pos());
-    let theta2 = delta_angle_signed(point_pos_angle, arc_end_angle, v1.bulge_is_neg());
-    let bulge2 = bulge_from_angle(theta2);
+    let chord1_length = (point_on_seg - v1.pos()).length();
+    let chord2_length = (v2.pos() - point_on_seg).length();
+    let (bulge1, bulge2) = if chord1_length <= chord2_length {
+        let bulge1 = bulge_from_chord_length(chord1_length);
+        let bulge2 = (v1.bulge - bulge1) / (T::one() + v1.bulge * bulge1);
+        (bulge1, bulge2)
+    } else {
+        let bulge2 = bulge_from_chord_length(chord2_length);
+        let bulge1 = (v1.bulge - bulge2) / (T::one() + v1.bulge * bulge2);
+        (bulge1, bulge2)
+    };
 
     let updated_start = PlineVertex::new(v1.x, v1.y, bulge1);
     let split_vertex = PlineVertex::new(point_on_seg.x, point_on_seg.y, bulge2);
@@ -417,6 +440,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::traits::FuzzyEq;
 
     #[test]
     fn seg_midpoint_returns_expected_arc_midpoints() {
@@ -447,6 +471,42 @@ mod tests {
 
         for (v1, v2, expected) in cases {
             assert!(seg_midpoint(v1, v2).fuzzy_eq_eps(expected, 1e-14));
+        }
+    }
+
+    #[test]
+    fn seg_split_at_point_returns_expected_subarcs() {
+        for bulge in [
+            -1.0,
+            -std::f64::consts::FRAC_PI_8.tan(),
+            -1e-7,
+            1e-7,
+            std::f64::consts::FRAC_PI_8.tan(),
+            1.0,
+        ] {
+            let sweep = 4.0 * bulge.atan();
+            let v1 = PlineVertex::new(1.0, 0.0, bulge);
+            let v2 = PlineVertex::new(sweep.cos(), sweep.sin(), 0.0);
+            for fraction in [1e-6, 0.1, 0.5, 0.9, 1.0 - 1e-6] {
+                let split_angle = sweep * fraction;
+                let point = Vector2::new(split_angle.cos(), split_angle.sin());
+                let result = seg_split_at_point(v1, v2, point, 1e-15);
+                let expected1 = (split_angle / 4.0).tan();
+                let expected2 = ((sweep - split_angle) / 4.0).tan();
+
+                assert!(
+                    result.updated_start.bulge.fuzzy_eq_eps(expected1, 2e-14),
+                    "{bulge}, {fraction}: {} != {expected1}",
+                    result.updated_start.bulge
+                );
+                assert!(
+                    result.split_vertex.bulge.fuzzy_eq_eps(expected2, 2e-14),
+                    "{bulge}, {fraction}: {} != {expected2}",
+                    result.split_vertex.bulge
+                );
+                assert_eq!(result.updated_start.pos(), v1.pos());
+                assert_eq!(result.split_vertex.pos(), point);
+            }
         }
     }
 }
