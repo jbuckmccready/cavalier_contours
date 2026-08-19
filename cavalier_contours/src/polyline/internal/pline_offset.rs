@@ -24,6 +24,8 @@
 
 use std::collections::HashMap;
 
+use smallvec::SmallVec;
+
 use crate::{
     core::{
         Control,
@@ -387,8 +389,8 @@ struct ContactRelation {
 /// requires the same occurrence or an explicit contact relation.
 struct ContactNode<T> {
     point: Vector2<T>,
-    occurrences: Vec<OccurrenceId>,
-    relations: Vec<ContactRelation>,
+    occurrences: SmallVec<[OccurrenceId; 2]>,
+    relations: SmallVec<[ContactRelation; 1]>,
 }
 
 /// Epsilon-sized point buckets for contact nodes.
@@ -674,8 +676,8 @@ where
             let id = ContactNodeId(self.nodes.len());
             self.nodes.push(ContactNode {
                 point,
-                occurrences: Vec::new(),
-                relations: Vec::new(),
+                occurrences: SmallVec::new(),
+                relations: SmallVec::new(),
             });
             lookup.insert(id, point, pos_equal_eps);
             return id;
@@ -692,8 +694,8 @@ where
         let id = ContactNodeId(self.nodes.len());
         self.nodes.push(ContactNode {
             point,
-            occurrences: Vec::new(),
-            relations: Vec::new(),
+            occurrences: SmallVec::new(),
+            relations: SmallVec::new(),
         });
         if self.nodes.len() > MIN_INDEXED_NODES && pos_equal_eps > T::zero() {
             self.node_lookup = Some(ContactNodeLookup::new(&self.nodes, pos_equal_eps));
@@ -2179,8 +2181,8 @@ mod tests {
     fn contact_node(point: Vector2<f64>) -> ContactNode<f64> {
         ContactNode {
             point,
-            occurrences: Vec::new(),
-            relations: Vec::new(),
+            occurrences: SmallVec::new(),
+            relations: SmallVec::new(),
         }
     }
 
@@ -2300,7 +2302,7 @@ mod tests {
                 occurrence2: OccurrenceId(occurrence2),
                 kind,
             })
-            .collect::<Vec<_>>();
+            .collect::<SmallVec<_>>();
         let nodes = vec![ContactNode {
             point,
             occurrences: (0..occurrences.len()).map(OccurrenceId).collect(),
@@ -2317,8 +2319,8 @@ mod tests {
         let mut topology = OffsetTopologyBuilder::new(0, false);
         topology.nodes.push(ContactNode {
             point: Vector2::zero(),
-            occurrences: Vec::new(),
-            relations: Vec::new(),
+            occurrences: SmallVec::new(),
+            relations: SmallVec::new(),
         });
         for &raw_segment in raw_segments {
             let occurrence_id = OccurrenceId(topology.occurrences.len());
@@ -2387,7 +2389,7 @@ mod tests {
 
         assert_eq!(topology.nodes.len(), 1);
         assert_eq!(topology.occurrences.len(), 1);
-        assert_eq!(topology.nodes[0].occurrences, [OccurrenceId(0)]);
+        assert_eq!(topology.nodes[0].occurrences.as_slice(), [OccurrenceId(0)]);
         assert_eq!(topology.dissection_points.occurrence_ids, [OccurrenceId(0)]);
     }
 
@@ -2625,13 +2627,13 @@ mod tests {
         let nodes = vec![
             ContactNode {
                 point,
-                occurrences: vec![OccurrenceId(0)],
-                relations: Vec::new(),
+                occurrences: smallvec::smallvec![OccurrenceId(0)],
+                relations: SmallVec::new(),
             },
             ContactNode {
                 point: Vector2::new(1e-8, 0.0),
-                occurrences: vec![OccurrenceId(1)],
-                relations: Vec::new(),
+                occurrences: smallvec::smallvec![OccurrenceId(1)],
+                relations: SmallVec::new(),
             },
         ];
         let occurrences = vec![
