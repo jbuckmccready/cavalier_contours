@@ -293,6 +293,71 @@ fn seg_length_group(c: &mut Criterion) {
     group.finish();
 }
 
+fn raw_offset_round_join_group(c: &mut Criterion) {
+    let open = |vertexes: &[(f64, f64, f64)]| {
+        let mut polyline = Polyline::new();
+        for &(x, y, bulge) in vertexes {
+            polyline.add(x, y, bulge);
+        }
+        polyline
+    };
+    let cases = [
+        (
+            "line_line_outer",
+            open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0)]),
+            -0.2,
+        ),
+        (
+            "line_line_shallow_outer",
+            open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, -1e-4, 0.0)]),
+            0.2,
+        ),
+        (
+            "line_line_near_reversal",
+            open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1e-6, 0.0)]),
+            -0.2,
+        ),
+        (
+            "line_line_reversal",
+            open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 0.0)]),
+            0.2,
+        ),
+        (
+            "line_arc_outer",
+            open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 1.0), (2.0, 0.0, 0.0)]),
+            0.2,
+        ),
+        (
+            "arc_line_outer",
+            open(&[(0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)]),
+            0.2,
+        ),
+        (
+            "arc_arc_outer",
+            open(&[(0.0, 0.0, 1.0), (1.0, 0.0, -1.0), (1.0, -1.0, 0.0)]),
+            0.2,
+        ),
+    ];
+
+    let mut group = c.benchmark_group("raw_offset_round_join");
+    for (name, polyline, offset) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &(polyline, offset),
+            |b, (polyline, offset)| {
+                b.iter(|| {
+                    black_box(create_raw_offset::<_, _, Polyline<f64>>(
+                        black_box(polyline),
+                        black_box(*offset),
+                        black_box(1e-5),
+                    ))
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
 fn repeat_offsets(polyline: &Polyline<f64>, offset: f64, count: u32) {
     for i in 1..=count {
         let offset = f64::from(i) * offset;
@@ -435,6 +500,7 @@ criterion_group!(
     seg_midpoint_group,
     seg_split_at_point_group,
     seg_length_group,
+    raw_offset_round_join_group,
     raw_offset_creation_group,
     polyline_offset_group,
     polyline_offset_topology_scaling_group,
