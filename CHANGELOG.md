@@ -32,19 +32,20 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ### Optimizations ⚡
 
-- Replaced the polyline offset stitcher's slice-start spatial index and endpoint queries with
-  direct contact-topology lookup. Coincident spans share the basic-contact traversal, and their
-  interval storage and coverage checks run only in discard mode.
-- Improved parallel offset slice stitching by selecting the next candidate without allocating or
-  sorting candidate lists.
-- Reuse the AABB query stack when finding open-offset end-circle intersections (avoids small
-  allocation).
-- Optimized arc winding-number checks to avoid calculating circle centers and radii.
-- Reduced allocations when finding global polyline self-intersections (avoiding use of HashSet).
+- Improved polyline offset stitching by following recorded intersections directly instead of
+  searching for nearby endpoints or sorting temporary candidate lists.
+- Reduced time and memory use for offsets with many intersections or coincident segments.
+- Sped up common polyline arc operations, including bounds, closest points, splits, lengths, and
+  distance checks.
+- Sped up round joins in raw offsets.
+- Reused temporary storage when finding open-offset end-circle intersections.
+- Sped up arc winding checks by avoiding unneeded center and radius calculations.
+- Reduced allocations when finding all self-intersections in a polyline.
 
 ### Internal
 
-- Added Criterion benchmarks for polyline area and raw and final parallel offset creation.
+- Added Criterion benchmarks for polyline area, polyline segment geometry, raw round joins, raw and
+  final parallel offset creation, and offset topology scaling.
 - Added initial AGENTS.md.
 - Refactored raw offset slice validation to share common logic between single and dual raw offsets.
 - Marked workspace-only algorithm APIs as hidden from generated documentation.
