@@ -29,8 +29,8 @@ use crate::{
     core::{
         Control,
         math::{
-            CircleCircleIntr, LineCircleIntr, Vector2, circle_circle_intr, dist_squared,
-            line_circle_intr, min_max, point_from_parametric, point_within_arc_sweep,
+            CircleCircleIntr, LineCircleIntr, Vector2, circle_circle_intr, line_circle_intr,
+            min_max, point_from_parametric, point_within_arc_sweep,
         },
         traits::Real,
     },
@@ -46,8 +46,8 @@ use crate::{
             },
             raw_pline_offset::{RawOffsetResult, create_raw_offset},
         },
-        pline_seg_intr, seg_arc_radius_and_center, seg_closest_point, seg_fast_approx_bounding_box,
-        seg_midpoint, seg_tangent_vector,
+        pline_seg_intr, seg_arc_radius_and_center, seg_distance_is_greater_than,
+        seg_fast_approx_bounding_box, seg_midpoint, seg_tangent_vector,
     },
 };
 use static_aabb2d_index::{Control as AabbControl, StaticAABB2DIndex, StaticAABB2DIndexBuilder};
@@ -70,13 +70,16 @@ where
     T: Real,
 {
     let abs_offset = offset.abs() - offset_tol;
-    let min_dist = abs_offset * abs_offset;
     let mut point_valid = true;
     let mut visitor = |i: usize| {
         let j = polyline.next_wrapping_index(i);
-        let closest_point = seg_closest_point(polyline.at(i), polyline.at(j), point, pos_equal_eps);
-        let dist = dist_squared(closest_point, point);
-        point_valid = dist > min_dist;
+        point_valid = seg_distance_is_greater_than(
+            polyline.at(i),
+            polyline.at(j),
+            point,
+            abs_offset,
+            pos_equal_eps,
+        );
         if point_valid {
             AabbControl::Continue
         } else {

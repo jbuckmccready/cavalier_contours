@@ -276,6 +276,77 @@ where
     v2.pos()
 }
 
+/// Returns whether the shortest distance from `point` to the segment from `v1` to `v2` is greater
+/// than `distance`.
+///
+/// `epsilon` is used for fuzzy float comparisons when the segment is an arc.
+pub fn seg_distance_is_greater_than<T>(
+    v1: PlineVertex<T>,
+    v2: PlineVertex<T>,
+    point: Vector2<T>,
+    distance: T,
+    epsilon: T,
+) -> bool
+where
+    T: Real,
+{
+    let distance = distance.abs();
+    let distance_squared = distance * distance;
+    if v1.bulge_is_zero() {
+        let chord = v2.pos() - v1.pos();
+        let point_offset = point - v1.pos();
+        let projection = point_offset.dot(chord);
+        if projection < T::fuzzy_epsilon() {
+            return point_offset.length_squared() > distance_squared;
+        }
+
+        let chord_length_squared = chord.length_squared();
+        if chord_length_squared < projection + T::fuzzy_epsilon() {
+            return (point - v2.pos()).length_squared() > distance_squared;
+        }
+
+        let cross = point_offset.perp_dot(chord);
+        return cross * cross > distance_squared * chord_length_squared;
+    }
+
+    let bulge = v1.bulge;
+    let chord = v2.pos() - v1.pos();
+    let inv_four_bulge = T::one() / (T::four() * bulge);
+    let arc_center = v1.pos()
+        + chord.scale(T::one() / T::two())
+        + chord
+            .perp()
+            .scale((T::one() - bulge) * (T::one() + bulge) * inv_four_bulge);
+    if point.fuzzy_eq_eps(arc_center, epsilon) {
+        return dist_squared(v1.pos(), point) > distance_squared;
+    }
+
+    if !point_within_arc_sweep(
+        arc_center,
+        v1.pos(),
+        v2.pos(),
+        v1.bulge_is_neg(),
+        point,
+        epsilon,
+    ) {
+        return dist_squared(v1.pos(), point) > distance_squared
+            && dist_squared(v2.pos(), point) > distance_squared;
+    }
+
+    let radius = chord.length() * (T::one() + bulge * bulge) * inv_four_bulge.abs();
+    let radial_length_squared = (point - arc_center).length_squared();
+    let outer_radius = radius + distance;
+    if radial_length_squared > outer_radius * outer_radius {
+        return true;
+    }
+
+    if radius <= distance {
+        return false;
+    }
+    let inner_radius = radius - distance;
+    radial_length_squared < inner_radius * inner_radius
+}
+
 /// Returns the axis-aligned bounding box of a line segment.
 #[inline]
 pub(crate) fn line_seg_bounding_box<T>(start: Vector2<T>, end: Vector2<T>) -> AABB<T>
@@ -607,6 +678,55 @@ mod tests {
                 seg_closest_point(v1, v2, outside_query, 1e-12)
                     .fuzzy_eq_eps(expected_endpoint, 2e-9)
             );
+        }
+    }
+
+    #[test]
+    fn seg_distance_is_greater_than_matches_closest_point_distance() {
+        let segments = [
+            (
+                PlineVertex::new(0.0, 0.0, 0.0),
+                PlineVertex::new(4.0, 0.0, 0.0),
+            ),
+            (
+                PlineVertex::new(0.0, 0.0, 1.0),
+                PlineVertex::new(4.0, 0.0, 0.0),
+            ),
+            (
+                PlineVertex::new(0.0, 0.0, -1.0),
+                PlineVertex::new(4.0, 0.0, 0.0),
+            ),
+            (
+                PlineVertex::new(1.0, 0.0, std::f64::consts::FRAC_PI_8.tan()),
+                PlineVertex::new(0.0, 1.0, 0.0),
+            ),
+            (
+                PlineVertex::new(-123.5, 47.25, 1e-7),
+                PlineVertex::new(891.75, -302.5, 0.0),
+            ),
+        ];
+        let points = [
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            Vector2::new(2.0, -2.0),
+            Vector2::new(2.0, 0.0),
+            Vector2::new(2.0, 3.0),
+            Vector2::new(5.0, -1.0),
+            Vector2::new(384.0, -126.0),
+        ];
+
+        for (v1, v2) in segments {
+            for point in points {
+                let closest = seg_closest_point(v1, v2, point, 1e-12);
+                let closest_distance_squared = dist_squared(closest, point);
+                for distance in [0.0, 0.1, 0.5, 1.0, 3.0, 10.0] {
+                    assert_eq!(
+                        seg_distance_is_greater_than(v1, v2, point, distance, 1e-12),
+                        closest_distance_squared > distance * distance,
+                        "{v1:?}, {v2:?}, {point:?}, {distance}"
+                    );
+                }
+            }
         }
     }
 
