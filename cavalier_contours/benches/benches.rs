@@ -4,8 +4,8 @@ use cavalier_contours::{
     core::math::Vector2,
     polyline::{
         PlineSource, PlineSourceMut, PlineVertex, Polyline, dist_from_segment_start,
-        internal::raw_pline_offset::create_raw_offset, seg_length, seg_midpoint,
-        seg_split_at_point,
+        internal::raw_pline_offset::create_raw_offset, seg_arc_radius_and_center, seg_length,
+        seg_midpoint, seg_split_at_point,
     },
 };
 use criterion::{
@@ -151,6 +151,43 @@ fn seg_midpoint_group(c: &mut Criterion) {
             &vertices,
             |b, &(v1, v2)| {
                 b.iter(|| black_box(seg_midpoint(black_box(v1), black_box(v2))));
+            },
+        );
+    }
+    group.finish();
+}
+
+fn seg_arc_radius_and_center_group(c: &mut Criterion) {
+    let cases = [
+        (
+            "shallow_arc",
+            PlineVertex::new(-123.5, 47.25, 1e-7),
+            PlineVertex::new(891.75, -302.5, 0.0),
+        ),
+        (
+            "quarter_circle",
+            PlineVertex::new(1.0, 0.0, std::f64::consts::FRAC_PI_8.tan()),
+            PlineVertex::new(0.0, 1.0, 0.0),
+        ),
+        (
+            "semicircle",
+            PlineVertex::new(-123.5, 47.25, 1.0),
+            PlineVertex::new(891.75, -302.5, 0.0),
+        ),
+        (
+            "clockwise_semicircle",
+            PlineVertex::new(-123.5, 47.25, -1.0),
+            PlineVertex::new(891.75, -302.5, 0.0),
+        ),
+    ];
+
+    let mut group = c.benchmark_group("seg_arc_radius_and_center");
+    for (name, v1, v2) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &(v1, v2),
+            |b, &(v1, v2)| {
+                b.iter(|| black_box(seg_arc_radius_and_center(black_box(v1), black_box(v2))));
             },
         );
     }
@@ -551,6 +588,7 @@ criterion_group!(
     polyline_area_group,
     polyline_winding_number_group,
     seg_midpoint_group,
+    seg_arc_radius_and_center_group,
     seg_split_at_point_group,
     seg_length_group,
     dist_from_segment_start_group,
