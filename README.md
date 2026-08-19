@@ -79,20 +79,13 @@ See more examples [here](examples/README.md).
 - Rust 1.95+ for the unpublished `cavalier_contours_ui` demo and testing app
 - Tested with CI on Linux, macOS, and Windows
 
-## Why go to Rust?
+## LLM Usage
 
-- All the same benefits of using C or C++ (great performance/optimizations, native compile, no
-  garbage collection, no run time) for creating fast portable libraries with a C FFI
-- Great builtin tooling around builds and packages (cargo + crates)
-- Great builtin tooling for writing and maintaining tests
-- All of the great builtin tooling makes open source contribution and participation easier to
-  facilitate
-- Borrow checker + lifetimes allow for more advanced memory allocation optimizations without the
-  risk of memory errors/corruption bugs
-- Type system allows for leaning heavily on threads/concurrency without the risk of memory
-  errors/corruption bugs
-- Discriminated unions and pattern matching as first class language features
-- Great tooling for targeting wasm
+This project started years before before LLMs were a viable tool for software development. At this point (mid 2026) the models have gotten more than good enough to be used for learning, generating code, debugging, optimizing, etc. That said they still tend to quickly produce slop, over engineer, derail into useless pursuits, struggle to escape local optimums based on false requirements, miss obvious and pertinent facts, etc.
+
+All of the crate/library code generated is reviewed ("I read the code"), and all algorithmic development and optimizations are done with a "human in the loop" approach. However, everyone has a different standard for code quality, one person's "I reviewed the code" is another person's slop.
+
+The standard pursued in this project is this: the code should be better than what you'd be able (or willing) to do without an LLM. That is to say the purpose of the LLM is not to produce more code faster, it is to produce the best code possible given innate time limitations, always keeping in mind continued ownership and improvement by humans. If the code is painful to read and/or understand without an LLM then it is no good (it is slop) and must be refactored.
 
 ## License
 
