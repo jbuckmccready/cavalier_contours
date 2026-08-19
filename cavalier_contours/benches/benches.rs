@@ -5,7 +5,7 @@ use cavalier_contours::{
     polyline::{
         PlineSource, PlineSourceMut, PlineVertex, Polyline, dist_from_segment_start,
         internal::raw_pline_offset::create_raw_offset, seg_arc_radius_and_center, seg_length,
-        seg_midpoint, seg_split_at_point,
+        seg_midpoint, seg_split_at_point, seg_tangent_vector,
     },
 };
 use criterion::{
@@ -188,6 +188,63 @@ fn seg_arc_radius_and_center_group(c: &mut Criterion) {
             &(v1, v2),
             |b, &(v1, v2)| {
                 b.iter(|| black_box(seg_arc_radius_and_center(black_box(v1), black_box(v2))));
+            },
+        );
+    }
+    group.finish();
+}
+
+fn seg_tangent_vector_group(c: &mut Criterion) {
+    let quarter_circle_bulge = std::f64::consts::FRAC_PI_8.tan();
+    let cases = [
+        (
+            "line",
+            PlineVertex::new(-123.5, 47.25, 0.0),
+            PlineVertex::new(891.75, -302.5, 0.0),
+            Vector2::new(384.125, -127.625),
+        ),
+        (
+            "shallow_arc_midpoint",
+            PlineVertex::new(-123.5, 47.25, 1e-7),
+            PlineVertex::new(891.75, -302.5, 0.0),
+            Vector2::new(384.1249825125, -127.6250507625),
+        ),
+        (
+            "quarter_circle_midpoint",
+            PlineVertex::new(1.0, 0.0, quarter_circle_bulge),
+            PlineVertex::new(0.0, 1.0, 0.0),
+            Vector2::new(
+                std::f64::consts::FRAC_1_SQRT_2,
+                std::f64::consts::FRAC_1_SQRT_2,
+            ),
+        ),
+        (
+            "semicircle_midpoint",
+            PlineVertex::new(0.0, 0.0, 1.0),
+            PlineVertex::new(2.0, 0.0, 0.0),
+            Vector2::new(1.0, -1.0),
+        ),
+        (
+            "clockwise_semicircle_midpoint",
+            PlineVertex::new(0.0, 0.0, -1.0),
+            PlineVertex::new(2.0, 0.0, 0.0),
+            Vector2::new(1.0, 1.0),
+        ),
+    ];
+
+    let mut group = c.benchmark_group("seg_tangent_vector");
+    for (name, v1, v2, point) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &(v1, v2, point),
+            |b, &(v1, v2, point)| {
+                b.iter(|| {
+                    black_box(seg_tangent_vector(
+                        black_box(v1),
+                        black_box(v2),
+                        black_box(point),
+                    ))
+                });
             },
         );
     }
@@ -589,6 +646,7 @@ criterion_group!(
     polyline_winding_number_group,
     seg_midpoint_group,
     seg_arc_radius_and_center_group,
+    seg_tangent_vector_group,
     seg_split_at_point_group,
     seg_length_group,
     dist_from_segment_start_group,
