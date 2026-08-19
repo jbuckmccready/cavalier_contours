@@ -3,7 +3,8 @@ use std::hint::black_box;
 use cavalier_contours::{
     core::math::Vector2,
     polyline::{
-        PlineSource, PlineSourceMut, Polyline, internal::raw_pline_offset::create_raw_offset,
+        PlineSource, PlineSourceMut, PlineVertex, Polyline,
+        internal::raw_pline_offset::create_raw_offset, seg_midpoint,
     },
 };
 use criterion::{
@@ -107,6 +108,51 @@ fn polyline_winding_number_group(c: &mut Criterion) {
     group.bench_function("arc_distance_checks", |b| {
         b.iter(|| black_box(crossing_arcs.winding_number(black_box(point))));
     });
+    group.finish();
+}
+
+fn seg_midpoint_group(c: &mut Criterion) {
+    let cases = [
+        (
+            "line",
+            (
+                PlineVertex::new(-123.5, 47.25, 0.0),
+                PlineVertex::new(891.75, -302.5, 0.0),
+            ),
+        ),
+        (
+            "shallow_arc",
+            (
+                PlineVertex::new(-123.5, 47.25, 1e-7),
+                PlineVertex::new(891.75, -302.5, 0.0),
+            ),
+        ),
+        (
+            "quarter_circle",
+            (
+                PlineVertex::new(2.0, 2.0, std::f64::consts::FRAC_PI_8.tan()),
+                PlineVertex::new(4.0, 4.0, 0.0),
+            ),
+        ),
+        (
+            "clockwise_semicircle",
+            (
+                PlineVertex::new(-123.5, 47.25, -1.0),
+                PlineVertex::new(891.75, -302.5, 0.0),
+            ),
+        ),
+    ];
+
+    let mut group = c.benchmark_group("seg_midpoint");
+    for (name, vertices) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &vertices,
+            |b, &(v1, v2)| {
+                b.iter(|| black_box(seg_midpoint(black_box(v1), black_box(v2))));
+            },
+        );
+    }
     group.finish();
 }
 
@@ -249,6 +295,7 @@ criterion_group!(
     benches,
     polyline_area_group,
     polyline_winding_number_group,
+    seg_midpoint_group,
     raw_offset_creation_group,
     polyline_offset_group,
     polyline_offset_topology_scaling_group,
