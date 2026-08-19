@@ -4,7 +4,7 @@ use cavalier_contours::{
     core::math::Vector2,
     polyline::{
         PlineSource, PlineSourceMut, PlineVertex, Polyline,
-        internal::raw_pline_offset::create_raw_offset, seg_midpoint,
+        internal::raw_pline_offset::create_raw_offset, seg_midpoint, seg_split_at_point,
     },
 };
 use criterion::{
@@ -156,6 +156,83 @@ fn seg_midpoint_group(c: &mut Criterion) {
     group.finish();
 }
 
+fn seg_split_at_point_group(c: &mut Criterion) {
+    let quarter_circle_bulge = std::f64::consts::FRAC_PI_8.tan();
+    let near_start_angle = std::f64::consts::PI * 1e-6;
+    let cases = [
+        (
+            "line_interior",
+            (
+                PlineVertex::new(-123.5, 47.25, 0.0),
+                PlineVertex::new(891.75, -302.5, 0.0),
+                Vector2::new(384.125, -127.625),
+            ),
+        ),
+        (
+            "arc_start",
+            (
+                PlineVertex::new(0.0, 0.0, 1.0),
+                PlineVertex::new(2.0, 0.0, 0.0),
+                Vector2::new(0.0, 0.0),
+            ),
+        ),
+        (
+            "shallow_arc_midpoint",
+            (
+                PlineVertex::new(-123.5, 47.25, 1e-7),
+                PlineVertex::new(891.75, -302.5, 0.0),
+                Vector2::new(384.1249825125, -127.6250507625),
+            ),
+        ),
+        (
+            "quarter_circle_midpoint",
+            (
+                PlineVertex::new(1.0, 0.0, quarter_circle_bulge),
+                PlineVertex::new(0.0, 1.0, 0.0),
+                Vector2::new(
+                    std::f64::consts::FRAC_1_SQRT_2,
+                    std::f64::consts::FRAC_1_SQRT_2,
+                ),
+            ),
+        ),
+        (
+            "semicircle_near_start",
+            (
+                PlineVertex::new(0.0, 0.0, 1.0),
+                PlineVertex::new(2.0, 0.0, 0.0),
+                Vector2::new(1.0 - near_start_angle.cos(), -near_start_angle.sin()),
+            ),
+        ),
+        (
+            "clockwise_semicircle_midpoint",
+            (
+                PlineVertex::new(0.0, 0.0, -1.0),
+                PlineVertex::new(2.0, 0.0, 0.0),
+                Vector2::new(1.0, 1.0),
+            ),
+        ),
+    ];
+
+    let mut group = c.benchmark_group("seg_split_at_point");
+    for (name, input) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &input,
+            |b, &(v1, v2, point)| {
+                b.iter(|| {
+                    black_box(seg_split_at_point(
+                        black_box(v1),
+                        black_box(v2),
+                        black_box(point),
+                        black_box(1e-12),
+                    ))
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
 fn repeat_offsets(polyline: &Polyline<f64>, offset: f64, count: u32) {
     for i in 1..=count {
         let offset = f64::from(i) * offset;
@@ -296,6 +373,7 @@ criterion_group!(
     polyline_area_group,
     polyline_winding_number_group,
     seg_midpoint_group,
+    seg_split_at_point_group,
     raw_offset_creation_group,
     polyline_offset_group,
     polyline_offset_topology_scaling_group,
