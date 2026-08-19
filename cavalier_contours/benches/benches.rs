@@ -4,7 +4,8 @@ use cavalier_contours::{
     core::math::Vector2,
     polyline::{
         PlineSource, PlineSourceMut, PlineVertex, Polyline,
-        internal::raw_pline_offset::create_raw_offset, seg_midpoint, seg_split_at_point,
+        internal::raw_pline_offset::create_raw_offset, seg_length, seg_midpoint,
+        seg_split_at_point,
     },
 };
 use criterion::{
@@ -233,6 +234,65 @@ fn seg_split_at_point_group(c: &mut Criterion) {
     group.finish();
 }
 
+fn seg_length_group(c: &mut Criterion) {
+    let cases = [
+        (
+            "zero_length",
+            (
+                PlineVertex::new(-123.5, 47.25, 0.0),
+                PlineVertex::new(-123.5, 47.25, 0.0),
+            ),
+        ),
+        (
+            "line",
+            (
+                PlineVertex::new(-123.5, 47.25, 0.0),
+                PlineVertex::new(891.75, -302.5, 0.0),
+            ),
+        ),
+        (
+            "shallow_arc",
+            (
+                PlineVertex::new(-123.5, 47.25, 1e-7),
+                PlineVertex::new(891.75, -302.5, 0.0),
+            ),
+        ),
+        (
+            "quarter_circle",
+            (
+                PlineVertex::new(1.0, 0.0, std::f64::consts::FRAC_PI_8.tan()),
+                PlineVertex::new(0.0, 1.0, 0.0),
+            ),
+        ),
+        (
+            "semicircle",
+            (
+                PlineVertex::new(-123.5, 47.25, 1.0),
+                PlineVertex::new(891.75, -302.5, 0.0),
+            ),
+        ),
+        (
+            "clockwise_semicircle",
+            (
+                PlineVertex::new(-123.5, 47.25, -1.0),
+                PlineVertex::new(891.75, -302.5, 0.0),
+            ),
+        ),
+    ];
+
+    let mut group = c.benchmark_group("seg_length");
+    for (name, vertices) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &vertices,
+            |b, &(v1, v2)| {
+                b.iter(|| black_box(seg_length(black_box(v1), black_box(v2))));
+            },
+        );
+    }
+    group.finish();
+}
+
 fn repeat_offsets(polyline: &Polyline<f64>, offset: f64, count: u32) {
     for i in 1..=count {
         let offset = f64::from(i) * offset;
@@ -374,6 +434,7 @@ criterion_group!(
     polyline_winding_number_group,
     seg_midpoint_group,
     seg_split_at_point_group,
+    seg_length_group,
     raw_offset_creation_group,
     polyline_offset_group,
     polyline_offset_topology_scaling_group,

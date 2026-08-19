@@ -1,7 +1,7 @@
 use super::PlineVertex;
 use crate::core::{
     math::{
-        Vector2, angle, arc_sweep_extents, delta_angle, delta_angle_signed, dist_squared,
+        Vector2, angle, angle_from_bulge, arc_sweep_extents, delta_angle_signed, dist_squared,
         line_seg_closest_point, midpoint, min_max, point_within_arc_sweep,
     },
     traits::Real,
@@ -392,10 +392,10 @@ where
         return dist_squared(v1.pos(), v2.pos()).sqrt();
     }
 
-    let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-    let start_angle = angle(arc_center, v1.pos());
-    let end_angle = angle(arc_center, v2.pos());
-    arc_radius * delta_angle(start_angle, end_angle).abs()
+    let abs_bulge = v1.bulge.abs();
+    let chord_length = (v2.pos() - v1.pos()).length();
+    let arc_radius = chord_length * (abs_bulge * abs_bulge + T::one()) / (T::four() * abs_bulge);
+    arc_radius * angle_from_bulge(v1.bulge).abs()
 }
 
 /// Find the midpoint for the polyline segment defined by `v1` to `v2`.
@@ -507,6 +507,28 @@ mod tests {
                 assert_eq!(result.updated_start.pos(), v1.pos());
                 assert_eq!(result.split_vertex.pos(), point);
             }
+        }
+    }
+
+    #[test]
+    fn seg_length_returns_expected_arc_lengths() {
+        for bulge in [
+            -1.0,
+            -std::f64::consts::FRAC_PI_8.tan(),
+            -1e-7,
+            1e-7,
+            std::f64::consts::FRAC_PI_8.tan(),
+            1.0,
+        ] {
+            let sweep = 4.0 * bulge.atan();
+            let v1 = PlineVertex::new(1.0, 0.0, bulge);
+            let v2 = PlineVertex::new(sweep.cos(), sweep.sin(), 0.0);
+            assert!(
+                seg_length(v1, v2).fuzzy_eq_eps(sweep.abs(), 2e-14),
+                "{bulge}: {} != {}",
+                seg_length(v1, v2),
+                sweep.abs()
+            );
         }
     }
 }
