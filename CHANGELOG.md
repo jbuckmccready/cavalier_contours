@@ -4,6 +4,53 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ## Unreleased
 
+Focus of this release is on robustness and performance of polyline offset generation.
+
+The main changes are:
+
+- Invalid slices are detected and tracked in raw offset creation to filter out invalid slices.
+- Slices are stitched together using intersect topology rather than global geometric queries.
+
+These both improve robustness in dealing with heavily overlapping/degenerate scenarios. Additionally
+this removes the need for `slice_join_eps` and made it possible to add options for behavior in
+dealing with coincident segments (keep or discard) and "touching loops" (longest continuation
+or split) in the offset results.
+
+Notably the intersect topology approach I think has application in the boolean operations to
+improve robustness there as well. Also the `Shape` offset algorithm has not yet been updated.
+
+Other improvements are mostly in optimizing some of lower level segment processing functions to
+avoid square root and trigonometric functions.
+
+There was significant improvements in performance for inputs that involve lots of arcs or generate
+raw offsets with many self intersects points.
+
+Some benchmarks collected before (release 0.8.0) and after (this release):
+
+Negative differences mean this release is faster.
+
+| Case                      | Before (`f5fe179`) | After (`52c44d1`) |  Difference |
+| ------------------------- | -----------------: | ----------------: | ----------: |
+| `profile1`                |          319.45 µs |         314.34 µs |  **-1.60%** |
+| `profile2`                |          673.86 µs |         449.43 µs | **-33.31%** |
+| `profile1_no_arcs`        |           4.387 ms |          4.090 ms |  **-6.77%** |
+| `profile2_no_arcs`        |           9.270 ms |          8.873 ms |  **-4.28%** |
+| `floor_plan`              |          157.83 µs |         159.68 µs |  **+1.17%** |
+| `mechanical_bracket`      |          105.23 µs |          92.13 µs | **-12.45%** |
+| `road_centerline`         |          823.36 µs |         833.82 µs |  **+1.27%** |
+| `bezier_enclosure`        |           3.481 ms |          3.543 ms |  **+1.79%** |
+| `involute_gear`           |           4.395 ms |          4.308 ms |  **-1.98%** |
+| `involute_gear_with_arcs` |           3.453 ms |          3.327 ms |  **-3.66%** |
+| `pathological1`           |          62.825 ms |         17.908 ms | **-71.50%** |
+| `pathological1_no_arcs`   |         245.604 ms |         99.280 ms | **-59.58%** |
+| `invalid_line_zigzag`     |           9.851 ms |          4.298 ms | **-56.37%** |
+| `invalid_line_arc_zigzag` |          19.296 ms |          5.998 ms | **-68.91%** |
+| `closed_invalid_runs`     |          12.569 ms |          6.706 ms | **-46.65%** |
+| `tapered_link_strip/128`  |          890.35 µs |         690.83 µs | **-22.41%** |
+| `tapered_link_strip/512`  |           4.710 ms |          3.571 ms | **-24.18%** |
+| `tapered_link_strip/2048` |          20.045 ms |         17.221 ms | **-14.09%** |
+| `tapered_link_strip/4096` |          42.864 ms |         37.224 ms | **-13.16%** |
+
 ### Added ⭐
 
 - Added `TouchingLoopBehavior` and `CoincidentSegmentBehavior` to polyline offset options. The
@@ -17,6 +64,13 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   `cavc_pline_parallel_offset_o` field. Polyline offset slices now connect through explicit
   intersection topology and use `pos_equal_eps` only to clean repeated positions. The separate
   `ShapeOffsetOptions::slice_join_eps` field remains unchanged.
+- ⚠️ BREAKING: Replaced `PlineIntersectVisitor::visit_basic_intr` and
+  `visit_overlapping_intr` with a single `visit(PlineIntersect)` method. Custom visitors must now
+  match the `Basic` and `Overlapping` variants. The trait also has an optional `filter_map` hook.
+- ⚠️ BREAKING: Removed the unused public `PlineVertexVisitor` and `PlineSegVisitor` traits.
+- ⚠️ BREAKING: Changed `cavc_pline_parallel_offset_o::to_internal` to return `Option` when behavior
+  values are invalid. The C `cavc_pline_parallel_offset` function can now return error code `2` for
+  an unrecognized behavior value.
 
 ### Fixed 🐛
 
