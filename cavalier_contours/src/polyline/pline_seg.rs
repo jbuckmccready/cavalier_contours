@@ -116,18 +116,21 @@ where
     }
 
     let abs_bulge = v1.bulge.abs();
-    let chord_length = (v2.pos() - v1.pos()).length();
-    let diameter = chord_length * (abs_bulge * abs_bulge + T::one()) / (T::two() * abs_bulge);
+    let chord_length_squared = (v2.pos() - v1.pos()).length_squared();
+    let diameter_ratio = T::two() * abs_bulge / (abs_bulge * abs_bulge + T::one());
+    let diameter_ratio_squared = diameter_ratio * diameter_ratio;
 
     // chord / diameter = sin(sweep / 2), and tan(sweep / 4) can then be found
     // from the half-angle identity. Compute the smaller subarc this way because
     // chord length becomes ill-conditioned as the sweep approaches a half circle.
     // Derive the larger subarc with the tangent subtraction identity instead.
-    let bulge_from_chord_length = |sub_chord_length: T| {
-        let sin_half_sweep = if sub_chord_length > diameter {
+    let bulge_from_chord_length_squared = |sub_chord_length_squared: T| {
+        let sin_half_sweep_squared =
+            sub_chord_length_squared / chord_length_squared * diameter_ratio_squared;
+        let sin_half_sweep = if sin_half_sweep_squared > T::one() {
             T::one()
         } else {
-            sub_chord_length / diameter
+            sin_half_sweep_squared.sqrt()
         };
         let cos_half_sweep = ((T::one() - sin_half_sweep) * (T::one() + sin_half_sweep)).sqrt();
         let magnitude = sin_half_sweep / (T::one() + cos_half_sweep);
@@ -138,14 +141,14 @@ where
         }
     };
 
-    let chord1_length = (point_on_seg - v1.pos()).length();
-    let chord2_length = (v2.pos() - point_on_seg).length();
-    let (bulge1, bulge2) = if chord1_length <= chord2_length {
-        let bulge1 = bulge_from_chord_length(chord1_length);
+    let chord1_length_squared = (point_on_seg - v1.pos()).length_squared();
+    let chord2_length_squared = (v2.pos() - point_on_seg).length_squared();
+    let (bulge1, bulge2) = if chord1_length_squared <= chord2_length_squared {
+        let bulge1 = bulge_from_chord_length_squared(chord1_length_squared);
         let bulge2 = (v1.bulge - bulge1) / (T::one() + v1.bulge * bulge1);
         (bulge1, bulge2)
     } else {
-        let bulge2 = bulge_from_chord_length(chord2_length);
+        let bulge2 = bulge_from_chord_length_squared(chord2_length_squared);
         let bulge1 = (v1.bulge - bulge2) / (T::one() + v1.bulge * bulge2);
         (bulge1, bulge2)
     };
