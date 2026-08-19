@@ -19,7 +19,6 @@ use crate::{
 };
 use static_aabb2d_index as aabb_index;
 use static_aabb2d_index::StaticAABB2DIndex;
-use std::collections::HashSet;
 
 /// Visits all local self intersects of the polyline. Local self intersects are defined as between
 /// two polyline segments that share a vertex.
@@ -479,9 +478,9 @@ where
     pline1: &'a P,
     pline2: &'a O,
     result: PlineIntersectsCollection<T>,
-    // Hash sets used to track possible duplicate intersects recorded due to overlapping segments.
-    possible_duplicates1: HashSet<usize>,
-    possible_duplicates2: HashSet<usize>,
+    // Segment indexes that may have duplicate intersects due to overlapping segments.
+    possible_duplicates1: Vec<usize>,
+    possible_duplicates2: Vec<usize>,
     // Last segment start indexes for open polylines, used when deciding whether to skip an
     // intersect at a segment endpoint.
     open1_last_idx: usize,
@@ -501,8 +500,8 @@ where
             pline1,
             pline2,
             result: PlineIntersectsCollection::new_empty(),
-            possible_duplicates1: HashSet::new(),
-            possible_duplicates2: HashSet::new(),
+            possible_duplicates1: Vec::new(),
+            possible_duplicates2: Vec::new(),
             open1_last_idx: pline1.vertex_count() - 2,
             open2_last_idx: pline2.vertex_count() - 2,
             pos_equal_eps,
@@ -514,17 +513,27 @@ where
         if self.possible_duplicates1.is_empty() && self.possible_duplicates2.is_empty() {
             return self.result;
         }
+        self.possible_duplicates1.sort_unstable();
+        self.possible_duplicates1.dedup();
+        self.possible_duplicates2.sort_unstable();
+        self.possible_duplicates2.dedup();
 
         // Remove duplicate points caused by endpoint intersects that are also part of an overlap.
         self.result.basic_intersects.retain(|intr| {
-            if self.possible_duplicates1.contains(&intr.start_index1)
+            if self
+                .possible_duplicates1
+                .binary_search(&intr.start_index1)
+                .is_ok()
                 && intr
                     .point
                     .fuzzy_eq_eps(self.pline1.at(intr.start_index1).pos(), self.pos_equal_eps)
             {
                 return false;
             }
-            !(self.possible_duplicates2.contains(&intr.start_index2)
+            !(self
+                .possible_duplicates2
+                .binary_search(&intr.start_index2)
+                .is_ok()
                 && intr
                     .point
                     .fuzzy_eq_eps(self.pline2.at(intr.start_index2).pos(), self.pos_equal_eps))
@@ -599,7 +608,7 @@ where
                         .fuzzy_eq_eps(point2, self.pos_equal_eps)
                 {
                     self.possible_duplicates1
-                        .insert(self.pline1.next_wrapping_index(i1));
+                        .push(self.pline1.next_wrapping_index(i1));
                 }
                 if pline2_context
                     .v2
@@ -611,7 +620,7 @@ where
                         .fuzzy_eq_eps(point2, self.pos_equal_eps)
                 {
                     self.possible_duplicates2
-                        .insert(self.pline2.next_wrapping_index(i2));
+                        .push(self.pline2.next_wrapping_index(i2));
                 }
             }
         }

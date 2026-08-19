@@ -71,11 +71,13 @@ raw offsets with many self intersects points.
 - Reused temporary storage when finding open-offset end-circle intersections.
 - Sped up arc winding checks by avoiding unneeded center and radius calculations.
 - Reduced allocations when finding all self-intersections in a polyline.
+- Sped up two-polyline intersection duplicate cleanup by sorting candidate segment indexes instead
+  of storing them in hash sets.
 
 ### Internal
 
 - Added Criterion benchmarks for polyline area, polyline segment geometry, raw round joins, raw and
-  final parallel offset creation, and offset topology scaling.
+  final parallel offset creation, offset topology scaling, and intersection duplicate cleanup.
 - Added initial AGENTS.md.
 - Refactored raw offset slice validation to share common logic between single and dual raw offsets.
 - Marked workspace-only algorithm APIs as hidden from generated documentation.
