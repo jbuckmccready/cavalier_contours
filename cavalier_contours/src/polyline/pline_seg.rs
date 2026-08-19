@@ -236,7 +236,15 @@ where
         return line_seg_closest_point(v1.pos(), v2.pos(), point);
     }
 
-    let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
+    let bulge = v1.bulge;
+    let bulge_squared = bulge * bulge;
+    let chord = v2.pos() - v1.pos();
+    let inv_four_bulge = T::one() / (T::four() * bulge);
+    let arc_center = v1.pos()
+        + chord.scale(T::one() / T::two())
+        + chord
+            .perp()
+            .scale((T::one() - bulge) * (T::one() + bulge) * inv_four_bulge);
     if point.fuzzy_eq_eps(arc_center, epsilon) {
         // avoid normalizing zero length vector (point is at center, just return start point)
         return v1.pos();
@@ -251,8 +259,11 @@ where
         epsilon,
     ) {
         // closest point is on the arc
-        let v_to_point = (point - arc_center).normalize();
-        return v_to_point.scale(arc_radius) + arc_center;
+        let radial = point - arc_center;
+        let radius_to_radial_length = (chord.length_squared() / radial.length_squared()).sqrt()
+            * (T::one() + bulge_squared)
+            * inv_four_bulge.abs();
+        return radial.scale(radius_to_radial_length) + arc_center;
     }
 
     // closest point is one of the ends
@@ -565,6 +576,37 @@ mod tests {
             ),
         ] {
             assert_eq!(seg_fast_approx_bounding_box(v1, v2), expected);
+        }
+    }
+
+    #[test]
+    fn seg_closest_point_returns_arc_projection_or_nearest_endpoint() {
+        for bulge in [
+            -1.0,
+            -std::f64::consts::FRAC_PI_8.tan(),
+            -1e-7,
+            1e-7,
+            std::f64::consts::FRAC_PI_8.tan(),
+            1.0,
+        ] {
+            let sweep = 4.0 * bulge.atan();
+            let v1 = PlineVertex::new(1.0, 0.0, bulge);
+            let v2 = PlineVertex::new(sweep.cos(), sweep.sin(), 0.0);
+            let midpoint = Vector2::new((sweep / 2.0).cos(), (sweep / 2.0).sin());
+            let inward_query = midpoint.scale(0.75);
+            assert!(seg_closest_point(v1, v2, inward_query, 1e-12).fuzzy_eq_eps(midpoint, 2e-9));
+
+            let outside_query = Vector2::new((-sweep).cos(), (-sweep).sin());
+            let expected_endpoint =
+                if dist_squared(v1.pos(), outside_query) < dist_squared(v2.pos(), outside_query) {
+                    v1.pos()
+                } else {
+                    v2.pos()
+                };
+            assert!(
+                seg_closest_point(v1, v2, outside_query, 1e-12)
+                    .fuzzy_eq_eps(expected_endpoint, 2e-9)
+            );
         }
     }
 
