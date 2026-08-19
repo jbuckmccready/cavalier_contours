@@ -3,7 +3,7 @@ use std::hint::black_box;
 use cavalier_contours::{
     core::math::Vector2,
     polyline::{
-        PlineSource, PlineSourceMut, PlineVertex, Polyline,
+        PlineSource, PlineSourceMut, PlineVertex, Polyline, dist_from_segment_start,
         internal::raw_pline_offset::create_raw_offset, seg_length, seg_midpoint,
         seg_split_at_point,
     },
@@ -293,6 +293,59 @@ fn seg_length_group(c: &mut Criterion) {
     group.finish();
 }
 
+fn dist_from_segment_start_group(c: &mut Criterion) {
+    let open_arc = |start_angle: f64, sweep: f64| {
+        let (start_sin, start_cos) = start_angle.sin_cos();
+        let (end_sin, end_cos) = (start_angle + sweep).sin_cos();
+        (
+            PlineVertex::new(start_cos, start_sin, (sweep / 4.0).tan()),
+            PlineVertex::new(end_cos, end_sin, 0.0),
+        )
+    };
+    let arc_case = |name, sweep: f64, fraction: f64| {
+        let start_angle = 0.25;
+        let point_angle = start_angle + sweep * fraction;
+        let (point_sin, point_cos) = point_angle.sin_cos();
+        let (v1, v2) = open_arc(start_angle, sweep);
+        (name, v1, v2, Vector2::new(point_cos, point_sin))
+    };
+    let cases = [
+        (
+            "line_interior",
+            PlineVertex::new(-123.5, 47.25, 0.0),
+            PlineVertex::new(891.75, -302.5, 0.0),
+            Vector2::new(384.125, -127.625),
+        ),
+        arc_case("arc_start_snap", std::f64::consts::PI, 0.0),
+        arc_case("arc_end_snap", std::f64::consts::PI, 1.0),
+        arc_case("shallow_arc_midpoint", 4e-7, 0.5),
+        arc_case("quarter_circle_midpoint", std::f64::consts::FRAC_PI_2, 0.5),
+        arc_case("semicircle_near_start", std::f64::consts::PI, 1e-6),
+        arc_case("semicircle_midpoint", std::f64::consts::PI, 0.5),
+        arc_case("semicircle_near_end", std::f64::consts::PI, 1.0 - 1e-6),
+        arc_case("clockwise_semicircle_midpoint", -std::f64::consts::PI, 0.5),
+    ];
+
+    let mut group = c.benchmark_group("dist_from_segment_start");
+    for (name, v1, v2, point) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &(v1, v2, point),
+            |b, &(v1, v2, point)| {
+                b.iter(|| {
+                    black_box(dist_from_segment_start(
+                        black_box(v1),
+                        black_box(v2),
+                        black_box(point),
+                        black_box(1e-12),
+                    ))
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
 fn raw_offset_round_join_group(c: &mut Criterion) {
     let open = |vertexes: &[(f64, f64, f64)]| {
         let mut polyline = Polyline::new();
@@ -500,6 +553,7 @@ criterion_group!(
     seg_midpoint_group,
     seg_split_at_point_group,
     seg_length_group,
+    dist_from_segment_start_group,
     raw_offset_round_join_group,
     raw_offset_creation_group,
     polyline_offset_group,
