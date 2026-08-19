@@ -475,7 +475,6 @@ impl ContactNodeLookup {
                 .map(ContactNodeId);
         };
 
-        let mut result = None;
         for x in [cell_x.checked_sub(1), Some(cell_x), cell_x.checked_add(1)]
             .into_iter()
             .flatten()
@@ -487,22 +486,16 @@ impl ContactNodeLookup {
                 let Some(&node_id) = self.buckets.get(&(x, y)) else {
                     continue;
                 };
-                if nodes[node_id.0].point.fuzzy_eq_eps(point, pos_equal_eps)
-                    && result.is_none_or(|current: ContactNodeId| node_id < current)
-                {
-                    result = Some(node_id);
+                if nodes[node_id.0].point.fuzzy_eq_eps(point, pos_equal_eps) {
+                    return Some(node_id);
                 }
             }
         }
 
-        for &node_id in &self.unbucketed {
-            if nodes[node_id.0].point.fuzzy_eq_eps(point, pos_equal_eps)
-                && result.is_none_or(|current| node_id < current)
-            {
-                result = Some(node_id);
-            }
-        }
-        result
+        self.unbucketed
+            .iter()
+            .copied()
+            .find(|&node_id| nodes[node_id.0].point.fuzzy_eq_eps(point, pos_equal_eps))
     }
 
     fn insert<T>(&mut self, node_id: ContactNodeId, point: Vector2<T>, pos_equal_eps: T)
@@ -705,7 +698,7 @@ where
         }
     }
 
-    /// Returns the first contact node within `pos_equal_eps` of `point`, or creates one that stores
+    /// Returns any contact node within `pos_equal_eps` of `point`, or creates one that stores
     /// `point`.
     fn find_or_create_node(&mut self, point: Vector2<T>, pos_equal_eps: T) -> ContactNodeId {
         const MIN_INDEXED_NODES: usize = 512;
@@ -2231,22 +2224,18 @@ mod tests {
     }
 
     #[test]
-    fn indexed_node_lookup_preserves_first_fuzzy_match() {
+    fn indexed_node_lookup_uses_bucket_probe_order_for_multiple_matches() {
         let eps = 1e-5;
         let nodes = vec![
-            contact_node(Vector2::new(0.0, 0.0)),
+            // The lower ID is in the later-probed x = 1 bucket.
             contact_node(Vector2::new(1.5 * eps, 0.0)),
+            contact_node(Vector2::new(0.0, 0.0)),
         ];
         let lookup = ContactNodeLookup::new(&nodes, eps);
+        let query = Vector2::new(0.75 * eps, 0.0);
 
-        assert_eq!(
-            lookup.find(&nodes, Vector2::new(0.75 * eps, 0.0), eps),
-            Some(ContactNodeId(0))
-        );
-        assert_eq!(
-            lookup.find(&nodes, Vector2::new(eps, 0.0), eps),
-            Some(ContactNodeId(1))
-        );
+        assert!(nodes.iter().all(|node| node.point.fuzzy_eq_eps(query, eps)));
+        assert_eq!(lookup.find(&nodes, query, eps), Some(ContactNodeId(1)));
     }
 
     #[test]
