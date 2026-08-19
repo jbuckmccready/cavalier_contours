@@ -22,8 +22,7 @@
 //! geometry. It does not find stitch connections. Connections come only from occurrence identity
 //! and recorded relations.
 
-use std::collections::HashMap;
-
+use ahash::{HashMap, HashMapExt};
 use smallvec::SmallVec;
 
 use crate::{
