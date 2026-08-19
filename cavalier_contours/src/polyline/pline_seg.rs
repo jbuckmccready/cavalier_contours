@@ -1,8 +1,8 @@
 use super::PlineVertex;
 use crate::core::{
     math::{
-        Vector2, angle, angle_from_bulge, arc_sweep_extents, delta_angle_signed, dist_squared,
-        line_seg_closest_point, midpoint, min_max, point_within_arc_sweep,
+        Vector2, angle_from_bulge, dist_squared, line_seg_closest_point, midpoint, min_max,
+        point_within_arc_sweep,
     },
     traits::Real,
 };
@@ -406,20 +406,59 @@ where
         return AABB::new(v1.x, v1.y, v1.x, v1.y);
     }
 
-    let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-    let start_angle = angle(arc_center, v1.pos());
-    let end_angle = angle(arc_center, v2.pos());
-    let sweep_angle = delta_angle_signed(start_angle, end_angle, v1.bulge_is_neg());
-    let (min_point, max_point) = arc_sweep_extents(
-        v1.pos(),
-        v2.pos(),
-        arc_center,
-        arc_radius,
-        start_angle,
-        sweep_angle,
-    );
+    let bulge = v1.bulge;
+    let bulge_squared = bulge * bulge;
+    let chord = v2.pos() - v1.pos();
+    let perpendicular_chord = chord.perp();
 
-    AABB::new(min_point.x, min_point.y, max_point.x, max_point.y)
+    // These are the start and end radius vectors scaled by `4 * bulge`. A negative scale for a
+    // clockwise arc also reverses the sweep direction, so the same sign tests work for both arc
+    // directions.
+    let scaled_perpendicular_chord = perpendicular_chord.scale(bulge_squared - T::one());
+    let scaled_chord = chord.scale(T::two() * bulge);
+    let start_radius = scaled_perpendicular_chord - scaled_chord;
+    let end_radius = scaled_perpendicular_chord + scaled_chord;
+
+    // Endpoints already include a cardinal extreme at a sweep boundary, so only test strict sign
+    // changes for cardinal directions in the sweep interior.
+    let crosses_right = start_radius.y < T::zero() && end_radius.y > T::zero();
+    let crosses_left = start_radius.y > T::zero() && end_radius.y < T::zero();
+    let crosses_top = start_radius.x > T::zero() && end_radius.x < T::zero();
+    let crosses_bottom = start_radius.x < T::zero() && end_radius.x > T::zero();
+
+    let (end_min_x, end_max_x) = min_max(v1.x, v2.x);
+    let (end_min_y, end_max_y) = min_max(v1.y, v2.y);
+    if !(crosses_right || crosses_left || crosses_top || crosses_bottom) {
+        return AABB::new(end_min_x, end_min_y, end_max_x, end_max_y);
+    }
+
+    let inv_four_bulge = T::one() / (T::four() * bulge);
+    let center = v1.pos()
+        + chord.scale(T::one() / T::two())
+        + perpendicular_chord.scale((T::one() - bulge) * (T::one() + bulge) * inv_four_bulge);
+    let radius = chord.length() * (T::one() + bulge_squared) * inv_four_bulge.abs();
+    AABB::new(
+        if crosses_left {
+            center.x - radius
+        } else {
+            end_min_x
+        },
+        if crosses_bottom {
+            center.y - radius
+        } else {
+            end_min_y
+        },
+        if crosses_right {
+            center.x + radius
+        } else {
+            end_max_x
+        },
+        if crosses_top {
+            center.y + radius
+        } else {
+            end_max_y
+        },
+    )
 }
 
 /// Computes the axis aligned bounding box of a polyline segment defined by `v1` to `v2`.
@@ -573,6 +612,41 @@ mod tests {
     use super::*;
     use crate::core::traits::FuzzyEq;
 
+    fn arc_vertexes(
+        center: Vector2<f64>,
+        radius: f64,
+        start_angle: f64,
+        sweep: f64,
+    ) -> (PlineVertex<f64>, PlineVertex<f64>) {
+        let point_at_angle = |angle: f64| {
+            let (sin, cos) = angle.sin_cos();
+            center + Vector2::new(radius * cos, radius * sin)
+        };
+        (
+            PlineVertex::from_vector2(point_at_angle(start_angle), (sweep / 4.0).tan()),
+            PlineVertex::from_vector2(point_at_angle(start_angle + sweep), 0.0),
+        )
+    }
+
+    fn assert_aabb_close(actual: AABB<f64>, expected: AABB<f64>, epsilon: f64) {
+        assert!(
+            (actual.min_x - expected.min_x).abs() <= epsilon,
+            "min_x: {actual:?} != {expected:?}"
+        );
+        assert!(
+            (actual.min_y - expected.min_y).abs() <= epsilon,
+            "min_y: {actual:?} != {expected:?}"
+        );
+        assert!(
+            (actual.max_x - expected.max_x).abs() <= epsilon,
+            "max_x: {actual:?} != {expected:?}"
+        );
+        assert!(
+            (actual.max_y - expected.max_y).abs() <= epsilon,
+            "max_y: {actual:?} != {expected:?}"
+        );
+    }
+
     #[test]
     fn seg_arc_radius_and_center_returns_expected_geometry() {
         let quarter_circle_bulge = std::f64::consts::FRAC_PI_8.tan();
@@ -647,6 +721,108 @@ mod tests {
             ),
         ] {
             assert_eq!(seg_fast_approx_bounding_box(v1, v2), expected);
+        }
+    }
+
+    #[test]
+    fn seg_bounding_box_returns_exact_arc_extents() {
+        let cases = [
+            (
+                Vector2::new(0.0, 0.0),
+                2.0,
+                -std::f64::consts::FRAC_PI_4,
+                std::f64::consts::FRAC_PI_2,
+                AABB::new(
+                    std::f64::consts::SQRT_2,
+                    -std::f64::consts::SQRT_2,
+                    2.0,
+                    std::f64::consts::SQRT_2,
+                ),
+            ),
+            (
+                Vector2::new(3.0, -4.0),
+                2.0,
+                std::f64::consts::FRAC_PI_4,
+                std::f64::consts::FRAC_PI_2,
+                AABB::new(
+                    3.0 - std::f64::consts::SQRT_2,
+                    -4.0 + std::f64::consts::SQRT_2,
+                    3.0 + std::f64::consts::SQRT_2,
+                    -2.0,
+                ),
+            ),
+            (
+                Vector2::new(-5.0, 7.0),
+                3.0,
+                std::f64::consts::FRAC_PI_4,
+                -std::f64::consts::PI,
+                AABB::new(
+                    -5.0 - 3.0 / std::f64::consts::SQRT_2,
+                    4.0,
+                    -2.0,
+                    7.0 + 3.0 / std::f64::consts::SQRT_2,
+                ),
+            ),
+        ];
+
+        for (center, radius, start_angle, sweep, expected) in cases {
+            let (v1, v2) = arc_vertexes(center, radius, start_angle, sweep);
+            assert_aabb_close(seg_bounding_box(v1, v2), expected, 2e-14);
+        }
+    }
+
+    #[test]
+    fn seg_bounding_box_matches_angle_based_extents() {
+        use crate::core::math::{angle, arc_sweep_extents, delta_angle_signed};
+
+        for center in [Vector2::zero(), Vector2::new(10_000.0, -20_000.0)] {
+            for radius in [0.001, 1.0, 32.0, 1000.0] {
+                for start_angle in [0.137, 1.013, 2.271, 4.123] {
+                    for sweep in [
+                        -std::f64::consts::PI,
+                        -std::f64::consts::FRAC_PI_2,
+                        -std::f64::consts::FRAC_PI_3,
+                        -4e-7,
+                        4e-7,
+                        std::f64::consts::FRAC_PI_3,
+                        std::f64::consts::FRAC_PI_2,
+                        std::f64::consts::PI,
+                    ] {
+                        let (v1, v2) = arc_vertexes(center, radius, start_angle, sweep);
+                        if v1.pos().fuzzy_eq(v2.pos()) {
+                            assert_eq!(seg_bounding_box(v1, v2), AABB::new(v1.x, v1.y, v1.x, v1.y));
+                            continue;
+                        }
+                        let (computed_radius, computed_center) = seg_arc_radius_and_center(v1, v2);
+                        let computed_start_angle = angle(computed_center, v1.pos());
+                        let computed_end_angle = angle(computed_center, v2.pos());
+                        let computed_sweep = delta_angle_signed(
+                            computed_start_angle,
+                            computed_end_angle,
+                            v1.bulge_is_neg(),
+                        );
+                        let (expected_min, expected_max) = arc_sweep_extents(
+                            v1.pos(),
+                            v2.pos(),
+                            computed_center,
+                            computed_radius,
+                            computed_start_angle,
+                            computed_sweep,
+                        );
+                        let expected = AABB::new(
+                            expected_min.x,
+                            expected_min.y,
+                            expected_max.x,
+                            expected_max.y,
+                        );
+                        assert_aabb_close(
+                            seg_bounding_box(v1, v2),
+                            expected,
+                            2e-9 * radius.max(1.0),
+                        );
+                    }
+                }
+            }
         }
     }
 
