@@ -139,6 +139,10 @@ where
     raw_offset_polyline: &'a R,
     orig_polyline_index: &'a StaticAABB2DIndex<T>,
     invalid_segments: &'a [usize],
+    /// Maps slice-boundary occurrence IDs to contact nodes.
+    occurrences: &'a [ContactOccurrence<T>],
+    /// Cached source-distance validity for repeated slice-boundary nodes.
+    node_validity: Vec<Option<bool>>,
     offset: T,
     pos_equal_eps: T,
     offset_dist_eps: T,
@@ -155,14 +159,23 @@ where
         raw_offset_polyline: &'a R,
         orig_polyline_index: &'a StaticAABB2DIndex<T>,
         invalid_segments: &'a [usize],
+        topology: &'a OffsetTopologyBuilder<T>,
         offset: T,
         options: &PlineOffsetOptions<T>,
     ) -> Self {
+        const MIN_CACHED_CONTACT_NODES: usize = 64;
+
         Self {
             original_polyline,
             raw_offset_polyline,
             orig_polyline_index,
             invalid_segments,
+            occurrences: &topology.occurrences,
+            node_validity: if topology.nodes.len() >= MIN_CACHED_CONTACT_NODES {
+                vec![None; topology.nodes.len()]
+            } else {
+                Vec::new()
+            },
             offset,
             pos_equal_eps: options.pos_equal_eps,
             offset_dist_eps: options.offset_dist_eps,
@@ -180,6 +193,28 @@ where
             self.pos_equal_eps,
             self.offset_dist_eps,
         )
+    }
+
+    /// Checks a contact point once per node when the contact set is large enough to cache.
+    fn contact_point_is_valid(
+        &mut self,
+        point: Vector2<T>,
+        occurrence_id: Option<OccurrenceId>,
+        query_stack: &mut Vec<usize>,
+    ) -> bool {
+        let Some(occurrence_id) = occurrence_id else {
+            return self.point_is_valid(point, query_stack);
+        };
+        let node_id = self.occurrences[occurrence_id.0].node_id;
+        let Some(validity) = self.node_validity.get(node_id.0) else {
+            return self.point_is_valid(point, query_stack);
+        };
+        if let Some(result) = *validity {
+            return result;
+        }
+        let result = self.point_is_valid(point, query_stack);
+        self.node_validity[node_id.0] = Some(result);
+        result
     }
 
     /// Uses the source index to check whether the segment from `v1` to `v2` intersects any source
@@ -227,7 +262,13 @@ where
 
     /// Returns whether `slice` has valid raw segments, stays far enough from the source, and does
     /// not intersect the source.
-    fn slice_is_valid(&self, slice: &PlineViewData<T>, query_stack: &mut Vec<usize>) -> bool {
+    fn slice_is_valid(
+        &mut self,
+        slice: &PlineViewData<T>,
+        start_occurrence: Option<OccurrenceId>,
+        end_occurrence: Option<OccurrenceId>,
+        query_stack: &mut Vec<usize>,
+    ) -> bool {
         let raw_offset_polyline = self.raw_offset_polyline;
         if slice_contains_invalid_segment(
             slice,
@@ -242,11 +283,11 @@ where
             // slice all on one segment, test start, end, midpoint, and if it intersects the
             // original
             let v1 = slice.updated_start;
-            if !self.point_is_valid(v1.pos(), query_stack) {
+            if !self.contact_point_is_valid(v1.pos(), start_occurrence, query_stack) {
                 return false;
             }
             let v2 = PlineVertex::from_vector2(slice.end_point, T::zero());
-            if !self.point_is_valid(v2.pos(), query_stack) {
+            if !self.contact_point_is_valid(v2.pos(), end_occurrence, query_stack) {
                 return false;
             }
             let midpoint = seg_midpoint(v1, v2);
@@ -282,9 +323,10 @@ where
         }
 
         // test all segments
-        for (v1, v2) in slice.view(raw_offset_polyline).iter_segments() {
+        for (index, (v1, v2)) in slice.view(raw_offset_polyline).iter_segments().enumerate() {
             // test start point
-            if !self.point_is_valid(v1.pos(), query_stack) {
+            let occurrence_id = if index == 0 { start_occurrence } else { None };
+            if !self.contact_point_is_valid(v1.pos(), occurrence_id, query_stack) {
                 return false;
             }
 
@@ -294,7 +336,7 @@ where
             }
         }
         // check final end point (loop checks only start point and intersection)
-        self.point_is_valid(slice.end_point, query_stack)
+        self.contact_point_is_valid(slice.end_point, end_occurrence, query_stack)
     }
 }
 
@@ -1153,7 +1195,7 @@ fn push_valid_offset_slice<P, R, T>(
     view_data: PlineViewData<T>,
     start_occurrence: Option<OccurrenceId>,
     end_occurrence: Option<OccurrenceId>,
-    validator: &OffsetSliceValidator<'_, P, R, T>,
+    validator: &mut OffsetSliceValidator<'_, P, R, T>,
     overlap_intervals: Option<&[Vec<OverlapInterval<T>>]>,
     query_stack: &mut Vec<usize>,
 ) where
@@ -1161,7 +1203,7 @@ fn push_valid_offset_slice<P, R, T>(
     R: PlineSource<Num = T> + ?Sized,
     T: Real,
 {
-    if !validator.slice_is_valid(&view_data, query_stack) {
+    if !validator.slice_is_valid(&view_data, start_occurrence, end_occurrence, query_stack) {
         return;
     }
 
@@ -1193,7 +1235,7 @@ fn push_valid_offset_slice<P, R, T>(
 fn build_dissected_slices<P, R, T>(
     raw_offset: &R,
     topology: &OffsetTopologyBuilder<T>,
-    validator: &OffsetSliceValidator<'_, P, R, T>,
+    validator: &mut OffsetSliceValidator<'_, P, R, T>,
     query_stack: &mut Vec<usize>,
 ) -> Vec<OffsetSlice<T>>
 where
@@ -1317,11 +1359,12 @@ where
     T: Real,
 {
     let raw_offset_polyline = &raw_offset.polyline;
-    let validator = OffsetSliceValidator::new(
+    let mut validator = OffsetSliceValidator::new(
         original_polyline,
         raw_offset_polyline,
         orig_polyline_index,
         &raw_offset.invalid_segment_indexes,
+        &topology,
         offset,
         options,
     );
@@ -1339,7 +1382,8 @@ where
         }]);
     }
 
-    let slices = build_dissected_slices(raw_offset_polyline, &topology, &validator, query_stack);
+    let slices =
+        build_dissected_slices(raw_offset_polyline, &topology, &mut validator, query_stack);
     topology.into_slice_set(slices)
 }
 
