@@ -16,7 +16,7 @@ mod test_polylines;
 use test_polylines::{
     bezier_enclosure, floor_plan, involute_gear, involute_gear_with_arcs, mechanical_bracket,
     pathological1, pathological1_no_arcs, profile1, profile1_no_arcs, profile2, profile2_no_arcs,
-    road_centerline,
+    road_centerline, tapered_link_strip,
 };
 
 fn bench_polyline_area(b: &mut Bencher<'_>, polyline: &Polyline<f64>) {
@@ -226,11 +226,31 @@ fn polyline_offset_group(c: &mut Criterion) {
     group.finish();
 }
 
+fn polyline_offset_topology_scaling_group(c: &mut Criterion) {
+    let mut group = c.benchmark_group("polyline_offset_topology_scaling");
+    for link_count in [128, 512, 2048, 4096] {
+        let polyline = tapered_link_strip(link_count);
+        assert_eq!(
+            polyline.parallel_offset(3.0).len(),
+            usize::try_from(link_count + 1).unwrap()
+        );
+        group.bench_with_input(
+            BenchmarkId::new("tapered_link_strip", link_count),
+            &polyline,
+            |b, polyline| {
+                b.iter(|| black_box(polyline.parallel_offset(black_box(3.0))));
+            },
+        );
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     polyline_area_group,
     polyline_winding_number_group,
     raw_offset_creation_group,
-    polyline_offset_group
+    polyline_offset_group,
+    polyline_offset_topology_scaling_group,
 );
 criterion_main!(benches);

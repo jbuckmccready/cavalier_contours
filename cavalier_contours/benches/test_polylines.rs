@@ -140,6 +140,37 @@ pub fn mechanical_bracket() -> Polyline<f64> {
     ]
 }
 
+/// Laser-cut strip with wide pads joined by narrow tapered links.
+///
+/// An inward offset larger than each link's half-width splits the strip into one component per
+/// pad. Each collapsed link creates two distinct raw-offset contacts, so contact count grows
+/// linearly with `link_count`.
+#[must_use]
+pub fn tapered_link_strip(link_count: u32) -> Polyline<f64> {
+    const HALF_PITCH: f64 = 12.0;
+    const PAD_HALF_WIDTH: f64 = 10.0;
+    const LINK_HALF_WIDTH: f64 = 2.0;
+
+    let step_count = 2 * link_count;
+    let mut result = Polyline::new_closed();
+    result.reserve(2 * usize::try_from(step_count + 1).unwrap());
+    let half_width = |i| {
+        if i % 2 == 0 {
+            PAD_HALF_WIDTH
+        } else {
+            LINK_HALF_WIDTH
+        }
+    };
+
+    for i in 0..=step_count {
+        result.add(f64::from(i) * HALF_PITCH, -half_width(i), 0.0);
+    }
+    for i in (0..=step_count).rev() {
+        result.add(f64::from(i) * HALF_PITCH, half_width(i), 0.0);
+    }
+    result
+}
+
 /// Survey-style open road centerline sampled as short straight spans.
 #[must_use]
 pub fn road_centerline() -> Polyline<f64> {
