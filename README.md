@@ -83,7 +83,7 @@ See more examples [here](examples/README.md).
 
 This project started years before before LLMs were a viable tool for software development. At this point (mid 2026) the models have gotten more than good enough to be used for learning, generating code, debugging, optimizing, etc. That said they still tend to quickly produce slop, over engineer, derail into useless pursuits, struggle to escape local optimums based on false requirements, miss obvious and pertinent facts, etc.
 
-All of the crate/library code generated is reviewed ("I read the code"), and all algorithmic development and optimizations are done with a "human in the loop" approach. However, everyone has a different standard for code quality, one person's "I reviewed the code" is another person's slop.
+All published crate/library code generated is reviewed ("I read the code"), and all algorithmic development and optimizations are done with a "human in the loop" approach. However, everyone has a different standard for code quality, one person's "I reviewed the code" is another person's slop.
 
 The standard pursued in this project is this: the code should be better than what you'd be able (or willing) to do without an LLM. That is to say the purpose of the LLM is not to produce more code faster, it is to produce the best code possible given innate time limitations, always keeping in mind continued ownership and improvement by humans. If the code is painful to read and/or understand without an LLM then it is no good (it is slop) and must be refactored.
 
