@@ -292,20 +292,23 @@ where
     // For arcs we don't compute the actual extents which is slower, instead we create an approximate
     // bounding box from the rectangle formed by extending the chord by the sagitta, note this
     // approximate bounding box is always equal to or bigger than the true bounding box
-    let b = v1.bulge;
-    let offs_x = b * (v2.y - v1.y) / T::two();
-    let offs_y = -b * (v2.x - v1.x) / T::two();
+    let half_bulge = v1.bulge / T::two();
+    let offset_x = half_bulge * (v2.y - v1.y);
+    let offset_y = -half_bulge * (v2.x - v1.x);
 
-    let (pt_x_min, pt_x_max) = min_max(v1.x + offs_x, v2.x + offs_x);
-    let (pt_y_min, pt_y_max) = min_max(v1.y + offs_y, v2.y + offs_y);
+    let (mut min_x, mut max_x) = min_max(v1.x, v2.x);
+    if offset_x < T::zero() {
+        min_x = min_x + offset_x;
+    } else {
+        max_x = max_x + offset_x;
+    }
 
-    let (end_point_x_min, end_point_x_max) = min_max(v1.x, v2.x);
-    let (end_point_y_min, end_point_y_max) = min_max(v1.y, v2.y);
-
-    let min_x = num_traits::real::Real::min(end_point_x_min, pt_x_min);
-    let min_y = num_traits::real::Real::min(end_point_y_min, pt_y_min);
-    let max_x = num_traits::real::Real::max(end_point_x_max, pt_x_max);
-    let max_y = num_traits::real::Real::max(end_point_y_max, pt_y_max);
+    let (mut min_y, mut max_y) = min_max(v1.y, v2.y);
+    if offset_y < T::zero() {
+        min_y = min_y + offset_y;
+    } else {
+        max_y = max_y + offset_y;
+    }
 
     AABB::new(min_x, min_y, max_x, max_y)
 }
@@ -534,6 +537,34 @@ mod tests {
                 tangent.fuzzy_eq_eps(expected, 2e-9),
                 "{bulge}: {tangent:?} != {expected:?}"
             );
+        }
+    }
+
+    #[test]
+    fn seg_fast_approx_bounding_box_extends_chord_by_sagitta() {
+        for (v1, v2, expected) in [
+            (
+                PlineVertex::new(0.0, 0.0, 1.0),
+                PlineVertex::new(4.0, 0.0, 0.0),
+                AABB::new(0.0, -2.0, 4.0, 0.0),
+            ),
+            (
+                PlineVertex::new(0.0, 0.0, -1.0),
+                PlineVertex::new(4.0, 0.0, 0.0),
+                AABB::new(0.0, 0.0, 4.0, 2.0),
+            ),
+            (
+                PlineVertex::new(2.0, -3.0, 0.5),
+                PlineVertex::new(2.0, 5.0, 0.0),
+                AABB::new(2.0, -3.0, 4.0, 5.0),
+            ),
+            (
+                PlineVertex::new(2.0, -3.0, -0.5),
+                PlineVertex::new(2.0, 5.0, 0.0),
+                AABB::new(0.0, -3.0, 2.0, 5.0),
+            ),
+        ] {
+            assert_eq!(seg_fast_approx_bounding_box(v1, v2), expected);
         }
     }
 
