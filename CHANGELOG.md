@@ -4,12 +4,35 @@ All notable changes to the cavalier_contours crate will be documented in this fi
 
 ## Unreleased
 
+Focus of this release is on robustness and performance of polyline offset generation.
+
+The main changes are:
+
+- Invalid slices are detected and tracked in raw offset creation to filter out invalid slices.
+- Slices are stitched together using intersect topology rather than global geometric queries.
+
+These both improve robustness in dealing with heavily overlapping/degenerate scenarios. Additionally
+this removes the need for `slice_join_eps` and made it possible to add options for behavior in
+dealing with coincident segments (keep or discard) and "touching loops" (longest continuation
+or split) in the offset results.
+
+Notably the intersect topology approach I think has application in the boolean operations to
+improve robustness there as well. Also the `Shape` offset algorithm has not yet been updated.
+
+Other improvements are mostly in optimizing some of lower level segment processing functions to
+avoid square root and trigonometric functions.
+
+There was significant improvements in performance for inputs that involve lots of arcs or generate
+raw offsets with many self intersects points.
+
 ### Added ⭐
 
 - Added `TouchingLoopBehavior` and `CoincidentSegmentBehavior` to polyline offset options. The
   defaults preserve tangent-touching loops and coincident spans. Callers can instead separate
   tangent-touching loops or discard every coincident raw span. The C FFI exposes matching constants
   and option fields.
+- Two new dependencies: `ahash` and `tinyvec`. These provice meaningful speedups and are very small
+  and popular crates.
 
 ### Changed 🔧
 
@@ -17,6 +40,13 @@ All notable changes to the cavalier_contours crate will be documented in this fi
   `cavc_pline_parallel_offset_o` field. Polyline offset slices now connect through explicit
   intersection topology and use `pos_equal_eps` only to clean repeated positions. The separate
   `ShapeOffsetOptions::slice_join_eps` field remains unchanged.
+- ⚠️ BREAKING: Replaced `PlineIntersectVisitor::visit_basic_intr` and
+  `visit_overlapping_intr` with a single `visit(PlineIntersect)` method. Custom visitors must now
+  match the `Basic` and `Overlapping` variants. The trait also has an optional `filter_map` hook.
+- ⚠️ BREAKING: Removed the unused public `PlineVertexVisitor` and `PlineSegVisitor` traits.
+- ⚠️ BREAKING: Changed `cavc_pline_parallel_offset_o::to_internal` to return `Option` when behavior
+  values are invalid. The C `cavc_pline_parallel_offset` function can now return error code `2` for
+  an unrecognized behavior value.
 
 ### Fixed 🐛
 
