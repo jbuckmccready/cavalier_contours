@@ -5,8 +5,8 @@ use cavalier_contours::{
     polyline::{
         PlineSource, PlineSourceMut, PlineVertex, Polyline, dist_from_segment_start,
         internal::raw_pline_offset::create_raw_offset, seg_arc_radius_and_center,
-        seg_fast_approx_bounding_box, seg_length, seg_midpoint, seg_split_at_point,
-        seg_tangent_vector,
+        seg_closest_point, seg_fast_approx_bounding_box, seg_length, seg_midpoint,
+        seg_split_at_point, seg_tangent_vector,
     },
 };
 use criterion::{
@@ -283,6 +283,73 @@ fn seg_fast_approx_bounding_box_group(c: &mut Criterion) {
             &(v1, v2),
             |b, &(v1, v2)| {
                 b.iter(|| black_box(seg_fast_approx_bounding_box(black_box(v1), black_box(v2))));
+            },
+        );
+    }
+    group.finish();
+}
+
+fn seg_closest_point_group(c: &mut Criterion) {
+    let quarter_circle_bulge = std::f64::consts::FRAC_PI_8.tan();
+    let cases = [
+        (
+            "line_interior",
+            PlineVertex::new(0.0, 0.0, 0.0),
+            PlineVertex::new(4.0, 0.0, 0.0),
+            Vector2::new(2.0, 3.0),
+        ),
+        (
+            "line_outside",
+            PlineVertex::new(0.0, 0.0, 0.0),
+            PlineVertex::new(4.0, 0.0, 0.0),
+            Vector2::new(5.0, 3.0),
+        ),
+        (
+            "shallow_arc_projection",
+            PlineVertex::new(-123.5, 47.25, 1e-7),
+            PlineVertex::new(891.75, -302.5, 0.0),
+            Vector2::new(384.0, -126.0),
+        ),
+        (
+            "quarter_circle_projection",
+            PlineVertex::new(1.0, 0.0, quarter_circle_bulge),
+            PlineVertex::new(0.0, 1.0, 0.0),
+            Vector2::new(2.0, 2.0),
+        ),
+        (
+            "semicircle_outside_sweep",
+            PlineVertex::new(0.0, 0.0, 1.0),
+            PlineVertex::new(2.0, 0.0, 0.0),
+            Vector2::new(1.0, 2.0),
+        ),
+        (
+            "semicircle_center",
+            PlineVertex::new(0.0, 0.0, 1.0),
+            PlineVertex::new(2.0, 0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+        ),
+        (
+            "clockwise_semicircle_projection",
+            PlineVertex::new(0.0, 0.0, -1.0),
+            PlineVertex::new(2.0, 0.0, 0.0),
+            Vector2::new(1.0, 2.0),
+        ),
+    ];
+
+    let mut group = c.benchmark_group("seg_closest_point");
+    for (name, v1, v2, point) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &(v1, v2, point),
+            |b, &(v1, v2, point)| {
+                b.iter(|| {
+                    black_box(seg_closest_point(
+                        black_box(v1),
+                        black_box(v2),
+                        black_box(point),
+                        black_box(1e-5),
+                    ))
+                });
             },
         );
     }
@@ -686,6 +753,7 @@ criterion_group!(
     seg_arc_radius_and_center_group,
     seg_tangent_vector_group,
     seg_fast_approx_bounding_box_group,
+    seg_closest_point_group,
     seg_split_at_point_group,
     seg_length_group,
     dist_from_segment_start_group,
