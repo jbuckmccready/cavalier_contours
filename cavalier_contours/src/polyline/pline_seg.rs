@@ -398,6 +398,56 @@ where
     arc_radius * angle_from_bulge(v1.bulge).abs()
 }
 
+/// Returns the forward distance from `v1` to `point` along the segment from `v1` to `v2`.
+///
+/// Assumes `point` lies on the segment from `v1` to `v2`.
+///
+/// Endpoints snap with `pos_equal_eps`. For lines, it uses distance along the line. For arcs, it
+/// uses the radius times the forward angle, which is the smaller radial angle because supported
+/// arcs sweep at most a half circle.
+pub fn dist_from_segment_start<T>(
+    v1: PlineVertex<T>,
+    v2: PlineVertex<T>,
+    point: Vector2<T>,
+    pos_equal_eps: T,
+) -> T
+where
+    T: Real,
+{
+    if point.fuzzy_eq_eps(v1.pos(), pos_equal_eps) {
+        return T::zero();
+    }
+    if point.fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
+        return seg_length(v1, v2);
+    }
+    if v1.bulge_is_zero() {
+        let direction = v2.pos() - v1.pos();
+        let length = direction.length();
+        if length == T::zero() {
+            T::zero()
+        } else {
+            (point - v1.pos()).dot(direction) / length
+        }
+    } else {
+        let bulge = v1.bulge;
+        let bulge_squared = bulge * bulge;
+        let chord = v2.pos() - v1.pos();
+        let radius = chord.length() * (bulge_squared + T::one()) / (T::four() * bulge.abs());
+
+        // These are the start and point radius vectors scaled by `4 * bulge`. Deriving them
+        // directly from the chord avoids constructing a distant center for shallow arcs. Their
+        // common scale does not change the angle between them.
+        let start_radius =
+            chord.perp().scale(bulge_squared - T::one()) - chord.scale(T::two() * bulge);
+        let point_radius = start_radius + (point - v1.pos()).scale(T::four() * bulge);
+        let sweep = T::atan2(
+            start_radius.perp_dot(point_radius).abs(),
+            start_radius.dot(point_radius),
+        );
+        radius * sweep
+    }
+}
+
 /// Find the midpoint for the polyline segment defined by `v1` to `v2`.
 ///
 /// # Examples
@@ -529,6 +579,59 @@ mod tests {
                 seg_length(v1, v2),
                 sweep.abs()
             );
+        }
+    }
+
+    #[test]
+    fn dist_from_segment_start_snaps_near_arc_endpoints() {
+        let v1 = PlineVertex::new(-1.0f64, 0.0, -1.0);
+        let v2 = PlineVertex::new(1.0, 0.0, 0.0);
+
+        assert!(dist_from_segment_start(v1, v2, Vector2::new(-1.0, -1e-6), 1e-5).abs() <= 1e-10);
+        assert!(
+            (dist_from_segment_start(v1, v2, Vector2::new(1.0, 1e-6), 1e-5) - std::f64::consts::PI)
+                .abs()
+                <= 1e-10
+        );
+    }
+
+    #[test]
+    fn dist_from_segment_start_matches_arc_fractions_in_both_directions() {
+        let radius = 3.25;
+        let start_angle = 0.37;
+        for bulge in [
+            -1.0,
+            -std::f64::consts::FRAC_PI_8.tan(),
+            -1e-7,
+            1e-7,
+            std::f64::consts::FRAC_PI_8.tan(),
+            1.0,
+        ] {
+            let sweep = 4.0 * bulge.atan();
+            let point_at_angle = |angle: f64| {
+                let (sin, cos) = angle.sin_cos();
+                Vector2::new(radius * cos, radius * sin)
+            };
+            let start = point_at_angle(start_angle);
+            let end = point_at_angle(start_angle + sweep);
+            let v1 = PlineVertex::from_vector2(start, bulge);
+            let v2 = PlineVertex::from_vector2(end, 0.0);
+            let mut previous = 0.0;
+
+            for fraction in [1e-6, 0.1, 0.5, 0.9, 1.0 - 1e-6] {
+                let point = point_at_angle(start_angle + sweep * fraction);
+                let distance = dist_from_segment_start(v1, v2, point, 1e-15);
+                let expected = radius * sweep.abs() * fraction;
+                assert!(
+                    (distance - expected).abs() <= 2e-13 * radius,
+                    "{bulge}, {fraction}: {distance} != {expected}"
+                );
+                assert!(
+                    distance > previous,
+                    "{bulge}, {fraction}: {distance} <= {previous}"
+                );
+                previous = distance;
+            }
         }
     }
 }

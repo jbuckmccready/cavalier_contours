@@ -29,9 +29,8 @@ use crate::{
     core::{
         Control,
         math::{
-            CircleCircleIntr, LineCircleIntr, Vector2, angle, circle_circle_intr,
-            delta_angle_signed, dist_squared, line_circle_intr, min_max, point_from_parametric,
-            point_within_arc_sweep,
+            CircleCircleIntr, LineCircleIntr, Vector2, circle_circle_intr, dist_squared,
+            line_circle_intr, min_max, point_from_parametric, point_within_arc_sweep,
         },
         traits::Real,
     },
@@ -39,7 +38,7 @@ use crate::{
         CoincidentSegmentBehavior, FindIntersectsOptions, PlineBasicIntersect, PlineCreation,
         PlineIntersect, PlineIntersectFilterItem, PlineIntersectVisitor, PlineOffsetOptions,
         PlineOverlappingIntersect, PlineSegIntr, PlineSource, PlineVertex, PlineViewData,
-        TouchingLoopBehavior, TwoPlinesIntersectFilterItem,
+        TouchingLoopBehavior, TwoPlinesIntersectFilterItem, dist_from_segment_start,
         internal::{
             pline_intersects::{
                 find_intersects, find_intersects_filtered, visit_global_self_intersects,
@@ -48,7 +47,7 @@ use crate::{
             raw_pline_offset::{RawOffsetResult, create_raw_offset},
         },
         pline_seg_intr, seg_arc_radius_and_center, seg_closest_point, seg_fast_approx_bounding_box,
-        seg_length, seg_midpoint, seg_tangent_vector,
+        seg_midpoint, seg_tangent_vector,
     },
 };
 use static_aabb2d_index::{Control as AabbControl, StaticAABB2DIndex, StaticAABB2DIndexBuilder};
@@ -767,9 +766,9 @@ where
         self.occurrences.push(ContactOccurrence {
             node_id,
             raw_segment: segment_index,
-            distance_from_segment_start: distance_from_segment_start(
-                raw_offset,
-                segment_index,
+            distance_from_segment_start: dist_from_segment_start(
+                raw_offset.at(segment_index),
+                raw_offset.at(raw_offset.next_wrapping_index(segment_index)),
                 point,
                 pos_equal_eps,
             ),
@@ -895,18 +894,10 @@ where
             return;
         };
         for segment_index in [overlap.start_index1, overlap.start_index2] {
-            let distance1 = distance_from_segment_start(
-                raw_offset,
-                segment_index,
-                overlap.point1,
-                pos_equal_eps,
-            );
-            let distance2 = distance_from_segment_start(
-                raw_offset,
-                segment_index,
-                overlap.point2,
-                pos_equal_eps,
-            );
+            let v1 = raw_offset.at(segment_index);
+            let v2 = raw_offset.at(raw_offset.next_wrapping_index(segment_index));
+            let distance1 = dist_from_segment_start(v1, v2, overlap.point1, pos_equal_eps);
+            let distance2 = dist_from_segment_start(v1, v2, overlap.point2, pos_equal_eps);
             let (start, end) = min_max(distance1, distance2);
             if end > start {
                 overlap_intervals[segment_index].push(OverlapInterval { start, end });
@@ -1051,45 +1042,6 @@ where
     }
 }
 
-/// Returns the forward distance from the start of one raw segment to `point`, for ordering
-/// occurrences.
-///
-/// Endpoints snap with `pos_equal_eps`. For lines, it uses distance along the line. For arcs, it
-/// uses the radius times the directed angle along the arc.
-fn distance_from_segment_start<P, T>(
-    polyline: &P,
-    segment_index: usize,
-    point: Vector2<T>,
-    pos_equal_eps: T,
-) -> T
-where
-    P: PlineSource<Num = T> + ?Sized,
-    T: Real,
-{
-    let v1 = polyline.at(segment_index);
-    let v2 = polyline.at(polyline.next_wrapping_index(segment_index));
-    if point.fuzzy_eq_eps(v1.pos(), pos_equal_eps) {
-        return T::zero();
-    }
-    if point.fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
-        return seg_length(v1, v2);
-    }
-    if v1.bulge_is_zero() {
-        let direction = v2.pos() - v1.pos();
-        let length = direction.length();
-        if length == T::zero() {
-            T::zero()
-        } else {
-            (point - v1.pos()).dot(direction) / length
-        }
-    } else {
-        let (radius, center) = seg_arc_radius_and_center(v1, v2);
-        let start_angle = angle(center, v1.pos());
-        let point_angle = angle(center, point);
-        radius * delta_angle_signed(start_angle, point_angle, v1.bulge_is_neg()).abs()
-    }
-}
-
 /// Classifies a basic self-contact from the tangents of its two raw segments.
 ///
 /// Parallel or opposite tangents produce `Touch`; other tangents produce `Crossing`. A tangent no
@@ -1163,10 +1115,10 @@ where
             continue;
         }
 
-        let distance1 =
-            distance_from_segment_start(raw_offset, segment_index, start_point, pos_equal_eps);
-        let distance2 =
-            distance_from_segment_start(raw_offset, segment_index, end_point, pos_equal_eps);
+        let v1 = raw_offset.at(segment_index);
+        let v2 = raw_offset.at(raw_offset.next_wrapping_index(segment_index));
+        let distance1 = dist_from_segment_start(v1, v2, start_point, pos_equal_eps);
+        let distance2 = dist_from_segment_start(v1, v2, end_point, pos_equal_eps);
         let (start, end) = min_max(distance1, distance2);
         if !intervals[segment_index].iter().any(|interval| {
             start + pos_equal_eps >= interval.start && end <= interval.end + pos_equal_eps
@@ -2735,22 +2687,6 @@ mod tests {
     }
 
     #[test]
-    fn raw_order_snaps_near_arc_endpoints_with_position_epsilon() {
-        let polyline = open(&[(-1.0, 0.0, -1.0), (1.0, 0.0, 0.0)]);
-
-        assert!(
-            distance_from_segment_start(&polyline, 0, Vector2::new(-1.0, -1e-6), 1e-5).abs()
-                <= 1e-10
-        );
-        assert!(
-            (distance_from_segment_start(&polyline, 0, Vector2::new(1.0, 1e-6), 1e-5)
-                - std::f64::consts::PI)
-                .abs()
-                <= 1e-10
-        );
-    }
-
-    #[test]
     fn short_tangent_is_classified_as_crossing() {
         let polyline = open(&[(0.0, 0.0, 0.0), (1e-6, 0.0, 0.0), (0.0, 1.0, 0.0)]);
 
@@ -2917,6 +2853,38 @@ mod tests {
             &arc_polyline,
             &arc_intervals,
             1e-5
+        ));
+
+        let quarter = std::f64::consts::FRAC_1_SQRT_2;
+        let partial_arc_slice = PlineViewData::from_slice_points(
+            &arc_polyline,
+            Vector2::new(-quarter, -quarter),
+            0,
+            Vector2::new(quarter, -quarter),
+            0,
+            1e-12,
+        )
+        .unwrap();
+        let partial_arc_intervals = vec![vec![OverlapInterval {
+            start: std::f64::consts::FRAC_PI_4,
+            end: 3.0 * std::f64::consts::FRAC_PI_4,
+        }]];
+        assert!(slice_is_fully_coincident(
+            &partial_arc_slice,
+            &arc_polyline,
+            &partial_arc_intervals,
+            1e-12
+        ));
+
+        let incomplete_arc_intervals = vec![vec![OverlapInterval {
+            start: std::f64::consts::FRAC_PI_4,
+            end: 3.0 * std::f64::consts::FRAC_PI_4 - 1e-3,
+        }]];
+        assert!(!slice_is_fully_coincident(
+            &partial_arc_slice,
+            &arc_polyline,
+            &incomplete_arc_intervals,
+            1e-12
         ));
     }
 }
