@@ -4,7 +4,7 @@ use cavalier_contours::{
     core::math::Vector2,
     polyline::{
         PlineSource, PlineSourceMut, PlineVertex, Polyline, dist_from_segment_start,
-        internal::raw_pline_offset::create_raw_offset, seg_arc_radius_and_center,
+        internal::raw_pline_offset::create_raw_offset, seg_arc_radius_and_center, seg_bounding_box,
         seg_closest_point, seg_distance_is_greater_than, seg_fast_approx_bounding_box, seg_length,
         seg_midpoint, seg_split_at_point, seg_tangent_vector,
     },
@@ -283,6 +283,62 @@ fn seg_fast_approx_bounding_box_group(c: &mut Criterion) {
             &(v1, v2),
             |b, &(v1, v2)| {
                 b.iter(|| black_box(seg_fast_approx_bounding_box(black_box(v1), black_box(v2))));
+            },
+        );
+    }
+    group.finish();
+}
+
+fn seg_bounding_box_group(c: &mut Criterion) {
+    let arc = |start_angle: f64, sweep: f64| {
+        let (start_sin, start_cos) = start_angle.sin_cos();
+        let (end_sin, end_cos) = (start_angle + sweep).sin_cos();
+        (
+            PlineVertex::new(start_cos, start_sin, (sweep / 4.0).tan()),
+            PlineVertex::new(end_cos, end_sin, 0.0),
+        )
+    };
+    let cases = [
+        (
+            "line",
+            PlineVertex::new(-123.5, 47.25, 0.0),
+            PlineVertex::new(891.75, -302.5, 0.0),
+        ),
+        ("shallow_no_cardinal", arc(0.25, 4e-7).0, arc(0.25, 4e-7).1),
+        (
+            "quarter_no_cardinal",
+            arc(0.1, std::f64::consts::FRAC_PI_2 * 0.8).0,
+            arc(0.1, std::f64::consts::FRAC_PI_2 * 0.8).1,
+        ),
+        (
+            "quarter_cardinal_endpoints",
+            arc(0.0, std::f64::consts::FRAC_PI_2).0,
+            arc(0.0, std::f64::consts::FRAC_PI_2).1,
+        ),
+        (
+            "quarter_crosses_cardinal",
+            arc(-std::f64::consts::FRAC_PI_4, std::f64::consts::FRAC_PI_2).0,
+            arc(-std::f64::consts::FRAC_PI_4, std::f64::consts::FRAC_PI_2).1,
+        ),
+        (
+            "semicircle",
+            arc(0.25, std::f64::consts::PI).0,
+            arc(0.25, std::f64::consts::PI).1,
+        ),
+        (
+            "clockwise_semicircle",
+            arc(0.25, -std::f64::consts::PI).0,
+            arc(0.25, -std::f64::consts::PI).1,
+        ),
+    ];
+
+    let mut group = c.benchmark_group("seg_bounding_box");
+    for (name, v1, v2) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &(v1, v2),
+            |b, &(v1, v2)| {
+                b.iter(|| black_box(seg_bounding_box(black_box(v1), black_box(v2))));
             },
         );
     }
@@ -828,6 +884,7 @@ criterion_group!(
     seg_arc_radius_and_center_group,
     seg_tangent_vector_group,
     seg_fast_approx_bounding_box_group,
+    seg_bounding_box_group,
     seg_closest_point_group,
     seg_distance_is_greater_than_group,
     seg_split_at_point_group,
