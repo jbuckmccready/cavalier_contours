@@ -2,8 +2,7 @@ use super::PlineVertex;
 use crate::core::{
     math::{
         Vector2, angle, arc_sweep_extents, bulge_from_angle, delta_angle, delta_angle_signed,
-        dist_squared, line_seg_closest_point, midpoint, min_max, point_on_circle,
-        point_within_arc_sweep,
+        dist_squared, line_seg_closest_point, midpoint, min_max, point_within_arc_sweep,
     },
     traits::Real,
 };
@@ -407,10 +406,47 @@ where
         return midpoint(v1.pos(), v2.pos());
     }
 
-    let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-    let angle1 = angle(arc_center, v1.pos());
-    let angle2 = angle(arc_center, v2.pos());
-    let angle_offset = delta_angle_signed(angle1, angle2, v1.bulge_is_neg()) / T::two();
-    let mid_angle = angle1 + angle_offset;
-    point_on_circle(arc_radius, arc_center, mid_angle)
+    let chord_midpoint = midpoint(v1.pos(), v2.pos());
+    let half_bulge = v1.bulge / T::two();
+    Vector2::new(
+        chord_midpoint.x + half_bulge * (v2.y - v1.y),
+        chord_midpoint.y - half_bulge * (v2.x - v1.x),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seg_midpoint_returns_expected_arc_midpoints() {
+        let quarter_circle_bulge = std::f64::consts::FRAC_PI_8.tan();
+        let sqrt_half = std::f64::consts::FRAC_1_SQRT_2;
+        let cases = [
+            (
+                PlineVertex::new(0.0, 0.0, 1.0),
+                PlineVertex::new(4.0, 0.0, 0.0),
+                Vector2::new(2.0, -2.0),
+            ),
+            (
+                PlineVertex::new(0.0, 0.0, -1.0),
+                PlineVertex::new(4.0, 0.0, 0.0),
+                Vector2::new(2.0, 2.0),
+            ),
+            (
+                PlineVertex::new(1.0, 0.0, quarter_circle_bulge),
+                PlineVertex::new(0.0, 1.0, 0.0),
+                Vector2::new(sqrt_half, sqrt_half),
+            ),
+            (
+                PlineVertex::new(0.0, 0.0, 1e-7),
+                PlineVertex::new(4.0, 0.0, 0.0),
+                Vector2::new(2.0, -2e-7),
+            ),
+        ];
+
+        for (v1, v2, expected) in cases {
+            assert!(seg_midpoint(v1, v2).fuzzy_eq_eps(expected, 1e-14));
+        }
+    }
 }
