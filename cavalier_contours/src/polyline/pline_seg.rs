@@ -31,26 +31,16 @@ where
     debug_assert!(!v1.bulge_is_zero(), "v1 to v2 must be an arc");
     debug_assert!(!v1.pos().fuzzy_eq(v2.pos()), "v1 must not be on top of v2");
 
-    // compute radius
-    let abs_bulge = v1.bulge.abs();
-    let chord_v = v2.pos() - v1.pos();
-    let chord_len = chord_v.length();
-    let radius = chord_len * (abs_bulge * abs_bulge + T::one()) / (T::four() * abs_bulge);
-
-    // compute center
-    let s = abs_bulge * chord_len / T::two();
-    let m = radius - s;
-    let mut offs_x = -m * chord_v.y / chord_len;
-    let mut offs_y = m * chord_v.x / chord_len;
-    if v1.bulge_is_neg() {
-        offs_x = -offs_x;
-        offs_y = -offs_y;
-    }
-
-    let center = Vector2::new(
-        v1.x + chord_v.x / T::two() + offs_x,
-        v1.y + chord_v.y / T::two() + offs_y,
-    );
+    let bulge = v1.bulge;
+    let bulge_squared = bulge * bulge;
+    let chord = v2.pos() - v1.pos();
+    let inv_four_bulge = T::one() / (T::four() * bulge);
+    let radius = chord.length() * (T::one() + bulge_squared) * inv_four_bulge.abs();
+    let center = v1.pos()
+        + chord.scale(T::one() / T::two())
+        + chord
+            .perp()
+            .scale((T::one() - bulge) * (T::one() + bulge) * inv_four_bulge);
 
     (radius, center)
 }
@@ -491,6 +481,28 @@ where
 mod tests {
     use super::*;
     use crate::core::traits::FuzzyEq;
+
+    #[test]
+    fn seg_arc_radius_and_center_returns_expected_geometry() {
+        let quarter_circle_bulge = std::f64::consts::FRAC_PI_8.tan();
+        for (bulge, expected_radius, expected_center_y) in [
+            (1.0, 2.0, 0.0),
+            (-1.0, 2.0, 0.0),
+            (quarter_circle_bulge, 2.0f64.sqrt() * 2.0, 2.0),
+            (-quarter_circle_bulge, 2.0f64.sqrt() * 2.0, -2.0),
+            (1e-7, 10_000_000.0000001, 9_999_999.9999999),
+            (-1e-7, 10_000_000.0000001, -9_999_999.9999999),
+        ] {
+            let v1 = PlineVertex::new(0.0, 0.0, bulge);
+            let v2 = PlineVertex::new(4.0, 0.0, 0.0);
+            let (radius, center) = seg_arc_radius_and_center(v1, v2);
+            assert!((radius - expected_radius).abs() <= expected_radius * 2e-15);
+            assert!(center.fuzzy_eq_eps(
+                Vector2::new(2.0, expected_center_y),
+                expected_radius * 2e-15
+            ));
+        }
+    }
 
     #[test]
     fn seg_midpoint_returns_expected_arc_midpoints() {
