@@ -93,7 +93,7 @@ where
     let midpoint = center1 + cv.scale(a / d);
     let diff = rad1_sq - a * a;
 
-    if diff < T::zero() {
+    if diff <= T::zero() {
         return TangentIntersect { point: midpoint };
     }
 
