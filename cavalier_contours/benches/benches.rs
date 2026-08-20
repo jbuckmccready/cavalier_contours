@@ -1,10 +1,13 @@
 use std::hint::black_box;
 
 use cavalier_contours::{
-    core::math::Vector2,
+    core::math::{
+        Vector2, circle_circle_intr, delta_angle, line_circle_intr, line_line_intr,
+        point_within_arc_sweep,
+    },
     polyline::{
         FindIntersectsOptions, PlineSource, PlineSourceMut, PlineVertex, Polyline,
-        dist_from_segment_start, internal::raw_pline_offset::create_raw_offset,
+        dist_from_segment_start, internal::raw_pline_offset::create_raw_offset, pline_seg_intr,
         seg_arc_radius_and_center, seg_bounding_box, seg_closest_point,
         seg_distance_is_greater_than, seg_fast_approx_bounding_box, seg_length, seg_midpoint,
         seg_split_at_point, seg_tangent_vector,
@@ -48,6 +51,409 @@ fn regular_polygon(vertex_count: u32, bulge: f64) -> Polyline<f64> {
         result.add(40.0 * cos, 40.0 * sin, bulge);
     }
     result
+}
+
+fn arc_segment(
+    center: Vector2<f64>,
+    radius: f64,
+    start_angle: f64,
+    sweep: f64,
+) -> (PlineVertex<f64>, PlineVertex<f64>) {
+    let point_at_angle = |angle: f64| {
+        let (sin, cos) = angle.sin_cos();
+        center + Vector2::new(radius * cos, radius * sin)
+    };
+    (
+        PlineVertex::from_vector2(point_at_angle(start_angle), (sweep / 4.0).tan()),
+        PlineVertex::from_vector2(point_at_angle(start_angle + sweep), 0.0),
+    )
+}
+
+fn line_line_intr_group(c: &mut Criterion) {
+    let cases = [
+        (
+            "true_interior",
+            Vector2::new(-1.0, -1.0),
+            Vector2::new(1.0, 1.0),
+            Vector2::new(-1.0, 1.0),
+            Vector2::new(1.0, -1.0),
+        ),
+        (
+            "false_intersect",
+            Vector2::new(-1.0, -1.0),
+            Vector2::new(-0.5, -0.5),
+            Vector2::new(-1.0, 1.0),
+            Vector2::new(1.0, -1.0),
+        ),
+        (
+            "parallel",
+            Vector2::new(-2.0, -1.0),
+            Vector2::new(2.0, -1.0),
+            Vector2::new(-1.0, 5.0),
+            Vector2::new(1.0, 5.0),
+        ),
+        (
+            "collinear_disjoint",
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            Vector2::new(2.0, 0.0),
+            Vector2::new(3.0, 0.0),
+        ),
+        (
+            "collinear_touch",
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            Vector2::new(2.0, 0.0),
+        ),
+        (
+            "collinear_overlap",
+            Vector2::new(-1.0, -1.0),
+            Vector2::new(1.0, 1.0),
+            Vector2::new(0.0, 0.0),
+            Vector2::new(0.5, 0.5),
+        ),
+        (
+            "point_on_segment",
+            Vector2::new(0.0, 0.0),
+            Vector2::new(0.0, 0.0),
+            Vector2::new(-1.0, 0.0),
+            Vector2::new(1.0, 0.0),
+        ),
+        (
+            "same_points",
+            Vector2::new(0.0, 0.0),
+            Vector2::new(0.0, 0.0),
+            Vector2::new(0.0, 0.0),
+            Vector2::new(0.0, 0.0),
+        ),
+    ];
+
+    let mut group = c.benchmark_group("line_line_intr");
+    for (name, v1, v2, u1, u2) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &(v1, v2, u1, u2),
+            |b, &(v1, v2, u1, u2)| {
+                b.iter(|| {
+                    black_box(line_line_intr(
+                        black_box(v1),
+                        black_box(v2),
+                        black_box(u1),
+                        black_box(u2),
+                        black_box(1e-5),
+                    ))
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
+fn line_circle_intr_group(c: &mut Criterion) {
+    let near_tangent_center = |radius: f64, half_spacing: f64| {
+        Vector2::new(0.0, (radius * radius - half_spacing * half_spacing).sqrt())
+    };
+    let cases = [
+        (
+            "oblique_miss",
+            Vector2::new(-1.0, -1.0),
+            Vector2::new(1.0, 1.0),
+            0.5,
+            Vector2::new(0.0, 5.0),
+        ),
+        (
+            "oblique_two",
+            Vector2::new(-4.0, -2.0),
+            Vector2::new(5.0, 3.0),
+            3.0,
+            Vector2::new(0.5, 0.5),
+        ),
+        (
+            "vertical_two",
+            Vector2::new(0.0, -2.0),
+            Vector2::new(0.0, 2.0),
+            1.0,
+            Vector2::new(0.0, 0.0),
+        ),
+        (
+            "exact_tangent",
+            Vector2::new(-1.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            1.0,
+            Vector2::new(0.0, -1.0),
+        ),
+        (
+            "near_tangent_two",
+            Vector2::new(-1.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            100.0,
+            near_tangent_center(100.0, 5e-4),
+        ),
+        (
+            "near_tangent_merged",
+            Vector2::new(-1.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            100.0,
+            near_tangent_center(100.0, 2e-6),
+        ),
+        (
+            "point_segment",
+            Vector2::new(0.0, 100.001),
+            Vector2::new(0.0, 100.001),
+            100.0,
+            Vector2::new(0.0, 0.0),
+        ),
+    ];
+
+    let mut group = c.benchmark_group("line_circle_intr");
+    for (name, p0, p1, radius, center) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &(p0, p1, radius, center),
+            |b, &(p0, p1, radius, center)| {
+                b.iter(|| {
+                    black_box(line_circle_intr(
+                        black_box(p0),
+                        black_box(p1),
+                        black_box(radius),
+                        black_box(center),
+                        black_box(1e-5),
+                    ))
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
+fn circle_circle_intr_group(c: &mut Criterion) {
+    let cases = [
+        (
+            "overlapping",
+            1.0,
+            Vector2::new(0.0, 0.0),
+            1.0,
+            Vector2::new(0.0, 0.0),
+        ),
+        (
+            "concentric_no_intersect",
+            2.0,
+            Vector2::new(0.0, 0.0),
+            1.0,
+            Vector2::new(0.0, 0.0),
+        ),
+        (
+            "external_no_intersect",
+            1.0,
+            Vector2::new(0.0, 0.0),
+            1.0,
+            Vector2::new(1.9, 0.8),
+        ),
+        (
+            "internal_no_intersect",
+            4.0,
+            Vector2::new(0.0, 0.0),
+            1.0,
+            Vector2::new(1.0, 0.25),
+        ),
+        (
+            "external_tangent",
+            1.0,
+            Vector2::new(0.0, 0.0),
+            1.0,
+            Vector2::new(2.0, 0.0),
+        ),
+        (
+            "internal_tangent",
+            3.0,
+            Vector2::new(0.0, 1.0),
+            4.0,
+            Vector2::new(0.0, 0.0),
+        ),
+        (
+            "two_intersects",
+            3.0,
+            Vector2::new(0.0, 1.0),
+            4.0,
+            Vector2::new(5.0, 5.0),
+        ),
+    ];
+
+    let mut group = c.benchmark_group("circle_circle_intr");
+    for (name, radius1, center1, radius2, center2) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &(radius1, center1, radius2, center2),
+            |b, &(radius1, center1, radius2, center2)| {
+                b.iter(|| {
+                    black_box(circle_circle_intr(
+                        black_box(radius1),
+                        black_box(center1),
+                        black_box(radius2),
+                        black_box(center2),
+                        black_box(1e-5),
+                    ))
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
+fn point_within_arc_sweep_group(c: &mut Criterion) {
+    let center = Vector2::new(0.0, 0.0);
+    let start = Vector2::new(10.0, 0.0);
+    let end = Vector2::new(0.0, 10.0);
+    let cases = [
+        ("interior", Vector2::new(5.0, 5.0)),
+        ("exterior", Vector2::new(-5.0, -5.0)),
+        ("near_start_ray", Vector2::new(5.0, -5e-6)),
+        ("near_end_ray", Vector2::new(-5e-6, 5.0)),
+        ("behind_start_ray", Vector2::new(-5.0, 5e-6)),
+        ("near_center", Vector2::new(1e-6, 1e-6)),
+    ];
+
+    let mut group = c.benchmark_group("point_within_arc_sweep");
+    for (name, point) in cases {
+        group.bench_with_input(BenchmarkId::from_parameter(name), &point, |b, &point| {
+            b.iter(|| {
+                black_box(point_within_arc_sweep(
+                    black_box(center),
+                    black_box(start),
+                    black_box(end),
+                    black_box(false),
+                    black_box(point),
+                    black_box(1e-5),
+                ))
+            });
+        });
+    }
+    group.finish();
+}
+
+fn delta_angle_group(c: &mut Criterion) {
+    let cases = [
+        ("same", (0.25, 0.25)),
+        ("small_positive", (0.25, 0.5)),
+        ("small_negative", (0.5, 0.25)),
+        ("wrap_positive", (6.0, 0.25)),
+        ("wrap_negative", (0.25, 6.0)),
+        ("large_angles", (1000.0, -1000.0)),
+    ];
+
+    let mut group = c.benchmark_group("delta_angle");
+    for (name, angles) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &angles,
+            |b, &(angle1, angle2)| {
+                b.iter(|| black_box(delta_angle(black_box(angle1), black_box(angle2))));
+            },
+        );
+    }
+    group.finish();
+}
+
+fn pline_seg_intr_group(c: &mut Criterion) {
+    let line = |start: Vector2<f64>, end: Vector2<f64>| {
+        (
+            PlineVertex::from_vector2(start, 0.0),
+            PlineVertex::from_vector2(end, 0.0),
+        )
+    };
+    let lower_semicircle = arc_segment(
+        Vector2::new(0.0, 0.0),
+        1.0,
+        std::f64::consts::PI,
+        std::f64::consts::PI,
+    );
+    let right_semicircle = arc_segment(
+        Vector2::new(0.0, 0.0),
+        1.0,
+        -std::f64::consts::FRAC_PI_2,
+        std::f64::consts::PI,
+    );
+    let left_semicircle = arc_segment(
+        Vector2::new(1.0, 0.0),
+        1.0,
+        std::f64::consts::FRAC_PI_2,
+        std::f64::consts::PI,
+    );
+    let identical_arc = arc_segment(Vector2::new(0.0, 0.0), 1.0, 0.25, 1.5);
+    let partial_arc = arc_segment(Vector2::new(0.0, 0.0), 1.0, 1.0, 1.5);
+    let disjoint_arc = arc_segment(Vector2::new(0.0, 0.0), 1.0, 3.0, 1.0);
+    let cases = [
+        (
+            "line_line/true",
+            line(Vector2::new(-1.0, -1.0), Vector2::new(1.0, 1.0)),
+            line(Vector2::new(-1.0, 1.0), Vector2::new(1.0, -1.0)),
+        ),
+        (
+            "line_line/parallel",
+            line(Vector2::new(-2.0, -1.0), Vector2::new(2.0, -1.0)),
+            line(Vector2::new(-1.0, 5.0), Vector2::new(1.0, 5.0)),
+        ),
+        (
+            "line_line/overlap",
+            line(Vector2::new(-1.0, -1.0), Vector2::new(1.0, 1.0)),
+            line(Vector2::new(0.0, 0.0), Vector2::new(0.5, 0.5)),
+        ),
+        (
+            "line_arc/circle_miss",
+            line(Vector2::new(-2.0, 2.0), Vector2::new(2.0, 2.0)),
+            lower_semicircle,
+        ),
+        (
+            "line_arc/tangent",
+            line(Vector2::new(-2.0, -1.0), Vector2::new(2.0, -1.0)),
+            lower_semicircle,
+        ),
+        (
+            "line_arc/two_in_sweep",
+            line(Vector2::new(-2.0, -0.5), Vector2::new(2.0, -0.5)),
+            lower_semicircle,
+        ),
+        (
+            "line_arc/one_in_sweep",
+            line(Vector2::new(0.0, -2.0), Vector2::new(0.0, 2.0)),
+            lower_semicircle,
+        ),
+        (
+            "arc_line/two_in_sweep",
+            lower_semicircle,
+            line(Vector2::new(-2.0, -0.5), Vector2::new(2.0, -0.5)),
+        ),
+        (
+            "arc_arc/no_intersect",
+            lower_semicircle,
+            arc_segment(Vector2::new(3.0, 0.0), 1.0, 0.0, std::f64::consts::PI),
+        ),
+        ("arc_arc/two_circle_hits", right_semicircle, left_semicircle),
+        ("arc_arc/identical", identical_arc, identical_arc),
+        ("arc_arc/partial_overlap", identical_arc, partial_arc),
+        ("arc_arc/disjoint_sweeps", identical_arc, disjoint_arc),
+    ];
+
+    let mut group = c.benchmark_group("pline_seg_intr");
+    for (name, (v1, v2), (u1, u2)) in cases {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(name),
+            &(v1, v2, u1, u2),
+            |b, &(v1, v2, u1, u2)| {
+                b.iter(|| {
+                    black_box(pline_seg_intr(
+                        black_box(v1),
+                        black_box(v2),
+                        black_box(u1),
+                        black_box(u2),
+                        black_box(1e-5),
+                    ))
+                });
+            },
+        );
+    }
+    group.finish();
 }
 
 fn invalid_line_zigzag(vertex_count: u32) -> Polyline<f64> {
@@ -968,6 +1374,12 @@ fn polyline_find_intersects_duplicates_group(c: &mut Criterion) {
 
 criterion_group!(
     benches,
+    line_line_intr_group,
+    line_circle_intr_group,
+    circle_circle_intr_group,
+    point_within_arc_sweep_group,
+    delta_angle_group,
+    pline_seg_intr_group,
     polyline_area_group,
     polyline_winding_number_group,
     seg_midpoint_group,
