@@ -112,20 +112,14 @@ where
 
     let eps = epsilon;
 
-    // segment lengths are used to scale parametric t value for fuzzy comparing
-    // this ensures when comparing parametric values the epsilon value is applied with numbers at a
-    // length/position scale, e.g., a difference in parametric t value of 0.1 represents a much
-    // greater position difference for a segment with a length of 1,000,000 vs. a segment with a
-    // length of 0.01, multiplying by the length first ensures that is accounted for to use with the
-    // epsilon value
-    let seg1_length = (v2 - v1).length();
-    let seg2_length = (u2 - u1).length();
-
     // threshold check here to avoid almost parallel lines resulting in very distant intersection
     if !v_pdot_u.fuzzy_eq_zero_eps(eps) {
         // segments not parallel or collinear
         let seg1_t = u.perp_dot(w) / v_pdot_u;
         let seg2_t = v.perp_dot(w) / v_pdot_u;
+        // Segment lengths scale the parametric values so epsilon is applied at a position scale.
+        let seg1_length = v.length();
+        let seg2_length = u.length();
         if !(seg1_t * seg1_length).fuzzy_in_range_eps(T::zero(), seg1_length, eps)
             || !(seg2_t * seg2_length).fuzzy_in_range_eps(T::zero(), seg2_length, eps)
         {
@@ -164,6 +158,7 @@ where
     if v_is_point {
         // v is point and u is not a point
         let seg2_t = parametric_from_point(u1, u2, v1, eps);
+        let seg2_length = u.length();
         if (seg2_t * seg2_length).fuzzy_in_range_eps(T::zero(), seg2_length, eps) {
             return TrueIntersect {
                 seg1_t: T::zero(),
@@ -177,6 +172,7 @@ where
     if u_is_point {
         // u is point and v is not a point
         let seg1_t = parametric_from_point(v1, v2, u1, eps);
+        let seg1_length = v.length();
         if (seg1_t * seg1_length).fuzzy_in_range_eps(T::zero(), seg1_length, eps) {
             return TrueIntersect {
                 seg1_t,
@@ -199,6 +195,7 @@ where
         std::mem::swap(&mut seg2_t0, &mut seg2_t1);
     }
 
+    let seg2_length = u.length();
     // using threshold check here to make intersect "sticky" to prefer considering it an intersect
     if !(seg2_t0 * seg2_length).fuzzy_lt_eps(seg2_length, eps)
         || !(seg2_t1 * seg2_length).fuzzy_gt_eps(T::zero(), eps)
