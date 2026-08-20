@@ -19,4 +19,4 @@ workspace = true
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-cavalier_contours = {version = "0.8", path = "../cavalier_contours"}
+cavalier_contours = {version = "0.9", path = "../cavalier_contours"}
