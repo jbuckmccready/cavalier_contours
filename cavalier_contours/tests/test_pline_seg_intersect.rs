@@ -49,6 +49,93 @@ macro_rules! assert_case_eq {
     };
 }
 
+fn arc_segment(
+    center: Vector2<f64>,
+    radius: f64,
+    start_angle: f64,
+    sweep: f64,
+) -> (PlineVertex<f64>, PlineVertex<f64>) {
+    let point_at_angle = |angle: f64| {
+        let (sin, cos) = angle.sin_cos();
+        center + Vector2::new(radius * cos, radius * sin)
+    };
+    (
+        PlineVertex::from_vector2(point_at_angle(start_angle), (sweep / 4.0).tan()),
+        PlineVertex::from_vector2(point_at_angle(start_angle + sweep), 0.0),
+    )
+}
+
+#[test]
+fn line_arc_intersect_sticks_to_fuzzy_circle_endpoint() {
+    let epsilon = 1e-5;
+    let line_start = PlineVertex::new(0.0, -1.0 - 0.5 * epsilon, 0.0);
+    let line_end = PlineVertex::new(0.0, -2.0, 0.0);
+    let (arc_start, arc_end) = arc_segment(
+        Vector2::new(0.0, 0.0),
+        1.0,
+        std::f64::consts::PI,
+        std::f64::consts::PI,
+    );
+
+    assert_case_eq!(
+        pline_seg_intr(line_start, line_end, arc_start, arc_end, epsilon),
+        OneIntersect {
+            point: line_start.pos()
+        }
+    );
+}
+
+#[test]
+fn overlapping_arcs_handle_angle_wrap_at_different_scales() {
+    for scale in [0.001, 1.0, 1e9] {
+        let center = Vector2::new(2.5 * scale, -3.25 * scale);
+        let arc1 = arc_segment(center, scale, 6.0, 0.8);
+        let arc2 = arc_segment(center, scale, 0.1, 0.8);
+        assert_case_eq!(
+            pline_seg_intr(arc1.0, arc1.1, arc2.0, arc2.1, 1e-5 * scale,),
+            OverlappingArcs {
+                point1: arc2.0.pos(),
+                point2: arc1.1.pos()
+            }
+        );
+    }
+}
+
+#[test]
+fn overlapping_arc_endpoint_touch_uses_position_tolerance() {
+    for scale in [0.001, 1.0, 1000.0] {
+        let epsilon = 1e-5 * scale;
+        let center = Vector2::new(0.0, 0.0);
+        let arc1 = arc_segment(center, scale, 0.0, 0.5);
+
+        let within_tolerance = arc_segment(center, scale, 0.5 + 0.5 * epsilon / scale, 0.5);
+        assert_case_eq!(
+            pline_seg_intr(
+                arc1.0,
+                arc1.1,
+                within_tolerance.0,
+                within_tolerance.1,
+                epsilon,
+            ),
+            OneIntersect {
+                point: within_tolerance.0.pos()
+            }
+        );
+
+        let outside_tolerance = arc_segment(center, scale, 0.5 + 2.0 * epsilon / scale, 0.5);
+        assert_case_eq!(
+            pline_seg_intr(
+                arc1.0,
+                arc1.1,
+                outside_tolerance.0,
+                outside_tolerance.1,
+                epsilon,
+            ),
+            NoIntersect::<f64>
+        );
+    }
+}
+
 #[test]
 fn arc_line_no_intersect() {
     let v1 = PlineVertex::new(0.0, 0.0, 1.0);
