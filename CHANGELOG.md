@@ -19,8 +19,8 @@ or split) in the offset results.
 Notably the intersect topology approach I think has application in the boolean operations to
 improve robustness there as well. Also the `Shape` offset algorithm has not yet been updated.
 
-Other improvements are mostly in optimizing some of lower level segment processing functions to
-avoid square root and trigonometric functions.
+Other improvements optimize low-level segment and intersection functions to avoid or defer square
+roots and trigonometric work.
 
 There was significant improvements in performance for inputs that involve lots of arcs or generate
 raw offsets with many self intersects points.
@@ -29,27 +29,27 @@ Some benchmarks collected before (release 0.8.0) and after (this release):
 
 Negative differences mean this release is faster.
 
-| Case                      | Before (`f5fe179`) | After (`277790c`) |  Difference |
+| Case                      | Before (`f5fe179`) | After (`5d0749c`) |  Difference |
 | ------------------------- | -----------------: | ----------------: | ----------: |
-| `profile1`                |          319.45 µs |         221.14 µs | **-30.77%** |
-| `profile2`                |          673.86 µs |         461.33 µs | **-31.54%** |
-| `profile1_no_arcs`        |           4.387 ms |          4.192 ms |  **-4.44%** |
-| `profile2_no_arcs`        |           9.270 ms |          8.768 ms |  **-5.41%** |
-| `floor_plan`              |          157.83 µs |         159.96 µs |  **+1.35%** |
-| `mechanical_bracket`      |          105.23 µs |          92.64 µs | **-11.96%** |
-| `road_centerline`         |          823.36 µs |         818.09 µs |  **-0.64%** |
-| `bezier_enclosure`        |           3.481 ms |          3.402 ms |  **-2.28%** |
-| `involute_gear`           |           4.395 ms |          4.523 ms |  **+2.91%** |
-| `involute_gear_with_arcs` |           3.453 ms |          3.363 ms |  **-2.61%** |
-| `pathological1`           |          62.825 ms |         18.002 ms | **-71.35%** |
-| `pathological1_no_arcs`   |         245.604 ms |         99.504 ms | **-59.49%** |
-| `invalid_line_zigzag`     |           9.851 ms |          4.367 ms | **-55.67%** |
-| `invalid_line_arc_zigzag` |          19.296 ms |          6.087 ms | **-68.45%** |
-| `closed_invalid_runs`     |          12.569 ms |          6.809 ms | **-45.83%** |
-| `tapered_link_strip/128`  |          890.35 µs |         728.91 µs | **-18.13%** |
-| `tapered_link_strip/512`  |           4.710 ms |          3.503 ms | **-25.63%** |
-| `tapered_link_strip/2048` |          20.045 ms |         15.667 ms | **-21.84%** |
-| `tapered_link_strip/4096` |          42.864 ms |         34.156 ms | **-20.32%** |
+| `profile1`                |          319.45 µs |         202.42 µs | **-36.63%** |
+| `profile2`                |          673.86 µs |         428.44 µs | **-36.42%** |
+| `profile1_no_arcs`        |           4.387 ms |          4.025 ms |  **-8.25%** |
+| `profile2_no_arcs`        |           9.270 ms |          8.562 ms |  **-7.64%** |
+| `floor_plan`              |          157.83 µs |         158.15 µs |  **+0.20%** |
+| `mechanical_bracket`      |          105.23 µs |          91.04 µs | **-13.48%** |
+| `road_centerline`         |          823.36 µs |         812.69 µs |  **-1.30%** |
+| `bezier_enclosure`        |           3.481 ms |          3.279 ms |  **-5.81%** |
+| `involute_gear`           |           4.395 ms |          4.145 ms |  **-5.69%** |
+| `involute_gear_with_arcs` |           3.453 ms |          3.300 ms |  **-4.43%** |
+| `pathological1`           |          62.825 ms |         18.498 ms | **-70.56%** |
+| `pathological1_no_arcs`   |         245.604 ms |         96.917 ms | **-60.54%** |
+| `invalid_line_zigzag`     |           9.851 ms |          4.102 ms | **-58.36%** |
+| `invalid_line_arc_zigzag` |          19.296 ms |          5.638 ms | **-70.78%** |
+| `closed_invalid_runs`     |          12.569 ms |          6.822 ms | **-45.72%** |
+| `tapered_link_strip/128`  |          890.35 µs |         685.12 µs | **-23.05%** |
+| `tapered_link_strip/512`  |           4.710 ms |          3.444 ms | **-26.87%** |
+| `tapered_link_strip/2048` |          20.045 ms |         15.642 ms | **-21.96%** |
+| `tapered_link_strip/4096` |          42.864 ms |         33.826 ms | **-21.08%** |
 
 ### Added ⭐
 
@@ -93,6 +93,9 @@ Negative differences mean this release is faster.
 - Reduced time and memory use for offsets with many intersections or coincident segments.
 - Sped up common polyline arc operations, including bounds, closest points, splits, lengths, and
   distance checks.
+- Sped up line-line, line-circle, circle-circle, and polyline segment intersections by deferring
+  geometric setup, reusing division results, and simplifying tangent and same-circle arc cases.
+- Sped up arc sweep checks by comparing squared boundary distances.
 - Sped up round joins in raw offsets.
 - Reused temporary storage when finding open-offset end-circle intersections.
 - Sped up arc winding checks by avoiding unneeded center and radius calculations.
@@ -104,6 +107,8 @@ Negative differences mean this release is faster.
 
 - Added Criterion benchmarks for polyline area, polyline segment geometry, raw round joins, raw and
   final parallel offset creation, offset topology scaling, and intersection duplicate cleanup.
+- Added direct benchmarks for core intersection and arc-sweep paths, and split the benchmark suite
+  into source-aligned modules.
 - Added initial AGENTS.md.
 - Refactored raw offset slice validation to share common logic between single and dual raw offsets.
 - Marked workspace-only algorithm APIs as hidden from generated documentation.
