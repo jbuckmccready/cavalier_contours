@@ -511,7 +511,8 @@ where
 
     // The center is the sweep region's apex, so include points within the position tolerance of it.
     let point_vector = point - center;
-    if point_vector.length_squared() < epsilon * epsilon {
+    let epsilon_squared = epsilon * epsilon;
+    if point_vector.length_squared() < epsilon_squared {
         return true;
     }
 
@@ -534,7 +535,7 @@ where
     // Then give fuzzy inclusion around each forward boundary ray. Scaling epsilon by the ray length
     // makes the cross product comparison a position-based tolerance.
     let fuzzy_on_ray = |ray: Vector2<T>, cross: T| {
-        ray.dot(point_vector) >= T::zero() && cross.abs() < epsilon * ray.length()
+        ray.dot(point_vector) >= T::zero() && cross * cross < epsilon_squared * ray.length_squared()
     };
 
     fuzzy_on_ray(start_vector, start_cross) || fuzzy_on_ray(end_vector, end_cross)
@@ -586,6 +587,48 @@ mod tests {
                 false,
                 scale_point(opposite_point),
                 1e-5 * scale,
+            ));
+        }
+    }
+
+    #[test]
+    fn arc_sweep_uses_position_tolerance_at_both_boundaries() {
+        let center = Vector2::zero();
+        for scale in [0.001, 1.0, 1000.0] {
+            let epsilon = 1e-5 * scale;
+            let start = Vector2::new(scale, 0.0);
+            let end = Vector2::new(0.0, scale);
+            assert!(point_within_arc_sweep(
+                center,
+                start,
+                end,
+                false,
+                Vector2::new(scale, -0.5 * epsilon),
+                epsilon,
+            ));
+            assert!(!point_within_arc_sweep(
+                center,
+                start,
+                end,
+                false,
+                Vector2::new(scale, -2.0 * epsilon),
+                epsilon,
+            ));
+            assert!(point_within_arc_sweep(
+                center,
+                start,
+                end,
+                false,
+                Vector2::new(-0.5 * epsilon, scale),
+                epsilon,
+            ));
+            assert!(!point_within_arc_sweep(
+                center,
+                start,
+                end,
+                false,
+                Vector2::new(-2.0 * epsilon, scale),
+                epsilon,
             ));
         }
     }
