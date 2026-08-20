@@ -11,21 +11,18 @@ The main changes are:
 - Invalid slices are detected and tracked in raw offset creation to filter out invalid slices.
 - Slices are stitched together using intersect topology rather than global geometric queries.
 
-These both improve robustness in dealing with heavily overlapping/degenerate scenarios. Additionally
-this removes the need for `slice_join_eps` and made it possible to add options for behavior in
-dealing with coincident segments (keep or discard) and "touching loops" (longest continuation
-or split) in the offset results.
+Both changes improve robustness for heavily overlapping or degenerate inputs. They also remove the
+need for `slice_join_eps` and enable options for handling coincident segments (keep or discard) and
+"touching loops" (longest continuation or split) in offset results.
 
-Notably the intersect topology approach I think has application in the boolean operations to
-improve robustness there as well. Also the `Shape` offset algorithm has not yet been updated.
+The intersect topology approach may also improve robustness in boolean operations in a future
+refactor (not yet updated). The `Shape` offset algorithm has not yet been updated either.
 
-Other improvements optimize low-level segment and intersection functions to avoid or defer square
-roots and trigonometric work.
+Other changes avoid or defer square roots and trigonometric work in low-level segment and
+intersection functions. This significantly improves performance for arc-heavy inputs and raw
+offsets with many self-intersection points.
 
-There was significant improvements in performance for inputs that involve lots of arcs or generate
-raw offsets with many self intersects points.
-
-Some benchmarks collected before (release 0.8.0) and after (this release):
+The following benchmarks compare release 0.8.0 with this release:
 
 Negative differences mean this release is faster.
 
@@ -106,9 +103,8 @@ Negative differences mean this release is faster.
 ### Internal
 
 - Added Criterion benchmarks for polyline area, polyline segment geometry, raw round joins, raw and
-  final parallel offset creation, offset topology scaling, and intersection duplicate cleanup.
-- Added direct benchmarks for core intersection and arc-sweep paths, and split the benchmark suite
-  into source-aligned modules.
+  final parallel offset creation, offset topology scaling, intersection duplicate cleanup, core
+  intersections, and arc-sweep paths; split the suite into source-aligned modules.
 - Added initial AGENTS.md.
 - Refactored raw offset slice validation to share common logic between single and dual raw offsets.
 - Marked workspace-only algorithm APIs as hidden from generated documentation.
