@@ -140,19 +140,20 @@ where
         return NoIntersect;
     }
 
+    let inv_a2_b2 = T::one() / a2_b2;
     // adding h and k back to solution terms (shifting from origin back to real coordinates)
-    let x0 = -a * c / a2_b2 + h;
-    let y0 = -b * c / a2_b2 + k;
+    let x0 = -a * c * inv_a2_b2 + h;
+    let y0 = -b * c * inv_a2_b2 + k;
 
     if shortest_dist >= radius {
         let t = parametric_from_point(p0, p1, Vector2::new(x0, y0), eps);
         return TangentIntersect { t0: t };
     }
 
-    let d = r2 - c2 / a2_b2;
+    let d = r2 - c2 * inv_a2_b2;
     // Taking abs avoids NaN if round-off makes d slightly negative after shortest_dist compared
     // less than radius above.
-    let mult = (d / a2_b2).abs().sqrt();
+    let mult = (d * inv_a2_b2).abs().sqrt();
 
     let point1 = Vector2::new(x0 + b * mult, y0 - a * mult);
     let point2 = Vector2::new(x0 - b * mult, y0 + a * mult);
