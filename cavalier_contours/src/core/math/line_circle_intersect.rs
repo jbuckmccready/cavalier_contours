@@ -1,6 +1,4 @@
 use super::Vector2;
-use super::base_math::min_max;
-use crate::core::math::parametric_from_point;
 use crate::core::traits::Real;
 
 /// Holds the result of finding the intersect between a line segment and a circle.
@@ -31,11 +29,17 @@ where
 /// `P(t) = p0 + t * (p1 - p0)` for `t = 0` to `t = 1`. If `t < 0` or `t > 1` then intersect occurs
 /// only when extending the segment out past the points `p0` and `p1` given.
 /// If `t < 0` then the intersect is nearest to `p0`, if `t > 1.0` then the intersect is
-/// nearest to `p1`. Intersects are "sticky" and "snap" to tangent points using fuzzy comparisons.
-/// Two intersect points that are fuzzy equal are returned as one tangent intersect. A line outside
-/// the circle but within `epsilon` of its radius is also returned as a tangent intersect.
+/// nearest to `p1`. Finite segment domain acceptance is left to the caller.
 ///
-/// `epsilon` is a positional tolerance used for fuzzy comparisons.
+/// `epsilon` must be greater than zero. All epsilon comparisons are strict:
+///
+/// - A point segment is on the circle when its distance from the circle edge is less than
+///   `epsilon`.
+/// - A supporting line less than `epsilon` outside the circle returns one intersection at its
+///   nearest point.
+/// - Two intersection points less than `epsilon` apart return one intersection at their midpoint.
+///
+/// A distance equal to `epsilon` does not satisfy any of these cases.
 ///
 /// # Examples
 ///
@@ -66,107 +70,376 @@ pub fn line_circle_intr<T>(
 where
     T: Real,
 {
-    // This function solves for t by solving for cartesian intersect points via geometric
-    // equations with the circle centered at (0, 0). Using the line equation of the form
-    // Ax + By + C = 0 (taken from p1 and p0 shifted to the origin) and comparing with the circle
-    // radius. The x, y cartesian points are then converted to parametric t representation using
-    // p0 and p1.
-
-    // This approach was found to be more numerically stable than solving for t using the quadratic
-    // equations.
-
     use LineCircleIntr::{NoIntersect, TangentIntersect, TwoIntersects};
 
-    let dx = p1.x - p0.x;
-    let dy = p1.y - p0.y;
-    let h = circle_center.x;
-    let k = circle_center.y;
-
     let eps = epsilon;
+    let line_dir = p1 - p0;
+    let line_len2 = line_dir.length_squared();
 
-    if p0.fuzzy_eq_eps(p1, eps) {
-        // p0 == p1, test if point is on the circle, using average of the points x and y values for
-        // fuzziness
-        let xh = (p0.x + p1.x) / T::two() - h;
-        let yk = (p0.y + p1.y) / T::two() - k;
-        if (xh * xh + yk * yk).sqrt().fuzzy_eq_eps(radius, eps) {
+    // Only a zero-length segment is a point. A nonzero segment shorter than epsilon still has a
+    // supporting line and must retain its direction.
+    if line_len2 == T::zero() {
+        let center_offset = p0 - circle_center;
+        let center_dist2 = center_offset.length_squared();
+        let outer_limit = radius + eps;
+        let inner_limit = radius - eps;
+        if center_dist2 < outer_limit * outer_limit
+            && (inner_limit < T::zero() || center_dist2 > inner_limit * inner_limit)
+        {
             return TangentIntersect { t0: T::zero() };
         }
 
         return NoIntersect;
     }
 
-    let p0_shifted = p0 - circle_center;
-    let p1_shifted = p1 - circle_center;
+    let center_offset = circle_center - p0;
+    let cross = line_dir.perp_dot(center_offset);
+    let cross2 = cross * cross;
+    let radius2 = radius * radius;
+    let scaled_radius2 = radius2 * line_len2;
 
-    // note: using Real number's defined epsilon for this check since it's just avoiding division by
-    // too small a number, using the epsilon passed into this function causes unneeded loss of
-    // precision (this branch is not directly determining the intersect result case returned)
-    let (a, b, c) = if dx.fuzzy_eq_zero() {
-        // vertical line, using average of point x values for fuzziness
-        let x_pos = (p1_shifted.x + p0_shifted.x) / T::two();
-        // x = x_pos
-        // x - x_pos = 0
-
-        // A = 1
-        // B = 0
-        // C = -x_pos
-        (T::one(), T::zero(), -x_pos)
-    } else {
-        // (y - y1) = m(x - x1)
-        // y - y1 = mx - mx1
-        // mx - y + y1 - mx1 = 0
-
-        // A = -m
-        // B = 1.0
-        // C = -y1 + m*x1
-
-        // m = (y1 - y0) / (x1 - x0)
-
-        let m = dy / dx;
-        (m, -T::one(), p1_shifted.y - m * p1_shifted.x)
-    };
-
-    let a2 = a * a;
-    let b2 = b * b;
-    let c2 = c * c;
-    let r2 = radius * radius;
-    let a2_b2 = a2 + b2;
-
-    // shortest distance from point on line to origin
-    let shortest_dist = c.abs() / (a2_b2).sqrt();
-
-    if shortest_dist > radius + eps {
-        return NoIntersect;
+    if cross2 >= scaled_radius2 {
+        let recovery_limit = radius + eps;
+        if cross2 >= recovery_limit * recovery_limit * line_len2 {
+            return NoIntersect;
+        }
+        let inv_line_len2 = T::one() / line_len2;
+        return TangentIntersect {
+            t0: center_offset.dot(line_dir) * inv_line_len2,
+        };
     }
 
-    let inv_a2_b2 = T::one() / a2_b2;
-    // adding h and k back to solution terms (shifting from origin back to real coordinates)
-    let x0 = -a * c * inv_a2_b2 + h;
-    let y0 = -b * c * inv_a2_b2 + k;
-
-    if shortest_dist >= radius {
-        let t = parametric_from_point(p0, p1, Vector2::new(x0, y0), eps);
-        return TangentIntersect { t0: t };
+    let inv_line_len2 = T::one() / line_len2;
+    let midpoint_t = center_offset.dot(line_dir) * inv_line_len2;
+    let half_chord2 = radius2 - cross2 * inv_line_len2;
+    if T::four() * half_chord2 < eps * eps {
+        return TangentIntersect { t0: midpoint_t };
     }
 
-    let d = r2 - c2 * inv_a2_b2;
-    // Taking abs avoids NaN if round-off makes d slightly negative after shortest_dist compared
-    // less than radius above.
-    let mult = (d * inv_a2_b2).abs().sqrt();
+    let t_offset = (half_chord2 * inv_line_len2).sqrt();
+    TwoIntersects {
+        t0: midpoint_t - t_offset,
+        t1: midpoint_t + t_offset,
+    }
+}
 
-    let point1 = Vector2::new(x0 + b * mult, y0 - a * mult);
-    let point2 = Vector2::new(x0 - b * mult, y0 + a * mult);
-    // Apply the positional epsilon to the intersection positions. Avoiding comparing shortest_dist
-    // with the radius because that can merge points much farther apart than epsilon when the circle
-    // radius is large.
-    if point1.fuzzy_eq_eps(point2, eps) {
-        let t = parametric_from_point(p0, p1, Vector2::new(x0, y0), eps);
-        return TangentIntersect { t0: t };
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::traits::FuzzyEq;
+
+    macro_rules! assert_case_eq {
+        ($left:expr, $right:expr) => {
+            match ($left, $right) {
+                (LineCircleIntr::NoIntersect, LineCircleIntr::NoIntersect) => {}
+                (
+                    LineCircleIntr::TangentIntersect { t0: a1 },
+                    LineCircleIntr::TangentIntersect { t0: a2 },
+                ) if a1.fuzzy_eq(a2) => {}
+                (
+                    LineCircleIntr::TwoIntersects { t0: a1, t1: b1 },
+                    LineCircleIntr::TwoIntersects { t0: a2, t1: b2 },
+                ) if a1.fuzzy_eq(a2) && b1.fuzzy_eq(b2) => {}
+                _ => panic!(
+                    "intersect cases do not match: left: {:?}, right: {:?}",
+                    $left, $right
+                ),
+            };
+        };
     }
 
-    let sol1 = parametric_from_point(p0, p1, point1, eps);
-    let sol2 = parametric_from_point(p0, p1, point2, eps);
-    let (t0, t1) = min_max(sol1, sol2);
-    TwoIntersects { t0, t1 }
+    #[test]
+    fn no_intersect() {
+        let result = line_circle_intr(
+            Vector2::new(-1.0, -1.0),
+            Vector2::new(1.0, 1.0),
+            0.5,
+            Vector2::new(0.0, 5.0),
+            1e-5,
+        );
+        assert_case_eq!(result, LineCircleIntr::NoIntersect::<f64>);
+    }
+
+    #[test]
+    fn no_intersect_vertical() {
+        let result = line_circle_intr(
+            Vector2::new(0.0, -1.0),
+            Vector2::new(0.0, 1.0),
+            0.5,
+            Vector2::new(2.0, 0.0),
+            1e-5,
+        );
+        assert_case_eq!(result, LineCircleIntr::NoIntersect::<f64>);
+    }
+
+    #[test]
+    fn no_intersect_horizontal() {
+        let result = line_circle_intr(
+            Vector2::new(1.0, 1.0),
+            Vector2::new(3.0, 1.0),
+            0.5,
+            Vector2::new(2.0, -2.0),
+            1e-5,
+        );
+        assert_case_eq!(result, LineCircleIntr::NoIntersect::<f64>);
+    }
+
+    #[test]
+    fn two_intersects_true() {
+        let p0 = Vector2::new(-1.0, -1.0);
+        let p1 = Vector2::new(1.0, 1.0);
+        // Place one edge of the circle at the origin.
+        let radius = 0.5f64;
+        let offset = (radius * radius / 2.0).sqrt();
+        let expected_t1 = (2.0 * offset - p0.x) / (p1.x - p0.x);
+        assert_case_eq!(
+            line_circle_intr(p0, p1, radius, Vector2::new(offset, offset), 1e-5),
+            LineCircleIntr::TwoIntersects {
+                t0: 0.5,
+                t1: expected_t1
+            }
+        );
+    }
+
+    #[test]
+    fn two_intersects_seg_inside_vertical() {
+        assert_case_eq!(
+            line_circle_intr(
+                Vector2::new(0.0, -1.0),
+                Vector2::new(0.0, 1.0),
+                1.0,
+                Vector2::zero(),
+                1e-5,
+            ),
+            LineCircleIntr::TwoIntersects { t0: 0.0, t1: 1.0 }
+        );
+    }
+
+    #[test]
+    fn two_intersects_seg_inside_horizontal() {
+        assert_case_eq!(
+            line_circle_intr(
+                Vector2::new(-1.0, 0.0),
+                Vector2::new(1.0, 0.0),
+                1.0,
+                Vector2::zero(),
+                1e-5,
+            ),
+            LineCircleIntr::TwoIntersects { t0: 0.0, t1: 1.0 }
+        );
+    }
+
+    #[test]
+    fn two_intersects_seg_touching() {
+        assert_case_eq!(
+            line_circle_intr(
+                Vector2::new(0.0, -1.0),
+                Vector2::new(0.0, 1.0),
+                1.0,
+                Vector2::zero(),
+                1e-5,
+            ),
+            LineCircleIntr::TwoIntersects { t0: 0.0, t1: 1.0 }
+        );
+    }
+
+    #[test]
+    fn tangent_intersect_vertical() {
+        assert_case_eq!(
+            line_circle_intr(
+                Vector2::new(0.0, -1.0),
+                Vector2::new(0.0, 1.0),
+                1.0,
+                Vector2::new(1.0, 0.0),
+                1e-5,
+            ),
+            LineCircleIntr::TangentIntersect { t0: 0.5 }
+        );
+    }
+
+    #[test]
+    fn tangent_intersect_horizontal() {
+        assert_case_eq!(
+            line_circle_intr(
+                Vector2::new(-1.0, 0.0),
+                Vector2::new(1.0, 0.0),
+                1.0,
+                Vector2::new(0.0, -1.0),
+                1e-5,
+            ),
+            LineCircleIntr::TangentIntersect { t0: 0.5 }
+        );
+    }
+
+    #[test]
+    fn tangent_at_start_point() {
+        // This case previously failed due to rounding at exact tangency.
+        assert_case_eq!(
+            line_circle_intr(
+                Vector2::new(161.29, 113.665),
+                Vector2::new(167.64, 113.665),
+                0.634_999_999_999_998,
+                Vector2::new(161.29, 114.30000000000001),
+                1e-5,
+            ),
+            LineCircleIntr::TangentIntersect { t0: 0.0 }
+        );
+    }
+
+    #[test]
+    fn near_tangent_intersections_use_position_epsilon_at_different_radii() {
+        let p0 = Vector2::new(-1.0, 0.0);
+        let p1 = Vector2::new(1.0, 0.0);
+        let half_intersect_spacing = 5e-4f64;
+
+        for radius in [0.01, 1.0, 100.0] {
+            let center_y =
+                (radius * radius - half_intersect_spacing * half_intersect_spacing).sqrt();
+            assert_case_eq!(
+                line_circle_intr(p0, p1, radius, Vector2::new(0.0, center_y), 1e-5),
+                LineCircleIntr::TwoIntersects {
+                    t0: 0.5 - half_intersect_spacing / 2.0,
+                    t1: 0.5 + half_intersect_spacing / 2.0,
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn near_tangent_intersections_snap_when_positions_are_equal() {
+        let p0 = Vector2::new(-1.0, 0.0);
+        let p1 = Vector2::new(1.0, 0.0);
+        let half_intersect_spacing = 2e-6f64;
+
+        for radius in [0.01, 1.0, 100.0] {
+            let center_y =
+                (radius * radius - half_intersect_spacing * half_intersect_spacing).sqrt();
+            assert_case_eq!(
+                line_circle_intr(p0, p1, radius, Vector2::new(0.0, center_y), 1e-5),
+                LineCircleIntr::TangentIntersect { t0: 0.5 }
+            );
+        }
+    }
+
+    #[test]
+    fn point_segment_uses_position_epsilon() {
+        let point = Vector2::new(0.0, 100.001);
+        assert_case_eq!(
+            line_circle_intr(point, point, 100.0, Vector2::zero(), 0.01),
+            LineCircleIntr::TangentIntersect { t0: 0.0 }
+        );
+    }
+
+    #[test]
+    fn point_segments_use_strict_radial_distance_boundaries() {
+        let epsilon = 1.0 / 1024.0;
+        for point in [
+            Vector2::new(1.0 + epsilon / 2.0, 0.0),
+            Vector2::new(1.0 - epsilon / 2.0, 0.0),
+        ] {
+            assert_case_eq!(
+                line_circle_intr(point, point, 1.0, Vector2::zero(), epsilon),
+                LineCircleIntr::TangentIntersect { t0: 0.0 }
+            );
+        }
+        for point in [
+            Vector2::new(1.0 + epsilon, 0.0),
+            Vector2::new(1.0 - epsilon, 0.0),
+        ] {
+            assert_case_eq!(
+                line_circle_intr(point, point, 1.0, Vector2::zero(), epsilon),
+                LineCircleIntr::NoIntersect::<f64>
+            );
+        }
+        assert_case_eq!(
+            line_circle_intr(
+                Vector2::zero(),
+                Vector2::zero(),
+                epsilon / 2.0,
+                Vector2::zero(),
+                epsilon,
+            ),
+            LineCircleIntr::TangentIntersect { t0: 0.0 }
+        );
+        assert_case_eq!(
+            line_circle_intr(
+                Vector2::zero(),
+                Vector2::zero(),
+                epsilon,
+                Vector2::zero(),
+                epsilon,
+            ),
+            LineCircleIntr::NoIntersect::<f64>
+        );
+    }
+
+    #[test]
+    fn recovered_tangent_uses_strict_position_boundary_at_different_radii() {
+        for radius in [1.0 / 64.0, 1.0, 64.0] {
+            let epsilon = radius / 1024.0;
+            let p0 = Vector2::new(-2.0 * radius, 0.0);
+            let p1 = Vector2::new(2.0 * radius, 0.0);
+            for (factor, intersects) in [(0.25, true), (0.99, true), (1.0, false), (1.01, false)] {
+                let center = Vector2::new(0.0, radius + factor * epsilon);
+                let result = line_circle_intr(p0, p1, radius, center, epsilon);
+                if intersects {
+                    assert_case_eq!(result, LineCircleIntr::TangentIntersect { t0: 0.5 });
+                } else {
+                    assert_case_eq!(result, LineCircleIntr::NoIntersect::<f64>);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn very_short_diagonal_line_keeps_both_supporting_roots() {
+        let result = line_circle_intr(
+            Vector2::new(0.9999999995, -0.0000000005),
+            Vector2::new(1.0000000005, 0.0000000005),
+            1.0,
+            Vector2::zero(),
+            1e-12,
+        );
+        assert!(
+            matches!(result, LineCircleIntr::TwoIntersects { .. }),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn nonzero_segment_shorter_than_epsilon_keeps_both_supporting_roots() {
+        let epsilon = 1.0 / 1024.0;
+        assert_case_eq!(
+            line_circle_intr(
+                Vector2::new(-epsilon / 4.0, 0.0),
+                Vector2::new(epsilon / 4.0, 0.0),
+                1.0,
+                Vector2::zero(),
+                epsilon,
+            ),
+            LineCircleIntr::TwoIntersects {
+                t0: 0.5 - 2.0 / epsilon,
+                t1: 0.5 + 2.0 / epsilon
+            }
+        );
+    }
+
+    #[test]
+    fn coalesced_intersections_use_strict_point_separation_boundary() {
+        let p0 = Vector2::new(-4.0, 4.0);
+        let p1 = Vector2::new(4.0, 4.0);
+        assert_case_eq!(
+            line_circle_intr(p0, p1, 5.0, Vector2::zero(), 6.25),
+            LineCircleIntr::TangentIntersect { t0: 0.5 }
+        );
+        for epsilon in [6.0, 5.75] {
+            assert_case_eq!(
+                line_circle_intr(p0, p1, 5.0, Vector2::zero(), epsilon),
+                LineCircleIntr::TwoIntersects {
+                    t0: 0.125,
+                    t1: 0.875
+                }
+            );
+        }
+    }
 }
