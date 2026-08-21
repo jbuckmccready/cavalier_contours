@@ -18,9 +18,10 @@
 //! Separate mode follows an unambiguous touch relation before same-occurrence continuation, so
 //! touching loops can become separate components. Crossings always use preserve routing.
 //!
-//! `pos_equal_eps` groups nearby contact points and removes repeated positions while copying
-//! geometry. It does not find stitch connections. Connections come only from occurrence identity
-//! and recorded relations.
+//! `pos_equal_eps` groups contact points whose Euclidean distance is strictly less than the
+//! epsilon and removes repeated positions by the same rule while copying geometry. It does not
+//! find stitch connections. Connections come only from occurrence identity and recorded
+//! relations. The epsilon must be greater than zero.
 
 use ahash::{HashMap, HashMapExt};
 use smallvec::SmallVec;
@@ -2200,6 +2201,29 @@ mod tests {
         let lookup = ContactNodeLookup::new(&nodes, eps);
 
         assert_eq!(lookup.find(&nodes, point, eps), Some(ContactNodeId(0)));
+    }
+
+    #[test]
+    fn indexed_node_lookup_covers_equal_points_across_bucket_edges_and_corners() {
+        let eps = 16.0;
+        for (node_point, query) in [
+            (Vector2::new(1.0, 8.0), Vector2::new(16.0, 8.0)),
+            (Vector2::new(5.0, 5.0), Vector2::new(16.0, 16.0)),
+            (Vector2::new(-1.0, -8.0), Vector2::new(0.0, -8.0)),
+            (Vector2::new(-11.0, -11.0), Vector2::new(0.0, 0.0)),
+        ] {
+            assert_ne!(
+                contact_node_bucket(node_point, eps),
+                contact_node_bucket(query, eps)
+            );
+            let nodes = vec![contact_node(node_point)];
+            let lookup = ContactNodeLookup::new(&nodes, eps);
+            assert_eq!(lookup.find(&nodes, query, eps), Some(ContactNodeId(0)));
+        }
+
+        let nodes = vec![contact_node(Vector2::new(0.0, 8.0))];
+        let lookup = ContactNodeLookup::new(&nodes, eps);
+        assert_eq!(lookup.find(&nodes, Vector2::new(16.0, 8.0), eps), None);
     }
 
     #[test]

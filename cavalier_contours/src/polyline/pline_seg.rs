@@ -173,13 +173,17 @@ where
 /// ```
 /// # use cavalier_contours::polyline::*;
 /// # use cavalier_contours::core::math::*;
+/// # use cavalier_contours::core::traits::*;
 /// // counter clockwise half circle arc going from (2, 2) to (2, 4)
 /// let v1 = PlineVertex::new(2.0, 2.0, 1.0);
 /// let v2 = PlineVertex::new(4.0, 2.0, 0.0);
 /// let midpoint = Vector2::new(3.0, 1.0);
-/// assert!(seg_tangent_vector(v1, v2, midpoint).normalize().fuzzy_eq(Vector2::new(1.0, 0.0)));
-/// assert!(seg_tangent_vector(v1, v2, v1.pos()).normalize().fuzzy_eq(Vector2::new(0.0, -1.0)));
-/// assert!(seg_tangent_vector(v1, v2, v2.pos()).normalize().fuzzy_eq(Vector2::new(0.0, 1.0)));
+/// let midpoint_tangent = seg_tangent_vector(v1, v2, midpoint).normalize();
+/// assert!(midpoint_tangent.x.fuzzy_eq(1.0) && midpoint_tangent.y.fuzzy_eq(0.0));
+/// let start_tangent = seg_tangent_vector(v1, v2, v1.pos()).normalize();
+/// assert!(start_tangent.x.fuzzy_eq(0.0) && start_tangent.y.fuzzy_eq(-1.0));
+/// let end_tangent = seg_tangent_vector(v1, v2, v2.pos()).normalize();
+/// assert!(end_tangent.x.fuzzy_eq(0.0) && end_tangent.y.fuzzy_eq(1.0));
 /// ```
 pub fn seg_tangent_vector<T>(
     v1: PlineVertex<T>,
@@ -690,7 +694,8 @@ mod tests {
                 point.perp()
             };
             assert!(
-                tangent.fuzzy_eq_eps(expected, 2e-9),
+                tangent.x.fuzzy_eq_eps(expected.x, 2e-9)
+                    && tangent.y.fuzzy_eq_eps(expected.y, 2e-9),
                 "{bulge}: {tangent:?} != {expected:?}"
             );
         }

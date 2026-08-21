@@ -130,17 +130,38 @@ where
         self.bulge < T::zero()
     }
 
-    /// Fuzzy equal comparison with another vertex using `fuzzy_epsilon` given.
+    /// Compares this vertex with another using `fuzzy_epsilon`.
+    ///
+    /// Positions compare equal when their Euclidean distance is strictly less than the epsilon.
+    /// Bulges use scalar fuzzy equality with the same strict epsilon. `fuzzy_epsilon` must be
+    /// greater than zero.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `fuzzy_epsilon` is zero or negative.
     #[inline]
     pub fn fuzzy_eq_eps(&self, other: Self, fuzzy_epsilon: T) -> bool {
-        self.x.fuzzy_eq_eps(other.x, fuzzy_epsilon)
-            && self.y.fuzzy_eq_eps(other.y, fuzzy_epsilon)
+        self.pos().fuzzy_eq_eps(other.pos(), fuzzy_epsilon)
             && self.bulge.fuzzy_eq_eps(other.bulge, fuzzy_epsilon)
     }
 
-    /// Fuzzy equal comparison with another vertex using `T::fuzzy_epsilon()`.
+    /// Compares this vertex with another using `T::fuzzy_epsilon()`.
     #[inline]
     pub fn fuzzy_eq(&self, other: Self) -> bool {
         self.fuzzy_eq_eps(other, T::fuzzy_epsilon())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fuzzy_eq_eps_uses_euclidean_position_and_scalar_bulge() {
+        let vertex = PlineVertex::new(0.0, 0.0, 2.0);
+
+        assert!(vertex.fuzzy_eq_eps(PlineVertex::new(0.5, 0.5, 2.0 + 1023.0 / 1024.0), 1.0));
+        assert!(!vertex.fuzzy_eq_eps(PlineVertex::new(0.75, 0.75, 2.0), 1.0));
+        assert!(!vertex.fuzzy_eq_eps(PlineVertex::new(0.5, 0.5, 3.0), 1.0));
     }
 }

@@ -94,14 +94,25 @@ where
         self.scale(T::one() / self.length())
     }
 
-    /// Fuzzy equal comparison with another vector using `fuzzy_epsilon` given.
+    /// Compares this vector with another using Euclidean distance.
+    ///
+    /// Returns `true` when the squared Euclidean distance is strictly less than
+    /// `fuzzy_epsilon * fuzzy_epsilon`. `fuzzy_epsilon` must be greater than zero.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `fuzzy_epsilon` is zero or negative.
     #[inline]
     #[must_use]
     pub fn fuzzy_eq_eps(&self, other: Self, fuzzy_epsilon: T) -> bool {
-        self.x.fuzzy_eq_eps(other.x, fuzzy_epsilon) && self.y.fuzzy_eq_eps(other.y, fuzzy_epsilon)
+        debug_assert!(
+            fuzzy_epsilon > T::zero(),
+            "fuzzy_epsilon must be greater than zero"
+        );
+        (*self - other).length_squared() < fuzzy_epsilon * fuzzy_epsilon
     }
 
-    /// Fuzzy equal comparison with another vector using `T::fuzzy_epsilon()`.
+    /// Compares this vector with another using Euclidean distance and `T::fuzzy_epsilon()`.
     #[inline]
     #[must_use]
     pub fn fuzzy_eq(&self, other: Self) -> bool {
@@ -267,18 +278,92 @@ mod tests {
 
     macro_rules! test_binary_op {
         ($v1:ident, $v2:ident, $op:tt, $expected:expr) => {
-            assert!(($v1 $op $v2).fuzzy_eq($expected));
-            assert!((&$v1 $op $v2).fuzzy_eq($expected));
-            assert!(($v1 $op &$v2).fuzzy_eq($expected));
-            assert!((&$v1 $op &$v2).fuzzy_eq($expected));
+            assert_eq!($v1 $op $v2, $expected);
+            assert_eq!(&$v1 $op $v2, $expected);
+            assert_eq!($v1 $op &$v2, $expected);
+            assert_eq!(&$v1 $op &$v2, $expected);
+        };
+    }
+
+    macro_rules! test_unary_op {
+        ($v:ident, $op:tt, $expected:expr) => {
+            assert_eq!($op $v, $expected);
+            assert_eq!($op &$v, $expected);
         };
     }
 
     #[test]
-    fn ops() {
+    fn operators_support_owned_and_borrowed_operands() {
         let v1 = vec2(4.0, 5.0);
         let v2 = vec2(1.0, 2.0);
         test_binary_op!(v1, v2, +, vec2(5.0, 7.0));
         test_binary_op!(v1, v2, -, vec2(3.0, 3.0));
+        test_unary_op!(v1, -, vec2(-4.0, -5.0));
+    }
+
+    #[test]
+    fn fuzzy_eq_eps_has_strict_axis_boundary() {
+        let origin = Vector2::zero();
+        let epsilon = 1.0;
+
+        assert!(origin.fuzzy_eq_eps(Vector2::new(1023.0 / 1024.0, 0.0), epsilon));
+        assert!(!origin.fuzzy_eq_eps(Vector2::new(1.0, 0.0), epsilon));
+        assert!(!origin.fuzzy_eq_eps(Vector2::new(1025.0 / 1024.0, 0.0), epsilon));
+    }
+
+    #[test]
+    fn fuzzy_eq_eps_uses_euclidean_distance() {
+        assert!(!Vector2::zero().fuzzy_eq_eps(Vector2::new(0.75, 0.75), 1.0));
+    }
+
+    #[test]
+    fn fuzzy_eq_eps_has_strict_three_four_five_boundary() {
+        let origin = Vector2::zero();
+        let epsilon = 5.0;
+
+        assert!(origin.fuzzy_eq_eps(
+            Vector2::new(3.0 * 1023.0 / 1024.0, 4.0 * 1023.0 / 1024.0),
+            epsilon
+        ));
+        assert!(!origin.fuzzy_eq_eps(Vector2::new(3.0, 4.0), epsilon));
+        assert!(!origin.fuzzy_eq_eps(
+            Vector2::new(3.0 * 1025.0 / 1024.0, 4.0 * 1025.0 / 1024.0),
+            epsilon
+        ));
+    }
+
+    #[test]
+    fn fuzzy_eq_eps_is_symmetric() {
+        let point = Vector2::new(2.0, -3.0);
+        let inside = Vector2::new(2.5, -2.5);
+        let outside = Vector2::new(2.75, -2.25);
+
+        assert!(point.fuzzy_eq_eps(inside, 1.0));
+        assert!(inside.fuzzy_eq_eps(point, 1.0));
+        assert!(!point.fuzzy_eq_eps(outside, 1.0));
+        assert!(!outside.fuzzy_eq_eps(point, 1.0));
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "fuzzy_epsilon must be greater than zero")]
+    fn fuzzy_eq_eps_debug_asserts_zero_epsilon() {
+        let _ = Vector2::zero().fuzzy_eq_eps(Vector2::zero(), 0.0);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "fuzzy_epsilon must be greater than zero")]
+    fn fuzzy_eq_eps_debug_asserts_negative_epsilon() {
+        let _ = Vector2::zero().fuzzy_eq_eps(Vector2::zero(), -1.0);
+    }
+
+    #[test]
+    fn fuzzy_eq_eps_handles_representable_offsets_after_large_translation() {
+        let base = 1_099_511_627_776.0;
+        let point = Vector2::new(base, -base);
+
+        assert!(point.fuzzy_eq_eps(Vector2::new(base + 0.5, -base + 0.5), 1.0));
+        assert!(!point.fuzzy_eq_eps(Vector2::new(base + 0.75, -base + 0.75), 1.0));
     }
 }

@@ -108,13 +108,14 @@ pub struct Shape<T: Real> {
 /// Struct to hold options parameters when performing shape offset.
 #[derive(Debug, Clone)]
 pub struct ShapeOffsetOptions<T> {
-    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    /// Position equality epsilon. Two positions are equal when their Euclidean distance is
+    /// strictly less than this value. Must be greater than zero.
     pub pos_equal_eps: T,
     /// Fuzzy comparison epsilon used when testing distance of slices to original polyline for
     /// validity.
     pub offset_dist_eps: T,
-    /// Fuzzy comparison epsilon used for determining if two positions are equal when stitching
-    /// polyline slices together.
+    /// Half-width of the axis-aligned search bounds used to find candidate slice endpoints when
+    /// stitching polyline slices together.
     pub slice_join_eps: T,
 }
 

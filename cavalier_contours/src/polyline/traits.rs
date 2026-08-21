@@ -107,8 +107,15 @@ pub trait PlineSource {
         self.vertex_count() == 0
     }
 
-    /// Fuzzy compare with another polyline using `eps` epsilon value for fuzzy comparison of
-    /// vertexes.
+    /// Fuzzy compare with another polyline using `eps`.
+    ///
+    /// Corresponding vertex positions use Euclidean distance strictly less than `eps`.
+    /// Corresponding bulges use scalar fuzzy equality with the same strict epsilon. `eps` must be
+    /// greater than zero.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `eps` is zero or negative and corresponding vertices are compared.
     #[inline]
     fn fuzzy_eq_eps<P>(&self, other: &P, eps: Self::Num) -> bool
     where
@@ -122,7 +129,7 @@ pub trait PlineSource {
                 .all(|(v1, v2)| v1.fuzzy_eq_eps(v2, eps))
     }
 
-    /// Same as [`PlineSource::fuzzy_eq_eps`] but uses default `Self::Num::fuzzy_epsilon()`.
+    /// Same as [`PlineSource::fuzzy_eq_eps`] but uses `Self::Num::fuzzy_epsilon()`.
     #[inline]
     fn fuzzy_eq<P>(&self, other: &P) -> bool
     where

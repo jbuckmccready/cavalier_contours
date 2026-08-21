@@ -78,7 +78,8 @@ where
     /// intersects of closed polylines requires more memory and computation. This option does not
     /// control whether contacts in the offset output are retained.
     pub handle_self_intersects: bool,
-    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    /// Position equality epsilon. Two positions are equal when their Euclidean distance is
+    /// strictly less than this value. Must be greater than zero.
     pub pos_equal_eps: T,
     /// Fuzzy comparison epsilon used when testing distance of slices to original polyline for
     /// validity.
@@ -140,7 +141,8 @@ where
 {
     /// Spatial index for `self`
     pub pline1_aabb_index: Option<&'a StaticAABB2DIndex<T>>,
-    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    /// Position equality epsilon. Two positions are equal when their Euclidean distance is
+    /// strictly less than this value. Must be greater than zero.
     pub pos_equal_eps: T,
 }
 
@@ -300,7 +302,8 @@ where
 {
     /// Spatial index for `self` or first polyline argument for the boolean operation.
     pub pline1_aabb_index: Option<&'a StaticAABB2DIndex<T>>,
-    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    /// Position equality epsilon. Two positions are equal when their Euclidean distance is
+    /// strictly less than this value. Must be greater than zero.
     pub pos_equal_eps: T,
     /// If Some then this epsilon value is used to determine if a result polyline is collapsed, that
     /// is has no area according to abs(area) < eps. Polylines that are collapsed will not be
@@ -354,7 +357,8 @@ where
 {
     /// Spatial index for the polyline.
     pub aabb_index: Option<&'a StaticAABB2DIndex<T>>,
-    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    /// Position equality epsilon. Two positions are equal when their Euclidean distance is
+    /// strictly less than this value. Must be greater than zero.
     pub pos_equal_eps: T,
     /// Controls whether to include all (local + global), only local, or only global self
     /// intersects.
@@ -393,7 +397,8 @@ where
 {
     /// Spatial index for `self` or first polyline argument to find intersects.
     pub pline1_aabb_index: Option<&'a StaticAABB2DIndex<T>>,
-    /// Fuzzy comparison epsilon used for determining if two positions are equal.
+    /// Position equality epsilon. Two positions are equal when their Euclidean distance is
+    /// strictly less than this value. Must be greater than zero.
     pub pos_equal_eps: T,
 }
 
