@@ -284,11 +284,13 @@ fn print_segment_info(start: PlineVertex<f64>, end: PlineVertex<f64>, name: &str
 fn print_intersection_result(result: PlineSegIntr<f64>) {
     match result {
         PlineSegIntr::NoIntersect => println!("  No intersection"),
-        PlineSegIntr::TangentIntersect { point } => print_point("Tangent intersection", point),
-        PlineSegIntr::OneIntersect { point } => print_point("Intersection", point),
-        PlineSegIntr::TwoIntersects { point1, point2 } => {
-            print_point("Intersection 1", point1);
-            print_point("Intersection 2", point2);
+        PlineSegIntr::TangentIntersect { hit } => {
+            print_point("Tangent intersection", hit.point);
+        }
+        PlineSegIntr::OneIntersect { hit } => print_point("Intersection", hit.point),
+        PlineSegIntr::TwoIntersects { hit1, hit2 } => {
+            print_point("Intersection 1", hit1.point);
+            print_point("Intersection 2", hit2.point);
         }
         PlineSegIntr::OverlappingLines { point1, point2 } => {
             println!("  Overlapping lines:");

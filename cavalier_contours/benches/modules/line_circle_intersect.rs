@@ -7,6 +7,9 @@ pub fn line_circle_intr_group(c: &mut Criterion) {
     let near_tangent_center = |radius: f64, half_spacing: f64| {
         Vector2::new(0.0, (radius * radius - half_spacing * half_spacing).sqrt())
     };
+    let epsilon = 1e-5;
+    let half_epsilon = epsilon / 2.0;
+    let endpoint_merge_half_spacing = 0.75 * epsilon;
     let cases = [
         (
             "oblique_miss",
@@ -51,7 +54,45 @@ pub fn line_circle_intr_group(c: &mut Criterion) {
             near_tangent_center(100.0, 2e-6),
         ),
         (
-            "point_segment",
+            "endpoint_snap",
+            Vector2::new(1.0 + half_epsilon, 0.0),
+            Vector2::new(2.0, 0.0),
+            1.0,
+            Vector2::new(0.0, 0.0),
+        ),
+        (
+            "endpoint_coalesced",
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            1.0,
+            Vector2::new(
+                -0.15 * epsilon,
+                (1.0 - endpoint_merge_half_spacing * endpoint_merge_half_spacing).sqrt(),
+            ),
+        ),
+        (
+            "recovered_tangent",
+            Vector2::new(-2.0, 0.0),
+            Vector2::new(2.0, 0.0),
+            1.0,
+            Vector2::new(0.0, 1.0 + half_epsilon),
+        ),
+        (
+            "recovered_tangent_endpoint_snap",
+            Vector2::new(half_epsilon, 0.0),
+            Vector2::new(2.0, 0.0),
+            1.0,
+            Vector2::new(0.0, 1.0 + half_epsilon),
+        ),
+        (
+            "point_segment_hit",
+            Vector2::new(0.0, 100.0 + half_epsilon),
+            Vector2::new(0.0, 100.0 + half_epsilon),
+            100.0,
+            Vector2::new(0.0, 0.0),
+        ),
+        (
+            "point_segment_miss",
             Vector2::new(0.0, 100.001),
             Vector2::new(0.0, 100.001),
             100.0,
@@ -71,7 +112,7 @@ pub fn line_circle_intr_group(c: &mut Criterion) {
                         black_box(p1),
                         black_box(radius),
                         black_box(center),
-                        black_box(1e-5),
+                        black_box(epsilon),
                     ))
                 });
             },

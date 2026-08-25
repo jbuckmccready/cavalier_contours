@@ -1,4 +1,4 @@
-use super::Vector2;
+use super::{IntrPoint, Vector2};
 use crate::core::traits::Real;
 
 /// Holds the result of finding the intersect between two circles.
@@ -11,16 +11,18 @@ where
     NoIntersect,
     /// One touching point found, or two nearby points combined into one.
     TangentIntersect {
-        /// Holds the tangent intersect point.
-        point: Vector2<T>,
+        /// Holds the tangent intersection point and its geometric error.
+        hit: IntrPoint<T>,
     },
     /// Simple case of two intersect points found.
     TwoIntersects {
-        /// Holds the first intersect point.
-        point1: Vector2<T>,
-        /// Holds the second intersect point.
-        point2: Vector2<T>,
+        /// Intersection on the right of the directed line from `center1` to `center2`.
+        hit1: IntrPoint<T>,
+        /// Intersection on the left of the directed line from `center1` to `center2`.
+        hit2: IntrPoint<T>,
     },
+    // TODO: Carry an error score for each overlap boundary. Supports accepted as collinear within
+    // epsilon can produce overlap points that required a nonzero geometric adjustment.
     /// Circles are treated as the same circle.
     Overlapping,
 }
@@ -38,6 +40,10 @@ where
 ///
 /// A distance equal to `epsilon` does not satisfy any of these cases.
 ///
+/// Two-point results follow argument order: viewed from `center1` toward `center2`, `hit1` is on
+/// the right and `hit2` is on the left. Swapping the circle arguments swaps the hits. Callers can
+/// use this order to check one side first and short-circuit without sorting the points.
+///
 /// # Examples
 ///
 /// ```
@@ -49,10 +55,10 @@ where
 /// let c1 = Vector2::new(0.0, 0.0);
 /// let r2 = 1.0;
 /// let c2 = Vector2::new(0.0, 2.0);
-/// if let CircleCircleIntr::TangentIntersect { point: p } =
+/// if let CircleCircleIntr::TangentIntersect { hit } =
 ///     circle_circle_intr(r1, c1, r2, c2, 1e-5)
 /// {
-///     assert_eq!(p, Vector2::new(0.0, 1.0));
+///     assert_eq!(hit.point, Vector2::new(0.0, 1.0));
 /// } else {
 ///     unreachable!("expected a tangent intersection");
 /// }
@@ -72,75 +78,104 @@ where
     use CircleCircleIntr::{NoIntersect, Overlapping, TangentIntersect, TwoIntersects};
 
     let cv = center2 - center1;
-    let d2 = cv.dot(cv);
+    let d_sq = cv.dot(cv);
     let eps = epsilon;
+    let half = T::one() / T::two();
     let radius_difference = (radius1 - radius2).abs();
 
     // Fuzzy-equal circles must stay within the position tolerance over their whole curves. Center
     // and radius errors can add, so compare the center distance against the remaining tolerance.
     if radius_difference < eps {
         let remaining_epsilon = eps - radius_difference;
-        if d2 < remaining_epsilon * remaining_epsilon {
+        if d_sq < remaining_epsilon * remaining_epsilon {
             return Overlapping;
         }
     }
 
     // Equal centers are either overlapping above or concentric with no intersections. Return
     // before dividing by the center distance.
-    if d2 == T::zero() {
+    if d_sq == T::zero() {
         return NoIntersect;
     }
 
     let external_limit = radius1 + radius2;
-    let external_limit_squared = external_limit * external_limit;
-    if d2 >= external_limit_squared {
+    let external_limit_sq = external_limit * external_limit;
+    if d_sq >= external_limit_sq {
         let external_reject_limit = external_limit + eps;
-        if d2 >= external_reject_limit * external_reject_limit {
+        if d_sq >= external_reject_limit * external_reject_limit {
             return NoIntersect;
         }
-        let d = d2.sqrt();
-        let unit_center_vector = cv.scale(T::one() / d);
+        let d = d_sq.sqrt();
+        let gap = d - external_limit;
+        let point = center1 + cv.scale((radius1 + d - radius2) / (T::two() * d));
+        // Exact or recovered external tangency: move both nearest edges by gap/2 to their midpoint.
         return TangentIntersect {
-            point: center1 + unit_center_vector.scale((radius1 + d - radius2) / T::two()),
+            hit: IntrPoint::adjusted(point, gap * gap / T::two()),
         };
     }
 
-    let radius_difference_squared = radius_difference * radius_difference;
-    if d2 <= radius_difference_squared {
+    let radius_difference_sq = radius_difference * radius_difference;
+    if d_sq <= radius_difference_sq {
         if radius_difference >= eps {
             let internal_reject_limit = radius_difference - eps;
-            if d2 <= internal_reject_limit * internal_reject_limit {
+            if d_sq <= internal_reject_limit * internal_reject_limit {
                 return NoIntersect;
             }
         }
-        let d = d2.sqrt();
-        let unit_center_vector = cv.scale(T::one() / d);
+        if d_sq == radius_difference_sq {
+            let distance_from_center1 = if radius1 > radius2 { radius1 } else { -radius1 };
+            let point = center1 + cv.scale(distance_from_center1 / radius_difference);
+            // Exact internal tangency: the analytic point needs no geometric adjustment.
+            return TangentIntersect {
+                hit: IntrPoint::exact(point),
+            };
+        }
+        let d = d_sq.sqrt();
+        let gap = radius_difference - d;
+        let half_gap = gap * half;
         let distance_from_center1 = if radius1 > radius2 {
-            (radius1 + d + radius2) / T::two()
+            radius1 - half_gap
         } else {
-            (d - radius2 - radius1) / T::two()
+            -radius1 - half_gap
         };
+        let point = center1 + cv.scale(distance_from_center1 / d);
+        // Internally disjoint within epsilon: move both nearest edges by gap/2 to their midpoint.
         return TangentIntersect {
-            point: center1 + unit_center_vector.scale(distance_from_center1),
+            hit: IntrPoint::adjusted(point, gap * half_gap),
         };
     }
 
-    let d = d2.sqrt();
-    let rad1_sq = radius1 * radius1;
-    let inv_d = T::one() / d;
-    let a = (rad1_sq - radius2 * radius2 + d2) * inv_d / T::two();
-    let midpoint = center1 + cv.scale(a * inv_d);
-    let diff = rad1_sq - a * a;
+    let radius1_sq = radius1 * radius1;
+    let a_numerator = radius1_sq - radius2 * radius2 + d_sq;
+    // Compute a/d directly because both the chord midpoint and perpendicular offset only need
+    // ratios to the center distance. Applying 1/2 before division avoids overflowing 2*d².
+    let a_over_d = a_numerator * half / d_sq;
+    let midpoint = center1 + cv.scale(a_over_d);
+    let a_sq = a_numerator * a_over_d * half;
+    let half_chord_sq = radius1_sq - a_sq;
 
-    if diff <= T::zero() {
-        return TangentIntersect { point: midpoint };
+    if half_chord_sq <= T::zero() {
+        let d = d_sq.sqrt();
+        let a = a_over_d * d;
+        let radius1_error = a.abs() - radius1;
+        let radius2_error = (d - a).abs() - radius2;
+        // Roundoff erased the chord: use its midpoint and sum its radial miss from both circles.
+        return TangentIntersect {
+            hit: IntrPoint::adjusted(
+                midpoint,
+                radius1_error * radius1_error + radius2_error * radius2_error,
+            ),
+        };
     }
 
-    if T::four() * diff < eps * eps {
-        return TangentIntersect { point: midpoint };
+    if T::four() * half_chord_sq < eps * eps {
+        // Two analytic hits are within epsilon: merge them at their midpoint, a distance h away.
+        return TangentIntersect {
+            hit: IntrPoint::adjusted(midpoint, half_chord_sq),
+        };
     }
 
-    let h_over_d = diff.sqrt() * inv_d;
+    let h_over_d = (half_chord_sq / d_sq).sqrt();
     let x_term = h_over_d * cv.y;
     let y_term = h_over_d * cv.x;
 
@@ -148,32 +183,43 @@ where
     let pt2 = Vector2::new(midpoint.x - x_term, midpoint.y + y_term);
 
     TwoIntersects {
-        point1: pt1,
-        point2: pt2,
+        hit1: IntrPoint::exact(pt1),
+        hit2: IntrPoint::exact(pt2),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CircleCircleIntr::*, *};
+    use super::*;
+
+    #[derive(Debug, Copy, Clone)]
+    enum ExpectedCircleCircleIntr<T> {
+        NoIntersect,
+        TangentIntersect {
+            point: Vector2<T>,
+        },
+        TwoIntersects {
+            point1: Vector2<T>,
+            point2: Vector2<T>,
+        },
+        Overlapping,
+    }
+    use ExpectedCircleCircleIntr::*;
 
     macro_rules! assert_case_eq {
         ($left:expr, $right:expr) => {
             match ($left, $right) {
-                (NoIntersect, NoIntersect) => {}
-                (TangentIntersect { point: a1 }, TangentIntersect { point: a2 })
-                    if a1.fuzzy_eq(a2) => {}
+                (CircleCircleIntr::NoIntersect, NoIntersect) => {}
+                (CircleCircleIntr::TangentIntersect { hit }, TangentIntersect { point })
+                    if hit.point.fuzzy_eq(point) => {}
                 (
-                    TwoIntersects {
-                        point1: a1,
-                        point2: b1,
-                    },
+                    CircleCircleIntr::TwoIntersects { hit1, hit2 },
                     TwoIntersects {
                         point1: a2,
                         point2: b2,
                     },
-                ) if a1.fuzzy_eq(a2) && b1.fuzzy_eq(b2) => {}
-                (Overlapping, Overlapping) => {}
+                ) if hit1.point.fuzzy_eq(a2) && hit2.point.fuzzy_eq(b2) => {}
+                (CircleCircleIntr::Overlapping, Overlapping) => {}
                 _ => panic!(
                     "intersect cases do not match: left: {:?}, right: {:?}",
                     $left, $right
@@ -262,6 +308,26 @@ mod tests {
     }
 
     #[test]
+    fn large_two_intersections_do_not_overflow_center_distance_ratio() {
+        let scale = 1e154f64;
+        let CircleCircleIntr::TwoIntersects { hit1, hit2 } = circle_circle_intr(
+            scale,
+            Vector2::zero(),
+            scale,
+            Vector2::new(scale, 0.0),
+            1e140,
+        ) else {
+            panic!("expected two intersections");
+        };
+
+        let expected_y = -(3.0f64.sqrt() / 2.0);
+        assert!((hit1.point.x / scale - 0.5).abs() < 1e-14);
+        assert!((hit1.point.y / scale - expected_y).abs() < 1e-14);
+        assert!((hit2.point.x / scale - 0.5).abs() < 1e-14);
+        assert!((hit2.point.y / scale + expected_y).abs() < 1e-14);
+    }
+
+    #[test]
     fn overlapping() {
         let center = Vector2::new(-1.0, 1.0);
         assert_case_eq!(
@@ -318,6 +384,63 @@ mod tests {
     }
 
     #[test]
+    fn recovered_external_tangent_reports_squared_error() {
+        let epsilon = 1e-5f64;
+        let gap = epsilon / 2.0;
+        let CircleCircleIntr::TangentIntersect { hit } = circle_circle_intr(
+            1.0,
+            Vector2::zero(),
+            1.0,
+            Vector2::new(2.0 + gap, 0.0),
+            epsilon,
+        ) else {
+            panic!("expected a recovered tangent");
+        };
+        let expected_error_sq = gap * gap / 2.0;
+        assert!((hit.error_squared - expected_error_sq).abs() < expected_error_sq * 1e-9);
+    }
+
+    #[test]
+    fn recovered_internal_tangent_reports_squared_error() {
+        let epsilon = 1e-5f64;
+        let gap = epsilon / 2.0;
+        let CircleCircleIntr::TangentIntersect { hit } = circle_circle_intr(
+            2.0,
+            Vector2::zero(),
+            1.0,
+            Vector2::new(1.0 - gap, 0.0),
+            epsilon,
+        ) else {
+            panic!("expected a recovered tangent");
+        };
+        let expected_error_sq = gap * gap / 2.0;
+        assert!((hit.error_squared - expected_error_sq).abs() < expected_error_sq * 1e-9);
+    }
+
+    #[test]
+    fn two_intersections_follow_argument_order() {
+        let center1 = Vector2::zero();
+        let center2 = Vector2::new(1.0, 0.0);
+        let CircleCircleIntr::TwoIntersects { hit1, hit2 } =
+            circle_circle_intr(1.0, center1, 1.0, center2, 1e-5)
+        else {
+            panic!("expected two intersections");
+        };
+        let CircleCircleIntr::TwoIntersects {
+            hit1: swapped_hit1,
+            hit2: swapped_hit2,
+        } = circle_circle_intr(1.0, center2, 1.0, center1, 1e-5)
+        else {
+            panic!("expected two intersections");
+        };
+
+        assert!(hit1.point.y < 0.0);
+        assert!(hit2.point.y > 0.0);
+        assert!(hit1.point.fuzzy_eq(swapped_hit2.point));
+        assert!(hit2.point.fuzzy_eq(swapped_hit1.point));
+    }
+
+    #[test]
     fn coalesced_intersection_point_is_invariant_under_argument_swap() {
         let radius = 1.0f64;
         let half_spacing = 2e-6f64;
@@ -336,6 +459,13 @@ mod tests {
             circle_circle_intr(radius, center2, radius, center1, 1e-5),
             expected
         );
+        let CircleCircleIntr::TangentIntersect { hit } =
+            circle_circle_intr(radius, center1, radius, center2, 1e-5)
+        else {
+            panic!("expected coalesced intersections");
+        };
+        let expected_error_sq = half_spacing * half_spacing;
+        assert!((hit.error_squared - expected_error_sq).abs() < expected_error_sq * 1e-4);
     }
 
     #[test]
@@ -430,7 +560,7 @@ mod tests {
                 Vector2::new(epsilon, 0.0),
                 epsilon,
             ),
-            TwoIntersects { .. }
+            CircleCircleIntr::TwoIntersects { .. }
         ));
     }
 

@@ -7,7 +7,7 @@ use crate::{
         traits::{ControlFlow, Real},
     },
     polyline::{
-        PlineCreation, PlineSegIntr, PlineSource, ViewDataValidation,
+        PlineCreation, PlineSegIntr, PlineSegIntrPoint, PlineSource, ViewDataValidation,
         internal::pline_intersects::OverlappingSlice,
     },
 };
@@ -435,9 +435,14 @@ pub struct PlineBasicIntersect<T = f64> {
     pub start_index2: usize,
     /// Point at which the intersect occurs.
     pub point: Vector2<T>,
+    /// Sum of squared geometric adjustments used to produce the intersection point.
+    pub error_squared: T,
 }
 
-impl<T> PlineBasicIntersect<T> {
+impl<T> PlineBasicIntersect<T>
+where
+    T: Real,
+{
     #[inline]
     #[must_use]
     pub fn new(start_index1: usize, start_index2: usize, point: Vector2<T>) -> Self {
@@ -445,6 +450,22 @@ impl<T> PlineBasicIntersect<T> {
             start_index1,
             start_index2,
             point,
+            error_squared: T::zero(),
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn from_seg_hit(
+        start_index1: usize,
+        start_index2: usize,
+        hit: PlineSegIntrPoint<T>,
+    ) -> Self {
+        Self {
+            start_index1,
+            start_index2,
+            point: hit.point,
+            error_squared: hit.error_squared,
         }
     }
 }
@@ -488,7 +509,10 @@ pub enum PlineIntersect<T = f64> {
     Overlapping(PlineOverlappingIntersect<T>),
 }
 
-impl<T> PlineIntersect<T> {
+impl<T> PlineIntersect<T>
+where
+    T: Real,
+{
     #[inline]
     #[must_use]
     pub fn new_basic(start_index1: usize, start_index2: usize, point: Vector2<T>) -> Self {
@@ -496,6 +520,7 @@ impl<T> PlineIntersect<T> {
             start_index1,
             start_index2,
             point,
+            error_squared: T::zero(),
         })
     }
 

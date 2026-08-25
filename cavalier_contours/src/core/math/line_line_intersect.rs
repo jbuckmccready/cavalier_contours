@@ -1,23 +1,24 @@
 use super::{
     Vector2,
-    base_math::{parametric_from_point, point_from_parametric},
+    base_math::{dist_squared, point_from_parametric},
 };
 use crate::core::traits::Real;
 use num_traits::real::Real as NumReal;
 
-#[inline]
-fn parameter_within_segment_domain<T>(t: T, length_squared: T, epsilon_squared: T) -> bool
+/// One intersection between two finite line segments.
+#[derive(Debug, Copy, Clone)]
+pub struct LineLineIntrPoint<T>
 where
     T: Real,
 {
-    if t < T::zero() {
-        t * t * length_squared < epsilon_squared
-    } else if t > T::one() {
-        let end_overshoot = t - T::one();
-        end_overshoot * end_overshoot * length_squared < epsilon_squared
-    } else {
-        t >= T::zero()
-    }
+    /// Resolved intersection point.
+    pub point: Vector2<T>,
+    /// Sum of successive squared geometric adjustments used to produce `point`.
+    pub error_squared: T,
+    /// Resolved parameter on the first segment.
+    pub seg1_t: T,
+    /// Resolved parameter on the second segment.
+    pub seg2_t: T,
 }
 
 /// Holds the result of finding the intersect between two line segments.
@@ -26,32 +27,21 @@ pub enum LineLineIntr<T>
 where
     T: Real,
 {
-    /// No intersect, segments are parallel and not collinear.
+    /// No finite-segment intersection.
     NoIntersect,
-    /// The intersection parameters are within the finite segment ranges or within the position
-    /// tolerance of those ranges.
-    TrueIntersect {
-        /// Parametric value for the intersection on the first segment. For nonparallel lines this
-        /// is the unclamped analytic value.
-        seg1_t: T,
-        /// Parametric value for the intersection on the second segment. For nonparallel lines this
-        /// is the unclamped analytic value.
-        seg2_t: T,
+    /// One finite-segment intersection.
+    OneIntersect {
+        /// Resolved intersection.
+        hit: LineLineIntrPoint<T>,
     },
+    // TODO: Carry an error score for each overlap boundary. Supports accepted as collinear within
+    // epsilon can produce overlap points that required a nonzero geometric adjustment.
     /// Segments overlap each other (are collinear) by some amount.
     Overlapping {
         /// Parametric value for start of coincidence along second segment.
         seg2_t0: T,
         /// Parametric value for end of coincidence along second segment.
         seg2_t1: T,
-    },
-    /// The supporting lines intersect, but at least one parameter is too far outside its finite
-    /// segment range.
-    FalseIntersect {
-        /// Unclamped parametric value for the intersection on the first segment.
-        seg1_t: T,
-        /// Unclamped parametric value for the intersection on the second segment.
-        seg2_t: T,
     },
 }
 
@@ -61,18 +51,13 @@ where
 /// `P(t) = p0 + t * (p1 - p0)`. Where `t` then goes from 0 to 1. For `t < 0` or `t > 1` the result
 /// is on the same line but not within the line segment.
 ///
-/// For nonparallel, nonzero-length segments, the analytic parameters are never clamped:
+/// Solutions just outside either finite segment are clamped to the nearest endpoint when their
+/// path overshoot is strictly less than `epsilon`. More distant supporting-line solutions are
+/// omitted. Returned parameters are therefore always in `0..=1`.
 ///
-/// * If both parameters are in the inclusive range `0..=1`, the result is
-///   [`LineLineIntr::TrueIntersect`].
-/// * A parameter outside `0..=1` is still returned as [`LineLineIntr::TrueIntersect`] when its path
-///   distance from the nearest end of the range is strictly less than `epsilon`.
-/// * If either parameter is outside `0..=1` by a path distance greater than or equal to `epsilon`,
-///   the result is [`LineLineIntr::FalseIntersect`].
-///
-/// Keeping the original parameters lets callers distinguish a solution in `0..=1` from one
-/// accepted only by the position tolerance. Collinear overlap parameters are different: their
-/// returned interval is clamped to `0..=1` on the second segment.
+/// Tolerance-resolved points are argument ordered. When distinct fuzzy-equal endpoint candidates
+/// are otherwise tied, the endpoint from the first segment is preferred. The returned point is
+/// therefore not guaranteed to remain the same when the segment arguments are swapped.
 ///
 /// `epsilon` must be greater than zero. It is a position tolerance for finite-domain,
 /// collinearity, and endpoint checks. All position comparisons are strict, so a distance equal to
@@ -83,46 +68,38 @@ where
 /// ## `NoIntersect`
 /// Either of the following cases:
 /// * Lines are parallel within the default dimensionless angular tolerance
+/// * The supporting lines intersect outside the finite domains by at least `epsilon`
 /// * Both line segments are points and distinct from each other
 /// * One line segment is a point and distinct from the other line segment
 ///
-/// ## `TrueIntersect`
+/// ## `OneIntersect`
 /// Either of the following cases:
 /// * Nonparallel supporting lines intersect with both parameters in `0..=1` or within the strict
 ///   path-distance tolerance of that range
 /// * Both line segments are points and lie over each other (using `epsilon` for position compare)
 /// * One line segment is a point and lies in other line segment (again using `epsilon`)
 ///
-/// ## `FalseIntersect`
-/// Either of the following cases:
-/// * Nonparallel supporting lines intersect, but at least one parameter is outside `0..=1` by a
-///   path distance greater than or equal to `epsilon`
-///
 /// ## `Overlapping`
 /// Either of the following cases:
-/// * The lines are collinear and overlap, the segments may fully, partially or not overlap at all
-///   (determined by parametric t values returned)
+/// * The lines are collinear and have a positive-length finite overlap
 ///
 /// # Examples
 ///
 /// ```
 /// # use cavalier_contours::core::traits::*;
 /// # use cavalier_contours::core::math::*;
-/// # use cavalier_contours::core::math::LineLineIntr::TrueIntersect;
+/// # use cavalier_contours::core::math::LineLineIntr::OneIntersect;
 /// // A line segment tangent-intersecting a circle with one of the line segments end points.
 /// let v1 = Vector2::new(0.0, 0.0);
 /// let v2 = Vector2::new(1.0, 0.0);
 /// let u1 = Vector2::new(0.5, -1.0);
 /// let u2 = Vector2::new(0.5, 1.0);
-/// if let LineLineIntr::TrueIntersect {
-///     seg1_t: t1,
-///     seg2_t: t2,
-/// } = line_line_intr(v1, v2, u1, u2, 1e-5)
+/// if let LineLineIntr::OneIntersect { hit } = line_line_intr(v1, v2, u1, u2, 1e-5)
 /// {
-///     assert_eq!(t1, 0.5);
-///     assert_eq!(t2, 0.5);
+///     assert_eq!(hit.seg1_t, 0.5);
+///     assert_eq!(hit.seg2_t, 0.5);
 /// } else {
-///     unreachable!("expected true intersection between line segments");
+///     unreachable!("expected an intersection between line segments");
 /// }
 ///```
 /// Line segments are defined by `v1->v2` and `u1->u2`.
@@ -143,7 +120,7 @@ where
     // http://geomalgorithms.com/a05-_intersect-1.html
     // http://mathworld.wolfram.com/PerpDotProduct.html
 
-    use LineLineIntr::{FalseIntersect, NoIntersect, Overlapping, TrueIntersect};
+    use LineLineIntr::{NoIntersect, OneIntersect, Overlapping};
 
     let v = v2 - v1;
     let u = u2 - u1;
@@ -151,19 +128,69 @@ where
     let w = v1 - u1;
 
     let eps = epsilon;
-    let eps_squared = eps * eps;
-    let v_length_squared = v.length_squared();
-    let u_length_squared = u.length_squared();
+    let eps_sq = eps * eps;
+    let v_length_sq = v.length_squared();
+    let u_length_sq = u.length_squared();
     // Only a zero-length segment is a point. A nonzero segment shorter than epsilon still has a
     // supporting line and must retain its direction.
-    let v_is_point = v_length_squared == T::zero();
-    let u_is_point = u_length_squared == T::zero();
+    let v_is_point = v_length_sq == T::zero();
+    let u_is_point = u_length_sq == T::zero();
+    let resolve_hit = |support_point: Vector2<T>, seg1_t: T, seg2_t: T, support_error_sq: T| {
+        let resolve_side = |t: T, length_sq: T, start: Vector2<T>, end: Vector2<T>| {
+            if t < T::zero() {
+                if t * t * length_sq >= eps_sq {
+                    return None;
+                }
+                Some((T::zero(), Some(start)))
+            } else if t > T::one() {
+                let overshoot = t - T::one();
+                if overshoot * overshoot * length_sq >= eps_sq {
+                    return None;
+                }
+                Some((T::one(), Some(end)))
+            } else {
+                Some((t, None))
+            }
+        };
+        let (seg1_t, snap1) = resolve_side(seg1_t, v_length_sq, v1, v2)?;
+        let (seg2_t, snap2) = resolve_side(seg2_t, u_length_sq, u1, u2)?;
+        let (point, snap_error_sq) = match (snap1, snap2) {
+            (None, None) => (support_point, T::zero()),
+            (Some(point), None) | (None, Some(point)) => {
+                (point, dist_squared(support_point, point))
+            }
+            (Some(point1), Some(point2)) => {
+                let endpoint_error_sq = dist_squared(point1, point2);
+                if endpoint_error_sq >= eps_sq {
+                    return None;
+                }
+                let distance1_sq = dist_squared(support_point, point1);
+                let distance2_sq = dist_squared(support_point, point2);
+                if distance1_sq <= distance2_sq {
+                    (point1, distance1_sq + endpoint_error_sq)
+                } else {
+                    (point2, distance2_sq + endpoint_error_sq)
+                }
+            }
+        };
+        Some(LineLineIntrPoint {
+            point,
+            error_squared: support_error_sq + snap_error_sq,
+            seg1_t,
+            seg2_t,
+        })
+    };
 
     if v_is_point && u_is_point {
-        if v1.fuzzy_eq_eps(u1, eps) {
-            return TrueIntersect {
-                seg1_t: T::zero(),
-                seg2_t: T::zero(),
+        let error_squared = dist_squared(v1, u1);
+        if error_squared < eps_sq {
+            return OneIntersect {
+                hit: LineLineIntrPoint {
+                    point: v1,
+                    error_squared,
+                    seg1_t: T::zero(),
+                    seg2_t: T::zero(),
+                },
             };
         }
         return NoIntersect;
@@ -173,48 +200,37 @@ where
     let u_pdot_w = u.perp_dot(w);
 
     if v_is_point {
-        if u_pdot_w * u_pdot_w >= eps_squared * u_length_squared {
+        if u_pdot_w * u_pdot_w >= eps_sq * u_length_sq {
             return NoIntersect;
         }
-        let seg2_t = parametric_from_point(u1, u2, v1, eps);
-        if parameter_within_segment_domain(seg2_t, u_length_squared, eps_squared) {
-            return TrueIntersect {
-                seg1_t: T::zero(),
-                seg2_t,
-            };
-        }
-        return NoIntersect;
+        let seg2_t = (v1 - u1).dot(u) / u_length_sq;
+        let support_point = point_from_parametric(u1, u2, seg2_t);
+        let support_error_sq = dist_squared(v1, support_point);
+        return resolve_hit(support_point, T::zero(), seg2_t, support_error_sq)
+            .map_or(NoIntersect, |hit| OneIntersect { hit });
     }
 
     if u_is_point {
-        if v_pdot_w * v_pdot_w >= eps_squared * v_length_squared {
+        if v_pdot_w * v_pdot_w >= eps_sq * v_length_sq {
             return NoIntersect;
         }
-        let seg1_t = parametric_from_point(v1, v2, u1, eps);
-        if parameter_within_segment_domain(seg1_t, v_length_squared, eps_squared) {
-            return TrueIntersect {
-                seg1_t,
-                seg2_t: T::zero(),
-            };
-        }
-        return NoIntersect;
+        let seg1_t = (u1 - v1).dot(v) / v_length_sq;
+        let support_point = point_from_parametric(v1, v2, seg1_t);
+        let support_error_sq = dist_squared(u1, support_point);
+        return resolve_hit(support_point, seg1_t, T::zero(), support_error_sq)
+            .map_or(NoIntersect, |hit| OneIntersect { hit });
     }
 
     // Use a dimensionless angular threshold for parallelism. The caller's position epsilon is
     // applied separately to finite-domain and collinearity checks.
     let angular_epsilon = T::fuzzy_epsilon();
-    if v_pdot_u * v_pdot_u
-        >= angular_epsilon * angular_epsilon * v_length_squared * u_length_squared
-    {
+    if v_pdot_u * v_pdot_u >= angular_epsilon * angular_epsilon * v_length_sq * u_length_sq {
         // segments not parallel or collinear
         let seg1_t = u_pdot_w / v_pdot_u;
         let seg2_t = v_pdot_w / v_pdot_u;
-        if !parameter_within_segment_domain(seg1_t, v_length_squared, eps_squared)
-            || !parameter_within_segment_domain(seg2_t, u_length_squared, eps_squared)
-        {
-            return FalseIntersect { seg1_t, seg2_t };
-        }
-        return TrueIntersect { seg1_t, seg2_t };
+        let point = point_from_parametric(v1, v2, seg1_t);
+        return resolve_hit(point, seg1_t, seg2_t, T::zero())
+            .map_or(NoIntersect, |hit| OneIntersect { hit });
     }
 
     // segments are parallel and possibly collinear
@@ -223,10 +239,10 @@ where
 
     // Parallel supports are collinear only when each endpoint-to-support distance is within the
     // strict position tolerance.
-    if v_pdot_w * v_pdot_w >= eps_squared * v_length_squared
-        || u_pdot_w * u_pdot_w >= eps_squared * u_length_squared
-        || v_pdot_u2 * v_pdot_u2 >= eps_squared * v_length_squared
-        || u_pdot_v2 * u_pdot_v2 >= eps_squared * u_length_squared
+    if v_pdot_w * v_pdot_w >= eps_sq * v_length_sq
+        || u_pdot_w * u_pdot_w >= eps_sq * u_length_sq
+        || v_pdot_u2 * v_pdot_u2 >= eps_sq * v_length_sq
+        || u_pdot_v2 * u_pdot_v2 >= eps_sq * u_length_sq
     {
         for (v_point, u_point, seg1_t, seg2_t) in [
             (v1, u1, T::zero(), T::zero()),
@@ -234,8 +250,16 @@ where
             (v2, u1, T::one(), T::zero()),
             (v2, u2, T::one(), T::one()),
         ] {
-            if v_point.fuzzy_eq_eps(u_point, eps) {
-                return TrueIntersect { seg1_t, seg2_t };
+            let error_squared = dist_squared(v_point, u_point);
+            if error_squared < eps_sq {
+                return OneIntersect {
+                    hit: LineLineIntrPoint {
+                        point: v_point,
+                        error_squared,
+                        seg1_t,
+                        seg2_t,
+                    },
+                };
             }
         }
         // parallel and not collinear so no intersect
@@ -254,7 +278,7 @@ where
         std::mem::swap(&mut seg2_t0, &mut seg2_t1);
     }
 
-    let seg2_length = u_length_squared.sqrt();
+    let seg2_length = u_length_sq.sqrt();
     // using threshold check here to make intersect "sticky" to prefer considering it an intersect
     if !(seg2_t0 * seg2_length).fuzzy_lt_eps(seg2_length, eps)
         || !(seg2_t1 * seg2_length).fuzzy_gt_eps(T::zero(), eps)
@@ -268,12 +292,12 @@ where
     if ((seg2_t1 - seg2_t0) * seg2_length).fuzzy_eq_zero_eps(eps) {
         // intersect is a single point (segments line up end to end)
         let point = point_from_parametric(u1, u2, seg2_t0);
-        let seg1_t = parametric_from_point(v1, v2, point, eps);
+        let seg1_t = (point - v1).dot(v) / v_length_sq;
+        let support_point = point_from_parametric(v1, v2, seg1_t);
 
-        return TrueIntersect {
-            seg1_t,
-            seg2_t: seg2_t0,
-        };
+        let support_error_sq = dist_squared(point, support_point);
+        return resolve_hit(support_point, seg1_t, seg2_t0, support_error_sq)
+            .map_or(NoIntersect, |hit| OneIntersect { hit });
     }
 
     Overlapping { seg2_t0, seg2_t1 }
@@ -281,36 +305,42 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{LineLineIntr::*, *};
+    use super::*;
     use crate::core::traits::FuzzyEq;
     use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_4, FRAC_PI_6, FRAC_PI_8};
+
+    #[derive(Debug, Copy, Clone)]
+    enum ExpectedLineLineIntr<T> {
+        NoIntersect,
+        TrueIntersect { seg1_t: T, seg2_t: T },
+        Rejected,
+        Overlapping { seg2_t0: T, seg2_t1: T },
+    }
+    use ExpectedLineLineIntr::*;
+
+    fn clamp01<T: Real>(value: T) -> T {
+        if value < T::zero() {
+            T::zero()
+        } else if value > T::one() {
+            T::one()
+        } else {
+            value
+        }
+    }
 
     macro_rules! assert_case_eq {
         ($left:expr, $right:expr) => {
             match ($left, $right) {
-                (NoIntersect, NoIntersect) => {}
+                (LineLineIntr::NoIntersect, NoIntersect | Rejected) => {}
                 (
-                    TrueIntersect {
-                        seg1_t: a1,
-                        seg2_t: b1,
-                    },
+                    LineLineIntr::OneIntersect { hit },
                     TrueIntersect {
                         seg1_t: a2,
                         seg2_t: b2,
                     },
-                )
-                | (
-                    FalseIntersect {
-                        seg1_t: a1,
-                        seg2_t: b1,
-                    },
-                    FalseIntersect {
-                        seg1_t: a2,
-                        seg2_t: b2,
-                    },
-                )
-                | (
-                    Overlapping {
+                ) if hit.seg1_t.fuzzy_eq(clamp01(a2)) && hit.seg2_t.fuzzy_eq(clamp01(b2)) => {}
+                (
+                    LineLineIntr::Overlapping {
                         seg2_t0: a1,
                         seg2_t1: b1,
                     },
@@ -446,6 +476,55 @@ mod tests {
                     NoIntersect::<f64>
                 );
             }
+        }
+    }
+
+    #[test]
+    fn point_segment_uses_the_projected_support_point() {
+        let epsilon = 1e-3;
+        let offset = 1e-4;
+        let line_start = Vector2::zero();
+        let line_end = Vector2::new(2.0, 2.0);
+        let point = Vector2::new(1.0, 1.0 + offset);
+        let expected_t = 0.5 + offset / 4.0;
+        let expected_point = Vector2::new(1.0 + offset / 2.0, 1.0 + offset / 2.0);
+        let expected_error_sq = offset * offset / 2.0;
+
+        for result in [
+            line_line_intr(line_start, line_end, point, point, epsilon),
+            line_line_intr(point, point, line_start, line_end, epsilon),
+        ] {
+            let LineLineIntr::OneIntersect { hit } = result else {
+                panic!("expected one intersection");
+            };
+            assert!(hit.point.fuzzy_eq_eps(expected_point, 1e-14));
+            assert!((hit.error_squared - expected_error_sq).abs() < expected_error_sq * 1e-6);
+            assert!(
+                hit.seg1_t.fuzzy_eq(expected_t) || hit.seg2_t.fuzzy_eq(expected_t),
+                "expected projected segment parameter"
+            );
+        }
+    }
+
+    #[test]
+    fn point_segment_support_and_snap_errors_do_not_overlap() {
+        let epsilon = 1e-3;
+        let overshoot = epsilon / 4.0;
+        let support_distance = epsilon / 3.0;
+        let line_start = Vector2::zero();
+        let line_end = Vector2::new(1.0, 0.0);
+        let point = Vector2::new(1.0 + overshoot, support_distance);
+        let expected_error_sq = overshoot * overshoot + support_distance * support_distance;
+
+        for result in [
+            line_line_intr(line_start, line_end, point, point, epsilon),
+            line_line_intr(point, point, line_start, line_end, epsilon),
+        ] {
+            let LineLineIntr::OneIntersect { hit } = result else {
+                panic!("expected one intersection");
+            };
+            assert_eq!(hit.point, line_end);
+            assert!((hit.error_squared - expected_error_sq).abs() < expected_error_sq * 1e-12);
         }
     }
 
@@ -644,7 +723,7 @@ mod tests {
     }
 
     #[test]
-    fn false_intersect() {
+    fn distant_supporting_intersection_is_rejected() {
         assert_case_eq!(
             line_line_intr(
                 Vector2::new(-1.0, -1.0),
@@ -653,15 +732,12 @@ mod tests {
                 Vector2::new(1.0, -1.0),
                 1e-5,
             ),
-            FalseIntersect {
-                seg1_t: 2.0,
-                seg2_t: 0.5
-            }
+            Rejected::<f64>
         );
     }
 
     #[test]
-    fn exterior_parameters_remain_available_for_bounded_segment_classification() {
+    fn exterior_parameters_use_bounded_segment_classification() {
         let epsilon = 1.0 / 1024.0;
         let line1_start = Vector2::zero();
         let line1_end = Vector2::new(2.0, 0.0);
@@ -694,13 +770,27 @@ mod tests {
                         Vector2::new(x, 1.0),
                         epsilon,
                     ),
-                    FalseIntersect {
-                        seg1_t: x / 2.0,
-                        seg2_t: 0.5
-                    }
+                    Rejected::<f64>
                 );
             }
         }
+    }
+
+    #[test]
+    fn endpoint_snap_reports_squared_error() {
+        let epsilon = 1e-5;
+        let gap = epsilon / 2.0;
+        let LineLineIntr::OneIntersect { hit } = line_line_intr(
+            Vector2::zero(),
+            Vector2::new(1.0, 0.0),
+            Vector2::new(1.0 + gap, -1.0),
+            Vector2::new(1.0 + gap, 1.0),
+            epsilon,
+        ) else {
+            panic!("expected one intersection");
+        };
+        assert_eq!(hit.point, Vector2::new(1.0, 0.0));
+        assert!((hit.error_squared - gap * gap).abs() < f64::EPSILON);
     }
 
     #[test]

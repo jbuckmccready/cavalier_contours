@@ -114,6 +114,18 @@ where
 {
     let mut intersects_lookup = BTreeMap::<usize, Vec<SlicePoint<T>>>::new();
 
+    let traversal_index_and_point = |support_index: usize, point: Vector2<T>| {
+        let next_index = pline.next_wrapping_index(support_index);
+        let index = if point.fuzzy_eq_eps(pline.at(next_index).pos(), pos_equal_eps)
+            && (pline.is_closed() || next_index < pline.segment_count())
+        {
+            next_index
+        } else {
+            support_index
+        };
+        (index, point)
+    };
+
     // helper function to adjust overlapping slice start point and endpoint indexes for lookup
     let adjust_sp_ep_indexes =
         |sp_idx: &mut usize, sp: Vector2<T>, ep_idx: &mut usize, ep: Vector2<T>| {
@@ -132,10 +144,11 @@ where
     if use_second_index {
         // using start_index2 from intersects
         for intr in &boolean_info.intersects {
+            let (start_index, point) = traversal_index_and_point(intr.start_index2, intr.point);
             intersects_lookup
-                .entry(intr.start_index2)
+                .entry(start_index)
                 .or_default()
-                .push(SlicePoint::new(intr.point, false));
+                .push(SlicePoint::new(point, false));
         }
 
         for overlapping_slice in &boolean_info.overlapping_slices {
@@ -157,10 +170,11 @@ where
     } else {
         // use start_index1 from intersects
         for intr in &boolean_info.intersects {
+            let (start_index, point) = traversal_index_and_point(intr.start_index1, intr.point);
             intersects_lookup
-                .entry(intr.start_index1)
+                .entry(start_index)
                 .or_default()
-                .push(SlicePoint::new(intr.point, false));
+                .push(SlicePoint::new(point, false));
         }
 
         for overlapping_slice in &boolean_info.overlapping_slices {

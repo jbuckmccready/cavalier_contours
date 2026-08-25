@@ -136,7 +136,8 @@ fn polyline_intersections() {
             PlineSegIntr::NoIntersect => {
                 // No intersection between these segments
             }
-            PlineSegIntr::TangentIntersect { point } => {
+            PlineSegIntr::TangentIntersect { hit } => {
+                let point = hit.point;
                 basic_count += 1;
                 intersection_points.push((point.x, point.y));
                 println!("  Tangent intersection #{basic_count}: ({:.2}, {:.2}) at segments ({}, {})", 
@@ -145,7 +146,8 @@ fn polyline_intersections() {
                 assert!(point.x >= 0.0 && point.x <= 15.0, "Intersection X coordinate should be within bounds");
                 assert!(point.y >= 0.0 && point.y <= 15.0, "Intersection Y coordinate should be within bounds");
             }
-            PlineSegIntr::OneIntersect { point } => {
+            PlineSegIntr::OneIntersect { hit } => {
+                let point = hit.point;
                 basic_count += 1;
                 intersection_points.push((point.x, point.y));
                 println!("  Basic intersection #{basic_count}: ({:.2}, {:.2}) at segments ({}, {})", 
@@ -154,7 +156,9 @@ fn polyline_intersections() {
                 assert!(point.x >= 0.0 && point.x <= 15.0, "Intersection X coordinate should be within bounds");
                 assert!(point.y >= 0.0 && point.y <= 15.0, "Intersection Y coordinate should be within bounds");
             }
-            PlineSegIntr::TwoIntersects { point1, point2 } => {
+            PlineSegIntr::TwoIntersects { hit1, hit2 } => {
+                let point1 = hit1.point;
+                let point2 = hit2.point;
                 basic_count += 2;
                 intersection_points.push((point1.x, point1.y));
                 intersection_points.push((point2.x, point2.y));
@@ -468,19 +472,19 @@ impl TwoPlinesIntersectVisitor<f64, Control<()>> for DetailedIntersectionVisitor
     ) -> Control<()> {
         let detail = match intersect {
             PlineSegIntr::NoIntersect => IntersectionDetail::NoIntersection,
-            PlineSegIntr::TangentIntersect { point } => IntersectionDetail::Tangent {
-                point: (point.x, point.y),
+            PlineSegIntr::TangentIntersect { hit } => IntersectionDetail::Tangent {
+                point: (hit.point.x, hit.point.y),
                 seg1: pline1_context.vertex_index,
                 seg2: pline2_context.vertex_index,
             },
-            PlineSegIntr::OneIntersect { point } => IntersectionDetail::Basic {
-                point: (point.x, point.y),
+            PlineSegIntr::OneIntersect { hit } => IntersectionDetail::Basic {
+                point: (hit.point.x, hit.point.y),
                 seg1: pline1_context.vertex_index,
                 seg2: pline2_context.vertex_index,
             },
-            PlineSegIntr::TwoIntersects { point1, point2 } => IntersectionDetail::Double {
-                point1: (point1.x, point1.y),
-                point2: (point2.x, point2.y),
+            PlineSegIntr::TwoIntersects { hit1, hit2 } => IntersectionDetail::Double {
+                point1: (hit1.point.x, hit1.point.y),
+                point2: (hit2.point.x, hit2.point.y),
                 seg1: pline1_context.vertex_index,
                 seg2: pline2_context.vertex_index,
             },

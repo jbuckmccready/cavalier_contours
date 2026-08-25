@@ -31,7 +31,7 @@ use crate::{
         Control,
         math::{
             CircleCircleIntr, LineCircleIntr, Vector2, circle_circle_intr, line_circle_intr,
-            min_max, point_from_parametric, point_within_arc_sweep,
+            min_max, point_within_arc_sweep,
         },
         traits::Real,
     },
@@ -1502,17 +1502,17 @@ fn visit_circle_intersects<P, T, F, V>(
                 pos_equal_eps,
             ) {
                 LineCircleIntr::NoIntersect => {}
-                LineCircleIntr::TangentIntersect { t0 } => {
-                    if is_valid_line_intr(t0) {
-                        visitor(start_index, point_from_parametric(v1.pos(), v2.pos(), t0));
+                LineCircleIntr::TangentIntersect { hit } | LineCircleIntr::OneIntersect { hit } => {
+                    if is_valid_line_intr(hit.line_t) {
+                        visitor(start_index, hit.point);
                     }
                 }
-                LineCircleIntr::TwoIntersects { t0, t1 } => {
-                    if is_valid_line_intr(t0) {
-                        visitor(start_index, point_from_parametric(v1.pos(), v2.pos(), t0));
+                LineCircleIntr::TwoIntersects { hit1, hit2 } => {
+                    if is_valid_line_intr(hit1.line_t) {
+                        visitor(start_index, hit1.point);
                     }
-                    if is_valid_line_intr(t1) {
-                        visitor(start_index, point_from_parametric(v1.pos(), v2.pos(), t1));
+                    if is_valid_line_intr(hit2.line_t) {
+                        visitor(start_index, hit2.point);
                     }
                 }
             }
@@ -1526,17 +1526,17 @@ fn visit_circle_intersects<P, T, F, V>(
                 pos_equal_eps,
             ) {
                 CircleCircleIntr::NoIntersect | CircleCircleIntr::Overlapping => {}
-                CircleCircleIntr::TangentIntersect { point } => {
-                    if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, point) {
-                        visitor(start_index, point);
+                CircleCircleIntr::TangentIntersect { hit } => {
+                    if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, hit.point) {
+                        visitor(start_index, hit.point);
                     }
                 }
-                CircleCircleIntr::TwoIntersects { point1, point2 } => {
-                    if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, point1) {
-                        visitor(start_index, point1);
+                CircleCircleIntr::TwoIntersects { hit1, hit2 } => {
+                    if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, hit1.point) {
+                        visitor(start_index, hit1.point);
                     }
-                    if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, point2) {
-                        visitor(start_index, point2);
+                    if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, hit2.point) {
+                        visitor(start_index, hit2.point);
                     }
                 }
             }

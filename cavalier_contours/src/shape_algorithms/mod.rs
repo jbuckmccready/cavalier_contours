@@ -429,11 +429,13 @@ where
                         start_index1,
                         start_index2,
                         point: overlap_intr.point1,
+                        error_squared: T::zero(),
                     });
                     slice_points.push(PlineBasicIntersect {
                         start_index1,
                         start_index2,
                         point: overlap_intr.point2,
+                        error_squared: T::zero(),
                     });
                 }
 

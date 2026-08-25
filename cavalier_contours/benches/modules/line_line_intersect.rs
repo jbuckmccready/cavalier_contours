@@ -61,6 +61,20 @@ pub fn line_line_intr_group(c: &mut Criterion) {
             Vector2::new(0.0, 0.0),
             Vector2::new(0.0, 0.0),
         ),
+        (
+            "fuzzy_points",
+            Vector2::new(0.0, 0.0),
+            Vector2::new(0.0, 0.0),
+            Vector2::new(5e-6, 0.0),
+            Vector2::new(5e-6, 0.0),
+        ),
+        (
+            "double_endpoint_snap",
+            Vector2::new(-1.0, 0.0),
+            Vector2::new(0.0, 0.0),
+            Vector2::new(2.5e-6, 1.0000025),
+            Vector2::new(2.5e-6, 2.5e-6),
+        ),
     ];
 
     let mut group = c.benchmark_group("line_line_intr");
