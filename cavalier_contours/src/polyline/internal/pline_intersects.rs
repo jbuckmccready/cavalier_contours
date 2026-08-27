@@ -267,37 +267,14 @@ struct BasicIntersectVisitor<T, F> {
     filter: F,
 }
 
-fn deduplicate_basic_intersects<P, O, T>(
+fn deduplicate_basic_intersects<T>(
     mut candidates: Vec<PlineBasicIntersect<T>>,
-    pline1: &P,
-    pline2: &O,
     pos_equal_eps: T,
 ) -> Vec<PlineBasicIntersect<T>>
 where
-    P: PlineSource<Num = T> + ?Sized,
-    O: PlineSource<Num = T> + ?Sized,
     T: Real,
 {
-    let outgoing_side_count = |candidate: &PlineBasicIntersect<T>| {
-        u8::from(
-            candidate
-                .point
-                .fuzzy_eq_eps(pline1.at(candidate.start_index1).pos(), pos_equal_eps),
-        ) + u8::from(
-            candidate
-                .point
-                .fuzzy_eq_eps(pline2.at(candidate.start_index2).pos(), pos_equal_eps),
-        )
-    };
-    candidates.sort_by(|a, b| {
-        a.error_squared
-            .total_cmp(&b.error_squared)
-            .then_with(|| outgoing_side_count(b).cmp(&outgoing_side_count(a)))
-            .then_with(|| a.point.x.total_cmp(&b.point.x))
-            .then_with(|| a.point.y.total_cmp(&b.point.y))
-            .then_with(|| a.start_index1.cmp(&b.start_index1))
-            .then_with(|| a.start_index2.cmp(&b.start_index2))
-    });
+    candidates.sort_by(|a, b| a.error_squared.total_cmp(&b.error_squared));
 
     let mut selected = Vec::<PlineBasicIntersect<T>>::new();
     for candidate in candidates {
@@ -368,7 +345,7 @@ where
     visit_local_self_intersects(polyline, &mut visitor, pos_equal_eps);
     visit_global_self_intersects(polyline, aabb_index, &mut visitor, pos_equal_eps);
 
-    deduplicate_basic_intersects(visitor.intrs, polyline, polyline, pos_equal_eps)
+    deduplicate_basic_intersects(visitor.intrs, pos_equal_eps)
 }
 
 /// Finds all self-intersections accepted by `filter`.
@@ -397,7 +374,7 @@ where
     visit_local_self_intersects(polyline, &mut visitor, pos_equal_eps);
     visit_global_self_intersects(polyline, aabb_index, &mut visitor, pos_equal_eps);
 
-    deduplicate_basic_intersects(visitor.intrs, polyline, polyline, pos_equal_eps)
+    deduplicate_basic_intersects(visitor.intrs, pos_equal_eps)
 }
 
 /// Visits intersections between two polylines.
@@ -498,30 +475,19 @@ pub fn visit_intersects<P, O, T, C, V>(
 ///
 /// Basic intersection indexes identify the actual segment pair that produced the selected report.
 /// Reports at shared vertices are not relabeled to adjacent segments.
-struct FindIntersectsVisitor<'a, P, O, T, F>
-where
-    P: PlineSource<Num = T> + ?Sized,
-    O: PlineSource<Num = T> + ?Sized,
-    T: Real,
-{
-    pline1: &'a P,
-    pline2: &'a O,
+struct FindIntersectsVisitor<T, F> {
     result: PlineIntersectsCollection<T>,
     raw_basic_intersects: Vec<PlineBasicIntersect<T>>,
     pos_equal_eps: T,
     filter: F,
 }
 
-impl<'a, P, O, T, F> FindIntersectsVisitor<'a, P, O, T, F>
+impl<T, F> FindIntersectsVisitor<T, F>
 where
-    P: PlineSource<Num = T> + ?Sized,
-    O: PlineSource<Num = T> + ?Sized,
     T: Real,
 {
-    fn new(pline1: &'a P, pline2: &'a O, pos_equal_eps: T, filter: F) -> Self {
+    fn new(pos_equal_eps: T, filter: F) -> Self {
         Self {
-            pline1,
-            pline2,
             result: PlineIntersectsCollection::new_empty(),
             raw_basic_intersects: Vec::new(),
             pos_equal_eps,
@@ -590,18 +556,14 @@ where
         });
         self.result.basic_intersects = deduplicate_basic_intersects(
             std::mem::take(&mut self.raw_basic_intersects),
-            self.pline1,
-            self.pline2,
             self.pos_equal_eps,
         );
         self.result
     }
 }
 
-impl<P, O, T, F> TwoPlinesIntersectVisitor<T, Control> for FindIntersectsVisitor<'_, P, O, T, F>
+impl<T, F> TwoPlinesIntersectVisitor<T, Control> for FindIntersectsVisitor<T, F>
 where
-    P: PlineSource<Num = T> + ?Sized,
-    O: PlineSource<Num = T> + ?Sized,
     T: Real,
     F: Fn(TwoPlinesIntersectFilterItem) -> Option<usize>,
 {
@@ -635,8 +597,6 @@ where
     }
 
     let mut visitor = FindIntersectsVisitor::new(
-        pline1,
-        pline2,
         options.pos_equal_eps,
         |item: TwoPlinesIntersectFilterItem| Some(item.index()),
     );
@@ -666,7 +626,7 @@ where
         return PlineIntersectsCollection::new_empty();
     }
 
-    let mut visitor = FindIntersectsVisitor::new(pline1, pline2, pos_equal_eps, filter);
+    let mut visitor = FindIntersectsVisitor::new(pos_equal_eps, filter);
     visit_intersects(
         pline1,
         pline2,
@@ -1356,7 +1316,7 @@ mod find_intersects_tests {
 
         assert_eq!(intrs.basic_intersects.len(), 1);
         assert!(intrs.overlapping_intersects.is_empty());
-        assert_eq!(intrs.basic_intersects[0].start_index1, 1);
+        assert_eq!(intrs.basic_intersects[0].start_index1, 0);
         assert_eq!(intrs.basic_intersects[0].start_index2, 0);
         assert_fuzzy_eq!(intrs.basic_intersects[0].point, Vector2::new(1.0, 0.0));
     }
@@ -1434,7 +1394,7 @@ mod find_intersects_tests {
         assert_eq!(intrs.overlapping_intersects.len(), 0);
 
         let intr = intrs.basic_intersects[0];
-        assert_eq!(intr.start_index1, 1);
+        assert_eq!(intr.start_index1, 0);
         assert_eq!(intr.start_index2, 0);
         assert_fuzzy_eq!(intrs.basic_intersects[0].point, Vector2::new(1.0, 0.0));
     }

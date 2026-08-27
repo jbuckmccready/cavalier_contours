@@ -10,26 +10,26 @@ use crate::core::{
     traits::Real,
 };
 
-type DomainPosition<T> = IntrDomainPosition<T>;
-
+/// Supporting-curve intersection classified against both finite segments.
 #[derive(Copy, Clone)]
-struct CandidateDomains<T>
+struct IntersectionCandidate<T>
 where
     T: Real,
 {
-    analytic_point: Vector2<T>,
+    candidate_point: Vector2<T>,
     error_squared: T,
-    first: DomainPosition<T>,
-    second: DomainPosition<T>,
+    seg1_position: IntrDomainPosition<T>,
+    seg2_position: IntrDomainPosition<T>,
 }
 
+/// Accepted finite-segment intersection and its position along segment 2.
 #[derive(Copy, Clone)]
-struct AcceptedCandidate<T>
+struct AcceptedIntersection<T>
 where
     T: Real,
 {
     hit: PlineSegIntrPoint<T>,
-    second_path_distance: T,
+    seg2_path_distance: T,
 }
 
 /// One finite polyline segment intersection point.
@@ -60,89 +60,86 @@ where
 }
 
 #[inline]
-fn suppress_duplicate_endpoint_claims<T>(candidates: &mut [CandidateDomains<T>; 2])
+fn suppress_duplicate_endpoint_snaps<T>(candidates: &mut [IntersectionCandidate<T>; 2])
 where
     T: Real,
 {
-    let suppress_for_side = |candidates: &mut [CandidateDomains<T>; 2], first_side: bool| {
-        let positions = if first_side {
-            [candidates[0].first, candidates[1].first]
+    let suppress_for_segment = |candidates: &mut [IntersectionCandidate<T>; 2],
+                                use_seg1_position: bool| {
+        let positions = if use_seg1_position {
+            [candidates[0].seg1_position, candidates[1].seg1_position]
         } else {
-            [candidates[0].second, candidates[1].second]
+            [candidates[0].seg2_position, candidates[1].seg2_position]
         };
-        let [Some(point0), Some(point1)] =
+        let [Some(snapped_point0), Some(snapped_point1)] =
             [positions[0].snapped_point(), positions[1].snapped_point()]
         else {
             return;
         };
-        if point0 != point1 {
+        if snapped_point0 != snapped_point1 {
             return;
         }
 
         let reject_index = usize::from(
-            dist_squared(candidates[0].analytic_point, point0)
-                <= dist_squared(candidates[1].analytic_point, point1),
+            dist_squared(candidates[0].candidate_point, snapped_point0)
+                <= dist_squared(candidates[1].candidate_point, snapped_point1),
         );
-        if first_side {
-            candidates[reject_index].first = DomainPosition::Outside;
+        if use_seg1_position {
+            candidates[reject_index].seg1_position = IntrDomainPosition::Outside;
         } else {
-            candidates[reject_index].second = DomainPosition::Outside;
+            candidates[reject_index].seg2_position = IntrDomainPosition::Outside;
         }
     };
 
-    suppress_for_side(candidates, true);
-    suppress_for_side(candidates, false);
+    suppress_for_segment(candidates, true);
+    suppress_for_segment(candidates, false);
 }
 
 #[inline]
 fn accept_candidate<T>(
-    candidate: CandidateDomains<T>,
+    candidate: IntersectionCandidate<T>,
     epsilon_sq: T,
-) -> Option<AcceptedCandidate<T>>
+) -> Option<AcceptedIntersection<T>>
 where
     T: Real,
 {
-    let second_path_distance = candidate.second.path_distance()?;
-    candidate.first.path_distance()?;
-    let first_snap = candidate.first.snapped_point();
-    let second_snap = candidate.second.snapped_point();
-    let hit = match (first_snap, second_snap) {
+    let seg2_path_distance = candidate.seg2_position.path_distance()?;
+    candidate.seg1_position.path_distance()?;
+    let seg1_snap = candidate.seg1_position.snapped_point();
+    let seg2_snap = candidate.seg2_position.snapped_point();
+    let hit = match (seg1_snap, seg2_snap) {
         (None, None) => {
-            PlineSegIntrPoint::adjusted(candidate.analytic_point, candidate.error_squared)
+            PlineSegIntrPoint::adjusted(candidate.candidate_point, candidate.error_squared)
         }
-        (Some(point), None) | (None, Some(point)) => {
-            let snap_error_sq = dist_squared(point, candidate.analytic_point);
+        (Some(snapped_point), None) | (None, Some(snapped_point)) => {
+            let snap_error_sq = dist_squared(snapped_point, candidate.candidate_point);
             if snap_error_sq >= epsilon_sq {
                 return None;
             }
-            PlineSegIntrPoint::adjusted(point, candidate.error_squared + snap_error_sq)
+            PlineSegIntrPoint::adjusted(snapped_point, candidate.error_squared + snap_error_sq)
         }
-        (Some(point1), Some(point2)) => {
-            let distance1_sq = dist_squared(point1, candidate.analytic_point);
-            let distance2_sq = dist_squared(point2, candidate.analytic_point);
-            if distance1_sq >= epsilon_sq
-                || distance2_sq >= epsilon_sq
-                || dist_squared(point1, point2) >= epsilon_sq
+        (Some(seg1_endpoint), Some(seg2_endpoint)) => {
+            let seg1_snap_error_sq = dist_squared(seg1_endpoint, candidate.candidate_point);
+            let seg2_snap_error_sq = dist_squared(seg2_endpoint, candidate.candidate_point);
+            if seg1_snap_error_sq >= epsilon_sq
+                || seg2_snap_error_sq >= epsilon_sq
+                || dist_squared(seg1_endpoint, seg2_endpoint) >= epsilon_sq
             {
                 return None;
             }
-            let endpoint_error_sq = dist_squared(point1, point2);
-            let (point, snap_error_sq) = if distance1_sq < distance2_sq {
-                (point1, distance1_sq + endpoint_error_sq)
-            } else if distance2_sq < distance1_sq {
-                (point2, distance2_sq + endpoint_error_sq)
-            } else if point1.x > point2.x || (point1.x == point2.x && point1.y > point2.y) {
-                (point1, distance1_sq + endpoint_error_sq)
+            let endpoint_separation_sq = dist_squared(seg1_endpoint, seg2_endpoint);
+            let (selected_endpoint, snap_error_sq) = if seg1_snap_error_sq <= seg2_snap_error_sq {
+                (seg1_endpoint, seg1_snap_error_sq + endpoint_separation_sq)
             } else {
-                (point2, distance2_sq + endpoint_error_sq)
+                (seg2_endpoint, seg2_snap_error_sq + endpoint_separation_sq)
             };
-            PlineSegIntrPoint::adjusted(point, candidate.error_squared + snap_error_sq)
+            PlineSegIntrPoint::adjusted(selected_endpoint, candidate.error_squared + snap_error_sq)
         }
     };
 
-    Some(AcceptedCandidate {
+    Some(AcceptedIntersection {
         hit,
-        second_path_distance,
+        seg2_path_distance,
     })
 }
 
@@ -189,18 +186,18 @@ where
 
 /// Finds the intersects between two polyline segments.
 ///
-/// Segments are defined by `v1->v2` and `u1->u2`. Supporting-curve solutions inside both finite
-/// domains are returned unchanged. A solution just outside a line is clamped by line-path
+/// Segments are defined by `seg1_start->seg1_end` and `seg2_start->seg2_end`. Supporting-curve
+/// solutions inside both finite domains are returned unchanged. A solution just outside a line is clamped by line-path
 /// overshoot, and a solution just outside an arc is clamped by arc-length overshoot, only when the
 /// overshoot and solution-to-endpoint distance are both strictly less than `pos_equal_eps`.
 /// Endpoint proximity to the other supporting curve does not create an intersection.
 /// Position-equal boundaries of a line or arc overlap coalesce to one endpoint event.
 #[must_use]
 pub fn pline_seg_intr<T>(
-    v1: PlineVertex<T>,
-    v2: PlineVertex<T>,
-    u1: PlineVertex<T>,
-    u2: PlineVertex<T>,
+    seg1_start: PlineVertex<T>,
+    seg1_end: PlineVertex<T>,
+    seg2_start: PlineVertex<T>,
+    seg2_end: PlineVertex<T>,
     pos_equal_eps: T,
 ) -> PlineSegIntr<T>
 where
@@ -209,11 +206,17 @@ where
     use PlineSegIntr::{
         NoIntersect, OneIntersect, OverlappingArcs, TangentIntersect, TwoIntersects,
     };
-    let v_is_line = v1.bulge_is_zero();
-    let u_is_line = u1.bulge_is_zero();
+    let seg1_is_line = seg1_start.bulge_is_zero();
+    let seg2_is_line = seg2_start.bulge_is_zero();
 
-    if v_is_line && u_is_line {
-        let intr_result = line_line_intr(v1.pos(), v2.pos(), u1.pos(), u2.pos(), pos_equal_eps);
+    if seg1_is_line && seg2_is_line {
+        let intr_result = line_line_intr(
+            seg1_start.pos(),
+            seg1_end.pos(),
+            seg2_start.pos(),
+            seg2_end.pos(),
+            pos_equal_eps,
+        );
         match intr_result {
             LineLineIntr::NoIntersect => return NoIntersect,
             LineLineIntr::OneIntersect { hit } => {
@@ -223,50 +226,51 @@ where
             }
             LineLineIntr::Overlapping { seg2_t0, seg2_t1 } => {
                 return PlineSegIntr::OverlappingLines {
-                    point1: point_from_parametric(u1.pos(), u2.pos(), seg2_t0),
-                    point2: point_from_parametric(u1.pos(), u2.pos(), seg2_t1),
+                    point1: point_from_parametric(seg2_start.pos(), seg2_end.pos(), seg2_t0),
+                    point2: point_from_parametric(seg2_start.pos(), seg2_end.pos(), seg2_t1),
                 };
             }
         }
     }
 
-    let process_line_arc_intr = |p0: Vector2<T>,
-                                 p1: Vector2<T>,
-                                 a1: PlineVertex<T>,
-                                 a2: PlineVertex<T>,
-                                 line_is_first: bool|
+    let process_line_arc_intr = |line_start: Vector2<T>,
+                                 line_end: Vector2<T>,
+                                 arc_start: PlineVertex<T>,
+                                 arc_end: PlineVertex<T>,
+                                 line_is_seg1: bool|
      -> PlineSegIntr<T> {
-        let (arc_radius, arc_center) = seg_arc_radius_and_center(a1, a2);
-        let intr_result = line_circle_intr(p0, p1, arc_radius, arc_center, pos_equal_eps);
+        let (arc_radius, arc_center) = seg_arc_radius_and_center(arc_start, arc_end);
+        let intr_result =
+            line_circle_intr(line_start, line_end, arc_radius, arc_center, pos_equal_eps);
         let epsilon_sq = pos_equal_eps * pos_equal_eps;
         let arc_domain = ArcDomain::new(
             arc_center,
             arc_radius,
-            a1.pos(),
-            a2.pos(),
-            angle_from_bulge(a1.bulge).abs(),
-            a1.bulge_is_neg(),
+            arc_start.pos(),
+            arc_end.pos(),
+            angle_from_bulge(arc_start.bulge).abs(),
+            arc_start.bulge_is_neg(),
         );
-        let line_length = (p1 - p0).length();
-        let candidate = |hit: crate::core::math::LineCircleIntrPoint<T>| {
-            let analytic_point = hit.point;
-            let line_domain = DomainPosition::Inside {
+        let line_length = (line_end - line_start).length();
+        let make_candidate = |hit: crate::core::math::LineCircleIntrPoint<T>| {
+            let candidate_point = hit.point;
+            let line_position = IntrDomainPosition::Inside {
                 path_distance: hit.line_t * line_length,
             };
-            let arc_domain = arc_domain.classify(analytic_point, epsilon_sq);
-            if line_is_first {
-                CandidateDomains {
-                    analytic_point,
+            let arc_position = arc_domain.classify(candidate_point, epsilon_sq);
+            if line_is_seg1 {
+                IntersectionCandidate {
+                    candidate_point,
                     error_squared: hit.error_squared,
-                    first: line_domain,
-                    second: arc_domain,
+                    seg1_position: line_position,
+                    seg2_position: arc_position,
                 }
             } else {
-                CandidateDomains {
-                    analytic_point,
+                IntersectionCandidate {
+                    candidate_point,
                     error_squared: hit.error_squared,
-                    first: arc_domain,
-                    second: line_domain,
+                    seg1_position: arc_position,
+                    seg2_position: line_position,
                 }
             }
         };
@@ -274,15 +278,17 @@ where
         match intr_result {
             LineCircleIntr::NoIntersect => NoIntersect,
             LineCircleIntr::TangentIntersect { hit } => {
-                accept_candidate(candidate(hit), epsilon_sq).map_or(NoIntersect, |accepted| {
+                accept_candidate(make_candidate(hit), epsilon_sq).map_or(NoIntersect, |accepted| {
                     TangentIntersect { hit: accepted.hit }
                 })
             }
-            LineCircleIntr::OneIntersect { hit } => accept_candidate(candidate(hit), epsilon_sq)
-                .map_or(NoIntersect, |accepted| OneIntersect { hit: accepted.hit }),
+            LineCircleIntr::OneIntersect { hit } => {
+                accept_candidate(make_candidate(hit), epsilon_sq)
+                    .map_or(NoIntersect, |accepted| OneIntersect { hit: accepted.hit })
+            }
             LineCircleIntr::TwoIntersects { hit1, hit2 } => {
-                let mut candidates = [candidate(hit1), candidate(hit2)];
-                suppress_duplicate_endpoint_claims(&mut candidates);
+                let mut candidates = [make_candidate(hit1), make_candidate(hit2)];
+                suppress_duplicate_endpoint_snaps(&mut candidates);
                 let accepted = [
                     accept_candidate(candidates[0], epsilon_sq),
                     accept_candidate(candidates[1], epsilon_sq),
@@ -293,7 +299,7 @@ where
                         OneIntersect { hit: accepted.hit }
                     }
                     [Some(mut accepted1), Some(mut accepted2)] => {
-                        if accepted2.second_path_distance < accepted1.second_path_distance {
+                        if accepted2.seg2_path_distance < accepted1.seg2_path_distance {
                             std::mem::swap(&mut accepted1, &mut accepted2);
                         }
                         TwoIntersects {
@@ -306,19 +312,22 @@ where
         }
     };
 
-    if v_is_line {
-        // v is line, u is arc
-        return process_line_arc_intr(v1.pos(), v2.pos(), u1, u2, true);
+    if seg1_is_line {
+        return process_line_arc_intr(seg1_start.pos(), seg1_end.pos(), seg2_start, seg2_end, true);
     }
 
-    if u_is_line {
-        // u is line, v is arc
-        return process_line_arc_intr(u1.pos(), u2.pos(), v1, v2, false);
+    if seg2_is_line {
+        return process_line_arc_intr(
+            seg2_start.pos(),
+            seg2_end.pos(),
+            seg1_start,
+            seg1_end,
+            false,
+        );
     }
 
-    // both v and u are arcs
-    let (arc1_radius, arc1_center) = seg_arc_radius_and_center(v1, v2);
-    let (arc2_radius, arc2_center) = seg_arc_radius_and_center(u1, u2);
+    let (arc1_radius, arc1_center) = seg_arc_radius_and_center(seg1_start, seg1_end);
+    let (arc2_radius, arc2_center) = seg_arc_radius_and_center(seg2_start, seg2_end);
 
     let intr_result = circle_circle_intr(
         arc1_radius,
@@ -332,35 +341,36 @@ where
     let arc1_domain = ArcDomain::new(
         arc1_center,
         arc1_radius,
-        v1.pos(),
-        v2.pos(),
-        angle_from_bulge(v1.bulge).abs(),
-        v1.bulge_is_neg(),
+        seg1_start.pos(),
+        seg1_end.pos(),
+        angle_from_bulge(seg1_start.bulge).abs(),
+        seg1_start.bulge_is_neg(),
     );
     let arc2_domain = ArcDomain::new(
         arc2_center,
         arc2_radius,
-        u1.pos(),
-        u2.pos(),
-        angle_from_bulge(u1.bulge).abs(),
-        u1.bulge_is_neg(),
+        seg2_start.pos(),
+        seg2_end.pos(),
+        angle_from_bulge(seg2_start.bulge).abs(),
+        seg2_start.bulge_is_neg(),
     );
-    let candidate = |hit: crate::core::math::IntrPoint<T>| CandidateDomains {
-        analytic_point: hit.point,
+    let make_candidate = |hit: crate::core::math::IntrPoint<T>| IntersectionCandidate {
+        candidate_point: hit.point,
         error_squared: hit.error_squared,
-        first: arc1_domain.classify(hit.point, epsilon_sq),
-        second: arc2_domain.classify(hit.point, epsilon_sq),
+        seg1_position: arc1_domain.classify(hit.point, epsilon_sq),
+        seg2_position: arc2_domain.classify(hit.point, epsilon_sq),
     };
 
     match intr_result {
         CircleCircleIntr::NoIntersect => NoIntersect,
-        CircleCircleIntr::TangentIntersect { hit } => accept_candidate(candidate(hit), epsilon_sq)
-            .map_or(NoIntersect, |accepted| TangentIntersect {
-                hit: accepted.hit,
-            }),
+        CircleCircleIntr::TangentIntersect { hit } => {
+            accept_candidate(make_candidate(hit), epsilon_sq).map_or(NoIntersect, |accepted| {
+                TangentIntersect { hit: accepted.hit }
+            })
+        }
         CircleCircleIntr::TwoIntersects { hit1, hit2 } => {
-            let mut candidates = [candidate(hit1), candidate(hit2)];
-            suppress_duplicate_endpoint_claims(&mut candidates);
+            let mut candidates = [make_candidate(hit1), make_candidate(hit2)];
+            suppress_duplicate_endpoint_snaps(&mut candidates);
             let accepted = [
                 accept_candidate(candidates[0], epsilon_sq),
                 accept_candidate(candidates[1], epsilon_sq),
@@ -371,7 +381,7 @@ where
                     OneIntersect { hit: accepted.hit }
                 }
                 [Some(mut accepted1), Some(mut accepted2)] => {
-                    if accepted2.second_path_distance < accepted1.second_path_distance {
+                    if accepted2.seg2_path_distance < accepted1.seg2_path_distance {
                         std::mem::swap(&mut accepted1, &mut accepted2);
                     }
                     TwoIntersects {
@@ -385,16 +395,16 @@ where
             // Express both arc sets in the second arc's direction and intersect exact angular
             // intervals before considering tolerant endpoint-only contact. This preserves positive
             // overlaps even when their length is below the position tolerance.
-            let same_direction_arcs = v1.bulge_is_neg() == u1.bulge_is_neg();
+            let same_direction_arcs = seg1_start.bulge_is_neg() == seg2_start.bulge_is_neg();
             let arc1_oriented_start = if same_direction_arcs {
-                v1.pos()
+                seg1_start.pos()
             } else {
-                v2.pos()
+                seg1_end.pos()
             };
             let arc1_oriented_end = if same_direction_arcs {
-                v2.pos()
+                seg1_end.pos()
             } else {
-                v1.pos()
+                seg1_start.pos()
             };
             let arc1_interval_start = arc2_domain.forward_angle(arc1_oriented_start);
             let mut overlap = None;
@@ -413,12 +423,12 @@ where
                 };
                 if low < high {
                     let point1 = if low == T::zero() {
-                        u1.pos()
+                        seg2_start.pos()
                     } else {
                         arc1_oriented_start
                     };
                     let point2 = if high == arc2_domain.sweep() {
-                        u2.pos()
+                        seg2_end.pos()
                     } else {
                         arc1_oriented_end
                     };
@@ -430,18 +440,18 @@ where
             if let Some((point1, point2)) = overlap {
                 let point1 = arc2_domain.project_to_circle(point1);
                 let point2 = arc2_domain.project_to_circle(point2);
-                let candidate1 = candidate(crate::core::math::IntrPoint {
+                let candidate1 = make_candidate(crate::core::math::IntrPoint {
                     point: point1,
                     error_squared: T::zero(),
                 });
-                let candidate2 = candidate(crate::core::math::IntrPoint {
+                let candidate2 = make_candidate(crate::core::math::IntrPoint {
                     point: point2,
                     error_squared: T::zero(),
                 });
-                if candidate1.first.path_distance().is_some()
-                    && candidate1.second.path_distance().is_some()
-                    && candidate2.first.path_distance().is_some()
-                    && candidate2.second.path_distance().is_some()
+                if candidate1.seg1_position.path_distance().is_some()
+                    && candidate1.seg2_position.path_distance().is_some()
+                    && candidate2.seg1_position.path_distance().is_some()
+                    && candidate2.seg2_position.path_distance().is_some()
                 {
                     // Position-equal overlap boundaries represent one endpoint event.
                     let boundary_distance_sq = dist_squared(point1, point2);
@@ -455,40 +465,42 @@ where
             }
 
             // With no positive interval overlap, only position-equal endpoints can create contact.
-            let first_endpoints = [v1.pos(), v2.pos()];
-            let endpoint_hit = |point: Vector2<T>| {
-                let distance_sq = first_endpoints
+            let seg1_endpoints = [seg1_start.pos(), seg1_end.pos()];
+            let seg2_endpoint_hit = |seg2_endpoint: Vector2<T>| {
+                let distance_sq = seg1_endpoints
                     .iter()
-                    .map(|endpoint| dist_squared(*endpoint, point))
+                    .map(|seg1_endpoint| dist_squared(*seg1_endpoint, seg2_endpoint))
                     .min_by(T::total_cmp)
                     .unwrap();
-                PlineSegIntrPoint::adjusted(point, distance_sq)
+                PlineSegIntrPoint::adjusted(seg2_endpoint, distance_sq)
             };
-            let start_distance_sq = first_endpoints
+            let seg2_start_distance_sq = seg1_endpoints
                 .iter()
-                .map(|point| dist_squared(*point, u1.pos()))
+                .map(|seg1_endpoint| dist_squared(*seg1_endpoint, seg2_start.pos()))
                 .min_by(T::total_cmp)
                 .unwrap();
-            let end_distance_sq = first_endpoints
+            let seg2_end_distance_sq = seg1_endpoints
                 .iter()
-                .map(|point| dist_squared(*point, u2.pos()))
+                .map(|seg1_endpoint| dist_squared(*seg1_endpoint, seg2_end.pos()))
                 .min_by(T::total_cmp)
                 .unwrap();
-            let start_touches = start_distance_sq < epsilon_sq;
-            let end_touches = end_distance_sq < epsilon_sq;
-            match (start_touches, end_touches) {
-                (true, true) if u1.pos().fuzzy_eq_eps(u2.pos(), pos_equal_eps) => OneIntersect {
-                    hit: endpoint_hit(u2.pos()),
-                },
+            let seg2_start_touches = seg2_start_distance_sq < epsilon_sq;
+            let seg2_end_touches = seg2_end_distance_sq < epsilon_sq;
+            match (seg2_start_touches, seg2_end_touches) {
+                (true, true) if seg2_start.pos().fuzzy_eq_eps(seg2_end.pos(), pos_equal_eps) => {
+                    OneIntersect {
+                        hit: seg2_endpoint_hit(seg2_end.pos()),
+                    }
+                }
                 (true, true) => TwoIntersects {
-                    hit1: endpoint_hit(u1.pos()),
-                    hit2: endpoint_hit(u2.pos()),
+                    hit1: seg2_endpoint_hit(seg2_start.pos()),
+                    hit2: seg2_endpoint_hit(seg2_end.pos()),
                 },
                 (true, false) => OneIntersect {
-                    hit: endpoint_hit(u1.pos()),
+                    hit: seg2_endpoint_hit(seg2_start.pos()),
                 },
                 (false, true) => OneIntersect {
-                    hit: endpoint_hit(u2.pos()),
+                    hit: seg2_endpoint_hit(seg2_end.pos()),
                 },
                 (false, false) => NoIntersect,
             }
