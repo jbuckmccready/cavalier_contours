@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed implementation plan. No code in this document has been implemented yet.
+In progress. The baseline has been recorded; the target geometry and result types, whole-curve
+functions, finite-domain location, and shared point resolver have been added alongside the old
+paths while finite pair functions and callers migrate.
 
 ## Goal
 

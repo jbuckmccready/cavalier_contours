@@ -8,6 +8,8 @@ mod pline_seg_intersect;
 mod pline_types;
 mod pline_vertex;
 mod pline_view;
+mod segment;
+mod segment_intersections;
 mod traits;
 
 pub use pline::*;
@@ -16,4 +18,6 @@ pub use pline_seg_intersect::*;
 pub use pline_types::*;
 pub use pline_vertex::*;
 pub use pline_view::*;
+pub use segment::*;
+pub use segment_intersections::*;
 pub use traits::*;
