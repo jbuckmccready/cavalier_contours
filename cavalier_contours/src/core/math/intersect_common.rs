@@ -47,29 +47,6 @@ where
     Outside,
 }
 
-impl<T> IntrDomainPosition<T>
-where
-    T: Real,
-{
-    #[inline]
-    pub(crate) fn path_distance(self) -> Option<T> {
-        match self {
-            Self::Inside { path_distance } | Self::Snap { path_distance, .. } => {
-                Some(path_distance)
-            }
-            Self::Outside => None,
-        }
-    }
-
-    #[inline]
-    pub(crate) fn snapped_point(self) -> Option<Vector2<T>> {
-        match self {
-            Self::Snap { point, .. } => Some(point),
-            Self::Inside { .. } | Self::Outside => None,
-        }
-    }
-}
-
 /// Finite circular-arc domain used to classify supporting-circle candidates.
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct ArcDomain<T>

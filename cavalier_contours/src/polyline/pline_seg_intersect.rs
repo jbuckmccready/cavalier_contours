@@ -3,12 +3,48 @@ use super::pline_seg::seg_arc_radius_and_center;
 use crate::core::{
     math::Vector2,
     math::{
-        ArcDomain, CircleCircleIntr, IntrDomainPosition, LineCircleIntr, LineLineIntr,
+        ArcDomain, CircleCircleIntr, IntrDomainPosition, IntrPoint, LineCircleIntr, LineLineIntr,
         angle_from_bulge, circle_circle_intr, dist_squared, line_circle_intr, line_line_intr,
         point_from_parametric,
     },
     traits::Real,
 };
+
+/// Finite-domain adjustment to apply to a supporting-curve intersection.
+#[derive(Copy, Clone)]
+enum PointAdjustment<T> {
+    Keep,
+    SnapTo(Vector2<T>),
+}
+
+/// Accepted finite-domain classification and its traversal order.
+#[derive(Copy, Clone)]
+struct FiniteDomainMatch<T> {
+    adjustment: PointAdjustment<T>,
+    order: T,
+}
+
+impl<T> FiniteDomainMatch<T>
+where
+    T: Real,
+{
+    fn from_position(position: IntrDomainPosition<T>) -> Option<Self> {
+        match position {
+            IntrDomainPosition::Inside { path_distance } => Some(Self {
+                adjustment: PointAdjustment::Keep,
+                order: path_distance,
+            }),
+            IntrDomainPosition::Snap {
+                point,
+                path_distance,
+            } => Some(Self {
+                adjustment: PointAdjustment::SnapTo(point),
+                order: path_distance,
+            }),
+            IntrDomainPosition::Outside => None,
+        }
+    }
+}
 
 /// Supporting-curve intersection classified against both finite segments.
 #[derive(Copy, Clone)]
@@ -16,10 +52,10 @@ struct IntersectionCandidate<T>
 where
     T: Real,
 {
-    candidate_point: Vector2<T>,
-    error_squared: T,
-    seg1_position: IntrDomainPosition<T>,
-    seg2_position: IntrDomainPosition<T>,
+    hit: IntrPoint<T>,
+    seg1_adjustment: PointAdjustment<T>,
+    seg2_adjustment: PointAdjustment<T>,
+    seg2_order: T,
 }
 
 /// Accepted finite-segment intersection and its position along segment 2.
@@ -29,7 +65,7 @@ where
     T: Real,
 {
     hit: PlineSegIntrPoint<T>,
-    seg2_path_distance: T,
+    seg2_order: T,
 }
 
 /// One finite polyline segment intersection point.
@@ -60,67 +96,28 @@ where
 }
 
 #[inline]
-fn suppress_duplicate_endpoint_snaps<T>(candidates: &mut [IntersectionCandidate<T>; 2])
-where
-    T: Real,
-{
-    let suppress_for_segment = |candidates: &mut [IntersectionCandidate<T>; 2],
-                                use_seg1_position: bool| {
-        let positions = if use_seg1_position {
-            [candidates[0].seg1_position, candidates[1].seg1_position]
-        } else {
-            [candidates[0].seg2_position, candidates[1].seg2_position]
-        };
-        let [Some(snapped_point0), Some(snapped_point1)] =
-            [positions[0].snapped_point(), positions[1].snapped_point()]
-        else {
-            return;
-        };
-        if snapped_point0 != snapped_point1 {
-            return;
-        }
-
-        let reject_index = usize::from(
-            dist_squared(candidates[0].candidate_point, snapped_point0)
-                <= dist_squared(candidates[1].candidate_point, snapped_point1),
-        );
-        if use_seg1_position {
-            candidates[reject_index].seg1_position = IntrDomainPosition::Outside;
-        } else {
-            candidates[reject_index].seg2_position = IntrDomainPosition::Outside;
-        }
-    };
-
-    suppress_for_segment(candidates, true);
-    suppress_for_segment(candidates, false);
-}
-
-#[inline]
-fn accept_candidate<T>(
+fn resolve_candidate<T>(
     candidate: IntersectionCandidate<T>,
     epsilon_sq: T,
 ) -> Option<AcceptedIntersection<T>>
 where
     T: Real,
 {
-    let seg2_path_distance = candidate.seg2_position.path_distance()?;
-    candidate.seg1_position.path_distance()?;
-    let seg1_snap = candidate.seg1_position.snapped_point();
-    let seg2_snap = candidate.seg2_position.snapped_point();
-    let hit = match (seg1_snap, seg2_snap) {
-        (None, None) => {
-            PlineSegIntrPoint::adjusted(candidate.candidate_point, candidate.error_squared)
+    let hit = match (candidate.seg1_adjustment, candidate.seg2_adjustment) {
+        (PointAdjustment::Keep, PointAdjustment::Keep) => {
+            PlineSegIntrPoint::adjusted(candidate.hit.point, candidate.hit.error_squared)
         }
-        (Some(snapped_point), None) | (None, Some(snapped_point)) => {
-            let snap_error_sq = dist_squared(snapped_point, candidate.candidate_point);
+        (PointAdjustment::SnapTo(snapped_point), PointAdjustment::Keep)
+        | (PointAdjustment::Keep, PointAdjustment::SnapTo(snapped_point)) => {
+            let snap_error_sq = dist_squared(snapped_point, candidate.hit.point);
             if snap_error_sq >= epsilon_sq {
                 return None;
             }
-            PlineSegIntrPoint::adjusted(snapped_point, candidate.error_squared + snap_error_sq)
+            PlineSegIntrPoint::adjusted(snapped_point, candidate.hit.error_squared + snap_error_sq)
         }
-        (Some(seg1_endpoint), Some(seg2_endpoint)) => {
-            let seg1_snap_error_sq = dist_squared(seg1_endpoint, candidate.candidate_point);
-            let seg2_snap_error_sq = dist_squared(seg2_endpoint, candidate.candidate_point);
+        (PointAdjustment::SnapTo(seg1_endpoint), PointAdjustment::SnapTo(seg2_endpoint)) => {
+            let seg1_snap_error_sq = dist_squared(seg1_endpoint, candidate.hit.point);
+            let seg2_snap_error_sq = dist_squared(seg2_endpoint, candidate.hit.point);
             if seg1_snap_error_sq >= epsilon_sq
                 || seg2_snap_error_sq >= epsilon_sq
                 || dist_squared(seg1_endpoint, seg2_endpoint) >= epsilon_sq
@@ -133,13 +130,16 @@ where
             } else {
                 (seg2_endpoint, seg2_snap_error_sq + endpoint_separation_sq)
             };
-            PlineSegIntrPoint::adjusted(selected_endpoint, candidate.error_squared + snap_error_sq)
+            PlineSegIntrPoint::adjusted(
+                selected_endpoint,
+                candidate.hit.error_squared + snap_error_sq,
+            )
         }
     };
 
     Some(AcceptedIntersection {
         hit,
-        seg2_path_distance,
+        seg2_order: candidate.seg2_order,
     })
 }
 
@@ -182,6 +182,42 @@ where
         /// Holds the end (according to the second segment direction) point of the arc overlap.
         point2: Vector2<T>,
     },
+}
+
+#[inline]
+fn resolve_two_candidates<T>(
+    candidates: [Option<IntersectionCandidate<T>>; 2],
+    epsilon_sq: T,
+) -> PlineSegIntr<T>
+where
+    T: Real,
+{
+    let accepted = candidates
+        .map(|candidate| candidate.and_then(|candidate| resolve_candidate(candidate, epsilon_sq)));
+    match accepted {
+        [None, None] => PlineSegIntr::NoIntersect,
+        [Some(accepted), None] | [None, Some(accepted)] => {
+            PlineSegIntr::OneIntersect { hit: accepted.hit }
+        }
+        [Some(mut accepted1), Some(mut accepted2)] => {
+            if dist_squared(accepted1.hit.point, accepted2.hit.point) < epsilon_sq {
+                let accepted = if accepted1.hit.error_squared <= accepted2.hit.error_squared {
+                    accepted1
+                } else {
+                    accepted2
+                };
+                return PlineSegIntr::OneIntersect { hit: accepted.hit };
+            }
+
+            if accepted2.seg2_order < accepted1.seg2_order {
+                std::mem::swap(&mut accepted1, &mut accepted2);
+            }
+            PlineSegIntr::TwoIntersects {
+                hit1: accepted1.hit,
+                hit2: accepted2.hit,
+            }
+        }
+    }
 }
 
 /// Finds the intersects between two polyline segments.
@@ -251,63 +287,42 @@ where
             angle_from_bulge(arc_start.bulge).abs(),
             arc_start.bulge_is_neg(),
         );
-        let line_length = (line_end - line_start).length();
         let make_candidate = |hit: crate::core::math::LineCircleIntrPoint<T>| {
-            let candidate_point = hit.point;
-            let line_position = IntrDomainPosition::Inside {
-                path_distance: hit.line_t * line_length,
+            let arc_match =
+                FiniteDomainMatch::from_position(arc_domain.classify(hit.point, epsilon_sq))?;
+            let hit_point = IntrPoint {
+                point: hit.point,
+                error_squared: hit.error_squared,
             };
-            let arc_position = arc_domain.classify(candidate_point, epsilon_sq);
-            if line_is_seg1 {
+            Some(if line_is_seg1 {
                 IntersectionCandidate {
-                    candidate_point,
-                    error_squared: hit.error_squared,
-                    seg1_position: line_position,
-                    seg2_position: arc_position,
+                    hit: hit_point,
+                    seg1_adjustment: PointAdjustment::Keep,
+                    seg2_adjustment: arc_match.adjustment,
+                    seg2_order: arc_match.order,
                 }
             } else {
                 IntersectionCandidate {
-                    candidate_point,
-                    error_squared: hit.error_squared,
-                    seg1_position: arc_position,
-                    seg2_position: line_position,
+                    hit: hit_point,
+                    seg1_adjustment: arc_match.adjustment,
+                    seg2_adjustment: PointAdjustment::Keep,
+                    seg2_order: hit.line_t,
                 }
-            }
+            })
         };
 
         match intr_result {
             LineCircleIntr::NoIntersect => NoIntersect,
-            LineCircleIntr::TangentIntersect { hit } => {
-                accept_candidate(make_candidate(hit), epsilon_sq).map_or(NoIntersect, |accepted| {
-                    TangentIntersect { hit: accepted.hit }
-                })
-            }
-            LineCircleIntr::OneIntersect { hit } => {
-                accept_candidate(make_candidate(hit), epsilon_sq)
-                    .map_or(NoIntersect, |accepted| OneIntersect { hit: accepted.hit })
-            }
+            LineCircleIntr::TangentIntersect { hit } => make_candidate(hit)
+                .and_then(|candidate| resolve_candidate(candidate, epsilon_sq))
+                .map_or(NoIntersect, |accepted| TangentIntersect {
+                    hit: accepted.hit,
+                }),
+            LineCircleIntr::OneIntersect { hit } => make_candidate(hit)
+                .and_then(|candidate| resolve_candidate(candidate, epsilon_sq))
+                .map_or(NoIntersect, |accepted| OneIntersect { hit: accepted.hit }),
             LineCircleIntr::TwoIntersects { hit1, hit2 } => {
-                let mut candidates = [make_candidate(hit1), make_candidate(hit2)];
-                suppress_duplicate_endpoint_snaps(&mut candidates);
-                let accepted = [
-                    accept_candidate(candidates[0], epsilon_sq),
-                    accept_candidate(candidates[1], epsilon_sq),
-                ];
-                match accepted {
-                    [None, None] => NoIntersect,
-                    [Some(accepted), None] | [None, Some(accepted)] => {
-                        OneIntersect { hit: accepted.hit }
-                    }
-                    [Some(mut accepted1), Some(mut accepted2)] => {
-                        if accepted2.seg2_path_distance < accepted1.seg2_path_distance {
-                            std::mem::swap(&mut accepted1, &mut accepted2);
-                        }
-                        TwoIntersects {
-                            hit1: accepted1.hit,
-                            hit2: accepted2.hit,
-                        }
-                    }
-                }
+                resolve_two_candidates([make_candidate(hit1), make_candidate(hit2)], epsilon_sq)
             }
         }
     };
@@ -354,42 +369,28 @@ where
         angle_from_bulge(seg2_start.bulge).abs(),
         seg2_start.bulge_is_neg(),
     );
-    let make_candidate = |hit: crate::core::math::IntrPoint<T>| IntersectionCandidate {
-        candidate_point: hit.point,
-        error_squared: hit.error_squared,
-        seg1_position: arc1_domain.classify(hit.point, epsilon_sq),
-        seg2_position: arc2_domain.classify(hit.point, epsilon_sq),
+    let make_candidate = |hit: IntrPoint<T>| {
+        let seg1_match =
+            FiniteDomainMatch::from_position(arc1_domain.classify(hit.point, epsilon_sq))?;
+        let seg2_match =
+            FiniteDomainMatch::from_position(arc2_domain.classify(hit.point, epsilon_sq))?;
+        Some(IntersectionCandidate {
+            hit,
+            seg1_adjustment: seg1_match.adjustment,
+            seg2_adjustment: seg2_match.adjustment,
+            seg2_order: seg2_match.order,
+        })
     };
 
     match intr_result {
         CircleCircleIntr::NoIntersect => NoIntersect,
-        CircleCircleIntr::TangentIntersect { hit } => {
-            accept_candidate(make_candidate(hit), epsilon_sq).map_or(NoIntersect, |accepted| {
-                TangentIntersect { hit: accepted.hit }
-            })
-        }
+        CircleCircleIntr::TangentIntersect { hit } => make_candidate(hit)
+            .and_then(|candidate| resolve_candidate(candidate, epsilon_sq))
+            .map_or(NoIntersect, |accepted| TangentIntersect {
+                hit: accepted.hit,
+            }),
         CircleCircleIntr::TwoIntersects { hit1, hit2 } => {
-            let mut candidates = [make_candidate(hit1), make_candidate(hit2)];
-            suppress_duplicate_endpoint_snaps(&mut candidates);
-            let accepted = [
-                accept_candidate(candidates[0], epsilon_sq),
-                accept_candidate(candidates[1], epsilon_sq),
-            ];
-            match accepted {
-                [None, None] => NoIntersect,
-                [Some(accepted), None] | [None, Some(accepted)] => {
-                    OneIntersect { hit: accepted.hit }
-                }
-                [Some(mut accepted1), Some(mut accepted2)] => {
-                    if accepted2.seg2_path_distance < accepted1.seg2_path_distance {
-                        std::mem::swap(&mut accepted1, &mut accepted2);
-                    }
-                    TwoIntersects {
-                        hit1: accepted1.hit,
-                        hit2: accepted2.hit,
-                    }
-                }
-            }
+            resolve_two_candidates([make_candidate(hit1), make_candidate(hit2)], epsilon_sq)
         }
         CircleCircleIntr::Overlapping => {
             // Express both arc sets in the second arc's direction and intersect exact angular
@@ -440,19 +441,15 @@ where
             if let Some((point1, point2)) = overlap {
                 let point1 = arc2_domain.project_to_circle(point1);
                 let point2 = arc2_domain.project_to_circle(point2);
-                let candidate1 = make_candidate(crate::core::math::IntrPoint {
+                let candidate1 = make_candidate(IntrPoint {
                     point: point1,
                     error_squared: T::zero(),
                 });
-                let candidate2 = make_candidate(crate::core::math::IntrPoint {
+                let candidate2 = make_candidate(IntrPoint {
                     point: point2,
                     error_squared: T::zero(),
                 });
-                if candidate1.seg1_position.path_distance().is_some()
-                    && candidate1.seg2_position.path_distance().is_some()
-                    && candidate2.seg1_position.path_distance().is_some()
-                    && candidate2.seg2_position.path_distance().is_some()
-                {
+                if candidate1.is_some() && candidate2.is_some() {
                     // Position-equal overlap boundaries represent one endpoint event.
                     let boundary_distance_sq = dist_squared(point1, point2);
                     if boundary_distance_sq < epsilon_sq {
@@ -597,6 +594,35 @@ mod tests {
             PlineVertex::from_vector2(point_at_angle(start_angle), (sweep / 4.0).tan()),
             PlineVertex::from_vector2(point_at_angle(start_angle + sweep), 0.0),
         )
+    }
+
+    #[test]
+    fn duplicate_endpoint_snaps_keep_smallest_final_error() {
+        let epsilon = 1e-5f64;
+        let endpoint = Vector2::zero();
+        let candidate = |distance| {
+            Some(IntersectionCandidate {
+                hit: IntrPoint {
+                    point: Vector2::new(distance, 0.0),
+                    error_squared: 0.0,
+                },
+                seg1_adjustment: PointAdjustment::SnapTo(endpoint),
+                seg2_adjustment: PointAdjustment::Keep,
+                seg2_order: 0.0,
+            })
+        };
+
+        let result = resolve_two_candidates(
+            [candidate(0.75 * epsilon), candidate(0.25 * epsilon)],
+            epsilon * epsilon,
+        );
+        let PlineSegIntr::OneIntersect { hit } = result else {
+            panic!("expected one resolved endpoint intersection: {result:?}");
+        };
+
+        assert_eq!(hit.point, endpoint);
+        let expected_error_squared = (0.25 * epsilon) * (0.25 * epsilon);
+        assert!((hit.error_squared - expected_error_squared).abs() < f64::EPSILON);
     }
 
     #[test]
