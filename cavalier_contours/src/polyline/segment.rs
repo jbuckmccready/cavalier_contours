@@ -2,19 +2,19 @@ use super::{PlineVertex, seg_arc_radius_and_center};
 use crate::core::{
     math::{
         Circle, IntersectionPoint, Line, Vector2, angle, angle_from_bulge, dist_squared,
-        parametric_from_point, point_from_parametric,
+        parametric_from_point_unchecked, point_from_parametric,
     },
     traits::Real,
 };
 
 #[derive(Debug, Copy, Clone)]
-pub(super) struct SegmentLocation<T>
+pub(crate) struct SegmentLocation<T>
 where
     T: Real,
 {
-    pub(super) t: T,
-    pub(super) point: Vector2<T>,
-    pub(super) adjustment_error_squared: T,
+    pub(crate) t: T,
+    pub(crate) point: Vector2<T>,
+    pub(crate) adjustment_error_squared: T,
 }
 
 /// A finite directed line segment.
@@ -35,7 +35,7 @@ where
     #[must_use]
     pub fn as_line(&self) -> Option<Line<T>> {
         let direction = self.end - self.start;
-        (direction.length_squared() != T::zero()).then_some(Line {
+        (direction.x != T::zero() || direction.y != T::zero()).then_some(Line {
             point: self.start,
             direction,
         })
@@ -44,7 +44,7 @@ where
     #[inline]
     #[must_use]
     pub fn parameter_at(&self, point: Vector2<T>) -> T {
-        parametric_from_point(self.start, self.end, point, T::fuzzy_epsilon())
+        parametric_from_point_unchecked(self.start, self.end, point)
     }
 
     #[inline]
@@ -58,7 +58,8 @@ where
         }
     }
 
-    pub(super) fn locate(
+    #[inline(always)]
+    pub(crate) fn locate(
         &self,
         candidate: IntersectionPoint<T>,
         epsilon_squared: T,
@@ -156,28 +157,39 @@ where
         self.center + Vector2::new(self.radius * cos, self.radius * sin)
     }
 
-    pub(super) fn locate(
-        &self,
-        candidate: IntersectionPoint<T>,
-        epsilon_squared: T,
-    ) -> Option<SegmentLocation<T>> {
-        let radial_difference = (candidate.point - self.center).length() - self.radius;
-        if radial_difference * radial_difference >= epsilon_squared {
-            return None;
-        }
-
+    #[inline]
+    pub(super) fn forward_angle(&self, point: Vector2<T>) -> T {
         let start_vector = self.start - self.center;
-        let point_vector = candidate.point - self.center;
+        let point_vector = point - self.center;
         let cross = start_vector.perp_dot(point_vector);
         let oriented_cross = if self.sweep < T::zero() {
             -cross
         } else {
             cross
         };
-        let mut forward_angle = T::atan2(oriented_cross, start_vector.dot(point_vector));
-        if forward_angle < T::zero() {
-            forward_angle = forward_angle + T::tau();
+        let mut result = T::atan2(oriented_cross, start_vector.dot(point_vector));
+        if result < T::zero() {
+            result = result + T::tau();
         }
+        result
+    }
+
+    #[inline(always)]
+    pub(crate) fn locate(
+        &self,
+        candidate: IntersectionPoint<T>,
+        epsilon_squared: T,
+    ) -> Option<SegmentLocation<T>> {
+        // Exact whole-circle points already satisfy the radial domain. Adjusted tangencies and
+        // coincident-circle boundary projections still need a strict radial check.
+        if candidate.error_squared != T::zero() {
+            let radial_difference = (candidate.point - self.center).length() - self.radius;
+            if radial_difference * radial_difference >= epsilon_squared {
+                return None;
+            }
+        }
+
+        let forward_angle = self.forward_angle(candidate.point);
         let sweep = self.sweep.abs();
         if forward_angle <= sweep {
             return Some(SegmentLocation {
@@ -240,7 +252,8 @@ where
         })
     }
 
-    pub(super) fn locate(
+    #[inline(always)]
+    pub(crate) fn locate(
         &self,
         candidate: IntersectionPoint<T>,
         epsilon_squared: T,

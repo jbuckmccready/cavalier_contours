@@ -3,6 +3,7 @@ use crate::core::traits::Real;
 
 /// Intersects two infinite lines.
 #[must_use]
+#[inline(always)]
 pub fn intersect_lines<T>(line1: Line<T>, line2: Line<T>, epsilon: T) -> CurveIntersections<T>
 where
     T: Real,

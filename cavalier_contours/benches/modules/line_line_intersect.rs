@@ -1,9 +1,12 @@
 use std::hint::black_box;
 
-use cavalier_contours::core::math::{Vector2, line_line_intr};
+use cavalier_contours::{
+    core::math::Vector2,
+    polyline::{LineSegment, intersect_line_segments},
+};
 use criterion::{BenchmarkId, Criterion};
 
-pub fn line_line_intr_group(c: &mut Criterion) {
+pub fn intersect_line_segments_group(c: &mut Criterion) {
     let cases = [
         (
             "true_interior",
@@ -77,18 +80,16 @@ pub fn line_line_intr_group(c: &mut Criterion) {
         ),
     ];
 
-    let mut group = c.benchmark_group("line_line_intr");
+    let mut group = c.benchmark_group("intersect_line_segments");
     for (name, v1, v2, u1, u2) in cases {
         group.bench_with_input(
             BenchmarkId::from_parameter(name),
             &(v1, v2, u1, u2),
             |b, &(v1, v2, u1, u2)| {
                 b.iter(|| {
-                    black_box(line_line_intr(
-                        black_box(v1),
-                        black_box(v2),
-                        black_box(u1),
-                        black_box(u2),
+                    black_box(intersect_line_segments(
+                        black_box(LineSegment { start: v1, end: v2 }),
+                        black_box(LineSegment { start: u1, end: u2 }),
                         black_box(1e-5),
                     ))
                 });

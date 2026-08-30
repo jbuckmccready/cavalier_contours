@@ -1,9 +1,14 @@
+mod arc_arc;
 mod line_arc;
+mod line_line;
 mod resolve;
 
 use crate::core::{math::Vector2, traits::Real};
+use crate::polyline::Segment;
 
+pub use arc_arc::intersect_arcs;
 pub use line_arc::{intersect_arc_line, intersect_line_arc};
+pub use line_line::intersect_line_segments;
 
 /// One resolved finite-segment intersection.
 #[derive(Debug, Copy, Clone)]
@@ -31,6 +36,27 @@ where
         start: SegmentIntersection<T>,
         end: SegmentIntersection<T>,
     },
+}
+
+/// Intersects any ordered pair of finite line or arc segments.
+#[must_use]
+#[inline(always)]
+pub fn intersect_segments<T>(
+    seg1: Segment<T>,
+    seg2: Segment<T>,
+    epsilon: T,
+) -> SegmentIntersections<T>
+where
+    T: Real,
+{
+    match (seg1, seg2) {
+        (Segment::Line(line1), Segment::Line(line2)) => {
+            intersect_line_segments(line1, line2, epsilon)
+        }
+        (Segment::Line(line), Segment::Arc(arc)) => intersect_line_arc(line, arc, epsilon),
+        (Segment::Arc(arc), Segment::Line(line)) => intersect_arc_line(arc, line, epsilon),
+        (Segment::Arc(arc1), Segment::Arc(arc2)) => intersect_arcs(arc1, arc2, epsilon),
+    }
 }
 
 #[cfg(test)]

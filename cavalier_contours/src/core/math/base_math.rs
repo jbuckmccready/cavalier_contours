@@ -323,14 +323,27 @@ where
         "point does not lie on the line defined by p0 to p1 (based on distance)"
     );
 
-    // use larger diff component for calculation to avoid problems with vertical/horizontal lines
-    // where component diff is zero and to avoid adding error in calculation caused by small
-    // denominator
+    parametric_from_point_unchecked(p0, p1, point)
+}
+
+/// Returns the parametric value of `point` on the line through `p0` and `p1`.
+///
+/// The caller must ensure that `p0` and `p1` are distinct. Unlike [`parametric_from_point`], this
+/// function also accepts points that are slightly off the line and projects by the most stable
+/// coordinate.
+#[inline]
+#[must_use]
+pub fn parametric_from_point_unchecked<T>(p0: Vector2<T>, p1: Vector2<T>, point: Vector2<T>) -> T
+where
+    T: Real,
+{
+    let x_diff = p1.x - p0.x;
+    let y_diff = p1.y - p0.y;
+
+    // Use the larger component to avoid a zero or small denominator.
     if x_diff.abs() < y_diff.abs() {
-        // use y component
         (point.y - p0.y) / y_diff
     } else {
-        // use x component
         (point.x - p0.x) / x_diff
     }
 }

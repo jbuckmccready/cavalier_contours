@@ -1,9 +1,9 @@
 use std::hint::black_box;
 
-use cavalier_contours::core::math::{Vector2, line_circle_intr};
+use cavalier_contours::core::math::{Circle, Line, Vector2, intersect_line_circle};
 use criterion::{BenchmarkId, Criterion};
 
-pub fn line_circle_intr_group(c: &mut Criterion) {
+pub fn intersect_line_circle_group(c: &mut Criterion) {
     let near_tangent_center = |radius: f64, half_spacing: f64| {
         Vector2::new(0.0, (radius * radius - half_spacing * half_spacing).sqrt())
     };
@@ -100,18 +100,19 @@ pub fn line_circle_intr_group(c: &mut Criterion) {
         ),
     ];
 
-    let mut group = c.benchmark_group("line_circle_intr");
+    let mut group = c.benchmark_group("intersect_line_circle");
     for (name, p0, p1, radius, center) in cases {
         group.bench_with_input(
             BenchmarkId::from_parameter(name),
             &(p0, p1, radius, center),
             |b, &(p0, p1, radius, center)| {
                 b.iter(|| {
-                    black_box(line_circle_intr(
-                        black_box(p0),
-                        black_box(p1),
-                        black_box(radius),
-                        black_box(center),
+                    black_box(intersect_line_circle(
+                        black_box(Line {
+                            point: p0,
+                            direction: p1 - p0,
+                        }),
+                        black_box(Circle { radius, center }),
                         black_box(epsilon),
                     ))
                 });

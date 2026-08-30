@@ -21,9 +21,9 @@ mod pline_seg_intersect;
 mod test_polylines;
 
 use base_math::{delta_angle_group, point_within_arc_sweep_group};
-use circle_circle_intersect::circle_circle_intr_group;
-use line_circle_intersect::line_circle_intr_group;
-use line_line_intersect::line_line_intr_group;
+use circle_circle_intersect::intersect_circles_group;
+use line_circle_intersect::intersect_line_circle_group;
+use line_line_intersect::intersect_line_segments_group;
 use pline::{polyline_area_group, polyline_winding_number_group};
 use pline_intersects::polyline_find_intersects_duplicates_group;
 use pline_offset::{
@@ -40,9 +40,9 @@ use pline_seg_intersect::pline_seg_intr_group;
 
 criterion_group!(
     benches,
-    line_line_intr_group,
-    line_circle_intr_group,
-    circle_circle_intr_group,
+    intersect_line_segments_group,
+    intersect_line_circle_group,
+    intersect_circles_group,
     point_within_arc_sweep_group,
     delta_angle_group,
     pline_seg_intr_group,

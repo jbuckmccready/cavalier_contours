@@ -7,6 +7,7 @@ use crate::{
     polyline::Segment,
 };
 
+#[inline(always)]
 pub(super) fn resolve_intersection<T>(
     seg1: &Segment<T>,
     seg2: &Segment<T>,
@@ -18,8 +19,8 @@ where
 {
     let location1 = seg1.locate(candidate, epsilon_squared)?;
     let location2 = seg2.locate(candidate, epsilon_squared)?;
-    let moved1 = location1.adjustment_error_squared != T::zero();
-    let moved2 = location2.adjustment_error_squared != T::zero();
+    let moved1 = location1.point != candidate.point;
+    let moved2 = location2.point != candidate.point;
 
     let (point, adjustment_error_squared) = match (moved1, moved2) {
         (false, false) => (candidate.point, T::zero()),
@@ -55,6 +56,7 @@ where
     })
 }
 
+#[inline(always)]
 pub(super) fn resolve_curve_intersections<T>(
     seg1: &Segment<T>,
     seg2: &Segment<T>,

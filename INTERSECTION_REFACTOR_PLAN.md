@@ -2,9 +2,9 @@
 
 ## Status
 
-In progress. The baseline has been recorded; the target geometry and result types, whole-curve
-functions, finite-domain location, and shared point resolver have been added alongside the old
-paths while finite pair functions and callers migrate.
+Complete. The whole-curve, finite-segment, and polyline collection layers described below are
+implemented. All workspace callers use the new result types, and the old intersection modules and
+near-duplicate types have been removed.
 
 ## Goal
 

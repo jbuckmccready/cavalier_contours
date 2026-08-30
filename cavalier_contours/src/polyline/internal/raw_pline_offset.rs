@@ -6,14 +6,15 @@
 use crate::{
     core::{
         math::{
-            ArcDomain, CircleCircleIntr, IntrDomainPosition, LineCircleIntr, LineLineIntr, Vector2,
-            angle, angle_from_bulge, arc_sweep_extents, bulge_from_angle, circle_circle_intr,
-            dist_squared, line_circle_intr, line_line_intr, parametric_from_point,
+            Vector2, angle, angle_from_bulge, arc_sweep_extents, bulge_from_angle, dist_squared,
+            parametric_from_point,
         },
         traits::Real,
     },
     polyline::{
-        PlineCreation, PlineSource, PlineSourceMut, PlineVertex, line_seg_bounding_box,
+        ArcSegment, LineSegment, PlineCreation, PlineSource, PlineSourceMut, PlineVertex,
+        SegmentIntersection, SegmentIntersections, intersect_arc_line, intersect_arcs,
+        intersect_line_arc, intersect_line_segments, line_seg_bounding_box,
         seg_arc_radius_and_center,
     },
 };
@@ -56,6 +57,17 @@ where
             tangent
         }
     }
+
+    #[inline]
+    fn as_segment(&self) -> ArcSegment<T> {
+        ArcSegment {
+            start: self.start,
+            end: self.end,
+            center: self.center,
+            radius: self.radius,
+            sweep: self.sweep,
+        }
+    }
 }
 
 /// A source arc offset past zero radius, retained as a straight clipping scaffold.
@@ -79,6 +91,14 @@ where
     #[inline]
     fn param_at(&self, point: Vector2<T>, pos_equal_eps: T) -> T {
         parametric_from_point(self.start, self.end, point, pos_equal_eps)
+    }
+
+    #[inline]
+    fn as_segment(&self) -> LineSegment<T> {
+        LineSegment {
+            start: self.start,
+            end: self.end,
+        }
     }
 }
 
@@ -456,32 +476,30 @@ where
         current: &RawOffsetLine<T>,
         next: &RawOffsetLine<T>,
     ) -> JoinBoundary<T> {
-        match line_line_intr(
-            current.start,
-            current.end,
-            next.start,
-            next.end,
-            self.pos_equal_eps,
-        ) {
-            LineLineIntr::NoIntersect => {
+        match intersect_line_segments(current.as_segment(), next.as_segment(), self.pos_equal_eps) {
+            SegmentIntersections::None => {
                 Self::line_connection_boundary(JoinClass::InvalidInnerGap, current.end, next.start)
             }
-            LineLineIntr::OneIntersect { hit } => {
+            SegmentIntersections::Tangent(hit) | SegmentIntersections::One(hit) => {
                 Self::trimmed_boundary(hit.point, hit.seg1_t, hit.seg2_t)
             }
-            LineLineIntr::Overlapping { .. } => {
+            SegmentIntersections::Two(_) => {
+                unreachable!("two line segments cannot have two distinct intersections")
+            }
+            SegmentIntersections::Overlap { start, end } => {
                 // Prefer the current endpoint when it lies on the overlapping next span.
                 let next_param = next.param_at(current.end, self.pos_equal_eps);
-                if let Some(next_param) =
-                    self.usable_line_param(next_param, (next.end - next.start).length_squared())
-                {
+                if next_param >= T::zero() && next_param <= T::one() {
                     Self::trimmed_boundary(current.end, T::one(), next_param)
                 } else {
-                    Self::line_connection_boundary(
-                        JoinClass::InvalidInnerGap,
-                        current.end,
-                        next.start,
-                    )
+                    let hit = if dist_squared(end.point, current.end)
+                        < dist_squared(start.point, current.end)
+                    {
+                        end
+                    } else {
+                        start
+                    };
+                    Self::trimmed_boundary(hit.point, hit.seg1_t, hit.seg2_t)
                 }
             }
         }
@@ -499,110 +517,30 @@ where
         }
     }
 
-    /// Clamps a line parameter when its endpoint overflow is within position tolerance.
-    #[inline]
-    fn usable_line_param(&self, param: T, length_sq: T) -> Option<T> {
-        let eps_sq = self.pos_equal_eps * self.pos_equal_eps;
-        let clamped = if param < T::zero() {
-            T::zero()
-        } else if param > T::one() {
-            T::one()
-        } else {
-            return Some(param);
-        };
-
-        let overflow = param - clamped;
-        if overflow * overflow * length_sq > eps_sq {
-            None
-        } else {
-            Some(clamped)
-        }
-    }
-
-    /// Returns a finite-sweep arc parameter, allowing endpoint overflow within position tolerance.
-    #[inline]
-    fn usable_arc_param(&self, arc: &RawOffsetArc<T>, point: Vector2<T>) -> Option<T> {
-        let sweep = arc.sweep.abs();
-        let domain = ArcDomain::new(
-            arc.center,
-            arc.radius,
-            arc.start,
-            arc.end,
-            sweep,
-            arc.sweep < T::zero(),
-        );
-        match domain.classify(point, self.pos_equal_eps * self.pos_equal_eps) {
-            IntrDomainPosition::Inside { path_distance }
-            | IntrDomainPosition::Snap { path_distance, .. } => {
-                Some(path_distance / (arc.radius * sweep))
-            }
-            IntrDomainPosition::Outside => None,
-        }
-    }
-
-    /// Tests squared distances within position tolerance without taking square roots.
-    #[inline]
-    fn squared_distances_equal(&self, dist1_sq: T, dist2_sq: T) -> bool {
-        let eps_sq = self.pos_equal_eps * self.pos_equal_eps;
-        let sum = dist1_sq + dist2_sq;
-        if sum <= eps_sq {
-            return true;
-        }
-        let difference_from_eps = sum - eps_sq;
-        difference_from_eps * difference_from_eps < T::four() * dist1_sq * dist2_sq
-    }
-
-    fn line_arc_intersection(
-        &self,
-        line: &RawOffsetLine<T>,
-        arc: &RawOffsetArc<T>,
+    #[inline(always)]
+    fn nearest_hit(
+        intersections: SegmentIntersections<T>,
         shared_source_vertex: Vector2<T>,
-    ) -> Option<(Vector2<T>, T, T)> {
-        let line_length_sq = (line.end - line.start).length_squared();
-
-        // Keep candidates on both finite spans and snap tolerant endpoint hits.
-        let process_intersect = |t: T, intersect: Vector2<T>| {
-            let line_param = self.usable_line_param(t, line_length_sq)?;
-            let point = if t < T::zero() {
-                line.start
-            } else if t > T::one() {
-                line.end
-            } else if intersect.fuzzy_eq_eps(arc.start, self.pos_equal_eps) {
-                arc.start
-            } else if intersect.fuzzy_eq_eps(arc.end, self.pos_equal_eps) {
-                arc.end
-            } else {
-                intersect
-            };
-            let arc_param = self.usable_arc_param(arc, point)?;
-            Some((point, line_param, arc_param))
-        };
-
-        // Prefer the intersection nearest the shared source vertex.
-        match line_circle_intr(
-            line.start,
-            line.end,
-            arc.radius,
-            arc.center,
-            self.pos_equal_eps,
-        ) {
-            LineCircleIntr::NoIntersect => None,
-            LineCircleIntr::TangentIntersect { hit } | LineCircleIntr::OneIntersect { hit } => {
-                process_intersect(hit.line_t, hit.point)
-            }
-            LineCircleIntr::TwoIntersects { hit1, hit2 } => {
-                let t0 = hit1.line_t;
-                let t1 = hit2.line_t;
-                let intr1 = hit1.point;
-                let intr2 = hit2.point;
-                let dist1_sq = dist_squared(intr1, shared_source_vertex);
-                let dist2_sq = dist_squared(intr2, shared_source_vertex);
-                if self.squared_distances_equal(dist1_sq, dist2_sq) {
-                    process_intersect(t0, intr1).or_else(|| process_intersect(t1, intr2))
-                } else if dist1_sq < dist2_sq {
-                    process_intersect(t0, intr1)
+    ) -> Option<SegmentIntersection<T>> {
+        match intersections {
+            SegmentIntersections::None => None,
+            SegmentIntersections::Tangent(hit) | SegmentIntersections::One(hit) => Some(hit),
+            SegmentIntersections::Two([hit1, hit2]) => {
+                let dist1_sq = dist_squared(hit1.point, shared_source_vertex);
+                let dist2_sq = dist_squared(hit2.point, shared_source_vertex);
+                if dist1_sq <= dist2_sq {
+                    Some(hit1)
                 } else {
-                    process_intersect(t1, intr2)
+                    Some(hit2)
+                }
+            }
+            SegmentIntersections::Overlap { start, end } => {
+                if dist_squared(start.point, shared_source_vertex)
+                    <= dist_squared(end.point, shared_source_vertex)
+                {
+                    Some(start)
+                } else {
+                    Some(end)
                 }
             }
         }
@@ -614,10 +552,10 @@ where
         next: &RawOffsetArc<T>,
         shared_source_vertex: Vector2<T>,
     ) -> JoinBoundary<T> {
-        match self.line_arc_intersection(current, next, shared_source_vertex) {
-            Some((point, line_param, arc_param)) => {
-                Self::trimmed_boundary(point, line_param, arc_param)
-            }
+        let intersections =
+            intersect_line_arc(current.as_segment(), next.as_segment(), self.pos_equal_eps);
+        match Self::nearest_hit(intersections, shared_source_vertex) {
+            Some(hit) => Self::trimmed_boundary(hit.point, hit.seg1_t, hit.seg2_t),
             None => {
                 Self::line_connection_boundary(JoinClass::InvalidInnerGap, current.end, next.start)
             }
@@ -630,10 +568,10 @@ where
         next: &RawOffsetLine<T>,
         shared_source_vertex: Vector2<T>,
     ) -> JoinBoundary<T> {
-        match self.line_arc_intersection(next, current, shared_source_vertex) {
-            Some((point, line_param, arc_param)) => {
-                Self::trimmed_boundary(point, arc_param, line_param)
-            }
+        let intersections =
+            intersect_arc_line(current.as_segment(), next.as_segment(), self.pos_equal_eps);
+        match Self::nearest_hit(intersections, shared_source_vertex) {
+            Some(hit) => Self::trimmed_boundary(hit.point, hit.seg1_t, hit.seg2_t),
             None => {
                 Self::line_connection_boundary(JoinClass::InvalidInnerGap, current.end, next.start)
             }
@@ -646,55 +584,12 @@ where
         next: &RawOffsetArc<T>,
         shared_source_vertex: Vector2<T>,
     ) -> JoinBoundary<T> {
-        // Keep candidates on both finite spans and snap tolerant endpoint hits.
-        let process_intersect = |intersect: Vector2<T>| {
-            let point = if intersect.fuzzy_eq_eps(current.start, self.pos_equal_eps) {
-                current.start
-            } else if intersect.fuzzy_eq_eps(current.end, self.pos_equal_eps) {
-                current.end
-            } else if intersect.fuzzy_eq_eps(next.start, self.pos_equal_eps) {
-                next.start
-            } else if intersect.fuzzy_eq_eps(next.end, self.pos_equal_eps) {
-                next.end
-            } else {
-                intersect
-            };
-            let current_param = self.usable_arc_param(current, point)?;
-            let next_param = self.usable_arc_param(next, point)?;
-            Some(Self::trimmed_boundary(point, current_param, next_param))
-        };
-
-        // Prefer the intersection nearest the shared source vertex.
-        let result = match circle_circle_intr(
-            current.radius,
-            current.center,
-            next.radius,
-            next.center,
-            self.pos_equal_eps,
-        ) {
-            CircleCircleIntr::NoIntersect => None,
-            CircleCircleIntr::TangentIntersect { hit } => process_intersect(hit.point),
-            CircleCircleIntr::TwoIntersects { hit1, hit2 } => {
-                let point1 = hit1.point;
-                let point2 = hit2.point;
-                let dist1_sq = dist_squared(point1, shared_source_vertex);
-                let dist2_sq = dist_squared(point2, shared_source_vertex);
-                if self.squared_distances_equal(dist1_sq, dist2_sq) {
-                    process_intersect(point1).or_else(|| process_intersect(point2))
-                } else if dist1_sq < dist2_sq {
-                    process_intersect(point1)
-                } else {
-                    process_intersect(point2)
-                }
-            }
-            CircleCircleIntr::Overlapping => {
-                process_intersect(next.start).or_else(|| process_intersect(current.end))
-            }
-        };
-
-        result.unwrap_or_else(|| {
-            Self::line_connection_boundary(JoinClass::InvalidInnerGap, current.end, next.start)
-        })
+        let intersections =
+            intersect_arcs(current.as_segment(), next.as_segment(), self.pos_equal_eps);
+        Self::nearest_hit(intersections, shared_source_vertex).map_or_else(
+            || Self::line_connection_boundary(JoinClass::InvalidInnerGap, current.end, next.start),
+            |hit| Self::trimmed_boundary(hit.point, hit.seg1_t, hit.seg2_t),
+        )
     }
 
     fn add_first(&mut self, point: Vector2<T>) {

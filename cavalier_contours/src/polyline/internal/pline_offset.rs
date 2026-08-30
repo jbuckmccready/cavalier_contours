@@ -30,16 +30,16 @@ use crate::{
     core::{
         Control,
         math::{
-            CircleCircleIntr, LineCircleIntr, Vector2, circle_circle_intr, line_circle_intr,
-            min_max, point_within_arc_sweep,
+            Circle, CurveIntersections, Vector2, intersect_circles, intersect_line_circle, min_max,
         },
         traits::Real,
     },
     polyline::{
         CoincidentSegmentBehavior, FindIntersectsOptions, PlineBasicIntersect, PlineCreation,
         PlineIntersect, PlineIntersectFilterItem, PlineIntersectVisitor, PlineOffsetOptions,
-        PlineOverlappingIntersect, PlineSegIntr, PlineSource, PlineVertex, PlineViewData,
-        TouchingLoopBehavior, TwoPlinesIntersectFilterItem, dist_from_segment_start,
+        PlineOverlappingIntersect, PlineSource, PlineVertex, PlineViewData, Segment,
+        SegmentIntersections, TouchingLoopBehavior, TwoPlinesIntersectFilterItem,
+        dist_from_segment_start,
         internal::{
             pline_intersects::{
                 find_intersects, find_intersects_filtered, visit_global_self_intersects,
@@ -47,8 +47,8 @@ use crate::{
             },
             raw_pline_offset::{RawOffsetResult, create_raw_offset},
         },
-        pline_seg_intr, seg_arc_radius_and_center, seg_distance_is_greater_than,
-        seg_fast_approx_bounding_box, seg_midpoint, seg_tangent_vector,
+        pline_seg_intr, seg_distance_is_greater_than, seg_fast_approx_bounding_box, seg_midpoint,
+        seg_tangent_vector,
     },
 };
 use static_aabb2d_index::{Control as AabbControl, StaticAABB2DIndex, StaticAABB2DIndexBuilder};
@@ -241,7 +241,7 @@ where
                     original_polyline.at(j),
                     pos_equal_eps
                 ),
-                PlineSegIntr::NoIntersect
+                SegmentIntersections::None
             );
             if has_intersect {
                 AabbControl::Break(())
@@ -1464,81 +1464,38 @@ fn visit_circle_intersects<P, T, F, V>(
     let aabb_index = query.aabb_index;
     let pos_equal_eps = query.pos_equal_eps;
 
-    let is_valid_line_intr = |t: T| -> bool {
-        // skip false intersects and intersects at start of seg
-        t >= T::zero() && t <= T::one() && t.abs() > pos_equal_eps
-    };
-
-    let is_valid_arc_intr = |arc_center: Vector2<T>,
-                             arc_start: Vector2<T>,
-                             arc_end: Vector2<T>,
-                             bulge: T,
-                             intr: Vector2<T>|
-     -> bool {
-        // skip false intersects and intersects at start of seg
-        !arc_start.fuzzy_eq_eps(intr, pos_equal_eps)
-            && point_within_arc_sweep(
-                arc_center,
-                arc_start,
-                arc_end,
-                bulge < T::zero(),
-                intr,
-                pos_equal_eps,
-            )
-    };
-
     let mut query_visitor = |item: usize| {
         let Some(start_index) = filter(item) else {
             return;
         };
         let v1 = pline.at(start_index);
         let v2 = pline.at(pline.next_wrapping_index(start_index));
-        if v1.bulge_is_zero() {
-            match line_circle_intr(
-                v1.pos(),
-                v2.pos(),
-                circle_radius,
-                circle_center,
-                pos_equal_eps,
-            ) {
-                LineCircleIntr::NoIntersect => {}
-                LineCircleIntr::TangentIntersect { hit } | LineCircleIntr::OneIntersect { hit } => {
-                    if is_valid_line_intr(hit.line_t) {
-                        visitor(start_index, hit.point);
-                    }
-                }
-                LineCircleIntr::TwoIntersects { hit1, hit2 } => {
-                    if is_valid_line_intr(hit1.line_t) {
-                        visitor(start_index, hit1.point);
-                    }
-                    if is_valid_line_intr(hit2.line_t) {
-                        visitor(start_index, hit2.point);
-                    }
-                }
+        let segment = Segment::from_vertices(v1, v2);
+        let query_circle = Circle {
+            center: circle_center,
+            radius: circle_radius,
+        };
+        let intersections = match segment {
+            Segment::Line(line) => {
+                let Some(whole_line) = line.as_line() else {
+                    return;
+                };
+                intersect_line_circle(whole_line, query_circle, pos_equal_eps)
             }
-        } else {
-            let (arc_radius, arc_center) = seg_arc_radius_and_center(v1, v2);
-            match circle_circle_intr(
-                arc_radius,
-                arc_center,
-                circle_radius,
-                circle_center,
-                pos_equal_eps,
-            ) {
-                CircleCircleIntr::NoIntersect | CircleCircleIntr::Overlapping => {}
-                CircleCircleIntr::TangentIntersect { hit } => {
-                    if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, hit.point) {
-                        visitor(start_index, hit.point);
-                    }
-                }
-                CircleCircleIntr::TwoIntersects { hit1, hit2 } => {
-                    if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, hit1.point) {
-                        visitor(start_index, hit1.point);
-                    }
-                    if is_valid_arc_intr(arc_center, v1.pos(), v2.pos(), v1.bulge, hit2.point) {
-                        visitor(start_index, hit2.point);
-                    }
-                }
+            Segment::Arc(arc) => intersect_circles(arc.circle(), query_circle, pos_equal_eps),
+        };
+        let candidates = match intersections {
+            CurveIntersections::None | CurveIntersections::Coincident => return,
+            CurveIntersections::Tangent(hit) | CurveIntersections::One(hit) => [Some(hit), None],
+            CurveIntersections::Two([hit1, hit2]) => [Some(hit1), Some(hit2)],
+        };
+        for candidate in candidates.into_iter().flatten() {
+            let Some(location) = segment.locate(candidate, pos_equal_eps * pos_equal_eps) else {
+                continue;
+            };
+            // Skip contacts at the start of the polyline segment.
+            if location.t.abs() > pos_equal_eps {
+                visitor(start_index, location.point);
             }
         }
     };

@@ -7,6 +7,7 @@ use crate::{
     polyline::{ArcSegment, LineSegment, Segment},
 };
 
+#[inline(always)]
 fn line_circle_intersections<T>(
     line: LineSegment<T>,
     arc: ArcSegment<T>,
@@ -31,6 +32,7 @@ where
 
 /// Intersects a finite line segment and arc in line-arc argument order.
 #[must_use]
+#[inline(always)]
 pub fn intersect_line_arc<T>(
     line: LineSegment<T>,
     arc: ArcSegment<T>,
@@ -50,6 +52,7 @@ where
 
 /// Intersects a finite arc and line segment in arc-line argument order.
 #[must_use]
+#[inline(always)]
 pub fn intersect_arc_line<T>(
     arc: ArcSegment<T>,
     line: LineSegment<T>,

@@ -7,7 +7,7 @@ use crate::{
         traits::{ControlFlow, Real},
     },
     polyline::{
-        PlineCreation, PlineSegIntr, PlineSegIntrPoint, PlineSource, ViewDataValidation,
+        PlineCreation, PlineSource, SegmentIntersection, SegmentIntersections, ViewDataValidation,
         internal::pline_intersects::OverlappingSlice,
     },
 };
@@ -459,7 +459,7 @@ where
     pub fn from_seg_hit(
         start_index1: usize,
         start_index2: usize,
-        hit: PlineSegIntrPoint<T>,
+        hit: SegmentIntersection<T>,
     ) -> Self {
         Self {
             start_index1,
@@ -652,7 +652,7 @@ where
     /// Visits the detailed intersection result and contexts for the resolved segment pair.
     fn visit(
         &mut self,
-        intersect: PlineSegIntr<T>,
+        intersect: SegmentIntersections<T>,
         pline1_context: &PlineIntersectVisitContext<T>,
         pline2_context: &PlineIntersectVisitContext<T>,
     ) -> C;
@@ -662,12 +662,16 @@ impl<T, C, F> TwoPlinesIntersectVisitor<T, C> for F
 where
     T: Real,
     C: ControlFlow,
-    F: FnMut(PlineSegIntr<T>, &PlineIntersectVisitContext<T>, &PlineIntersectVisitContext<T>) -> C,
+    F: FnMut(
+        SegmentIntersections<T>,
+        &PlineIntersectVisitContext<T>,
+        &PlineIntersectVisitContext<T>,
+    ) -> C,
 {
     #[inline]
     fn visit(
         &mut self,
-        intersect: PlineSegIntr<T>,
+        intersect: SegmentIntersections<T>,
         pline1_context: &PlineIntersectVisitContext<T>,
         pline2_context: &PlineIntersectVisitContext<T>,
     ) -> C {

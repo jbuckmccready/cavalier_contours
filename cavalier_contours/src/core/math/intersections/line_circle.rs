@@ -3,6 +3,7 @@ use crate::core::traits::Real;
 
 /// Intersects an infinite line and a full circle.
 #[must_use]
+#[inline(always)]
 pub fn intersect_line_circle<T>(
     line: Line<T>,
     circle: Circle<T>,

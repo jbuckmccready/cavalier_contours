@@ -3,7 +3,7 @@ use cavalier_contours::{
     core::{math::Vector2, traits::FuzzyEq},
     polyline::{
         pline_seg_intr, seg_arc_radius_and_center, seg_bounding_box, seg_closest_point, seg_length,
-        seg_midpoint, seg_split_at_point, seg_tangent_vector, PlineSegIntr, PlineVertex,
+        seg_midpoint, seg_split_at_point, seg_tangent_vector, PlineVertex, SegmentIntersections,
     },
 };
 
@@ -281,26 +281,21 @@ fn print_segment_info(start: PlineVertex<f64>, end: PlineVertex<f64>, name: &str
     }
 }
 
-fn print_intersection_result(result: PlineSegIntr<f64>) {
+fn print_intersection_result(result: SegmentIntersections<f64>) {
     match result {
-        PlineSegIntr::NoIntersect => println!("  No intersection"),
-        PlineSegIntr::TangentIntersect { hit } => {
+        SegmentIntersections::None => println!("  No intersection"),
+        SegmentIntersections::Tangent(hit) => {
             print_point("Tangent intersection", hit.point);
         }
-        PlineSegIntr::OneIntersect { hit } => print_point("Intersection", hit.point),
-        PlineSegIntr::TwoIntersects { hit1, hit2 } => {
+        SegmentIntersections::One(hit) => print_point("Intersection", hit.point),
+        SegmentIntersections::Two([hit1, hit2]) => {
             print_point("Intersection 1", hit1.point);
             print_point("Intersection 2", hit2.point);
         }
-        PlineSegIntr::OverlappingLines { point1, point2 } => {
-            println!("  Overlapping lines:");
-            print_point("  From", point1);
-            print_point("  To", point2);
-        }
-        PlineSegIntr::OverlappingArcs { point1, point2 } => {
-            println!("  Overlapping arcs:");
-            print_point("  From", point1);
-            print_point("  To", point2);
+        SegmentIntersections::Overlap { start, end } => {
+            println!("  Overlapping segments:");
+            print_point("  From", start.point);
+            print_point("  To", end.point);
         }
     }
 }

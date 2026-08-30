@@ -2,7 +2,7 @@ use cavalier_contours::{
     core::{traits::FuzzyEq, Control},
     polyline::{
         FindIntersectsOptions, PlineIntersect, PlineIntersectVisitContext, PlineIntersectVisitor,
-        PlineSegIntr, PlineSelfIntersectOptions, PlineSource, PlineSourceMut, Polyline,
+        PlineSelfIntersectOptions, PlineSource, PlineSourceMut, Polyline, SegmentIntersections,
         TwoPlinesIntersectVisitor,
     },
 };
@@ -133,10 +133,10 @@ fn polyline_intersections() {
 
     rect1.visit_intersects(&rect2, &mut |seg_intr, ctx1: &PlineIntersectVisitContext<f64>, ctx2: &PlineIntersectVisitContext<f64>| {
         match seg_intr {
-            PlineSegIntr::NoIntersect => {
+            SegmentIntersections::None => {
                 // No intersection between these segments
             }
-            PlineSegIntr::TangentIntersect { hit } => {
+            SegmentIntersections::Tangent(hit) => {
                 let point = hit.point;
                 basic_count += 1;
                 intersection_points.push((point.x, point.y));
@@ -146,7 +146,7 @@ fn polyline_intersections() {
                 assert!(point.x >= 0.0 && point.x <= 15.0, "Intersection X coordinate should be within bounds");
                 assert!(point.y >= 0.0 && point.y <= 15.0, "Intersection Y coordinate should be within bounds");
             }
-            PlineSegIntr::OneIntersect { hit } => {
+            SegmentIntersections::One(hit) => {
                 let point = hit.point;
                 basic_count += 1;
                 intersection_points.push((point.x, point.y));
@@ -156,7 +156,7 @@ fn polyline_intersections() {
                 assert!(point.x >= 0.0 && point.x <= 15.0, "Intersection X coordinate should be within bounds");
                 assert!(point.y >= 0.0 && point.y <= 15.0, "Intersection Y coordinate should be within bounds");
             }
-            PlineSegIntr::TwoIntersects { hit1, hit2 } => {
+            SegmentIntersections::Two([hit1, hit2]) => {
                 let point1 = hit1.point;
                 let point2 = hit2.point;
                 basic_count += 2;
@@ -165,15 +165,10 @@ fn polyline_intersections() {
                 println!("  Two intersections #{}: ({:.2}, {:.2}) and ({:.2}, {:.2}) at segments ({}, {})", 
                          basic_count - 1, point1.x, point1.y, point2.x, point2.y, ctx1.vertex_index, ctx2.vertex_index);
             }
-            PlineSegIntr::OverlappingLines { point1, point2 } => {
+            SegmentIntersections::Overlap { start, end } => {
                 overlapping_count += 1;
-                println!("  Overlapping line #{overlapping_count}: ({:.2}, {:.2}) to ({:.2}, {:.2}) at segments ({}, {})", 
-                         point1.x, point1.y, point2.x, point2.y, ctx1.vertex_index, ctx2.vertex_index);
-            }
-            PlineSegIntr::OverlappingArcs { point1, point2 } => {
-                overlapping_count += 1;
-                println!("  Overlapping arc #{overlapping_count}: ({:.2}, {:.2}) to ({:.2}, {:.2}) at segments ({}, {})", 
-                         point1.x, point1.y, point2.x, point2.y, ctx1.vertex_index, ctx2.vertex_index);
+                println!("  Overlap #{overlapping_count}: ({:.2}, {:.2}) to ({:.2}, {:.2}) at segments ({}, {})",
+                         start.point.x, start.point.y, end.point.x, end.point.y, ctx1.vertex_index, ctx2.vertex_index);
             }
         }
     });
@@ -466,42 +461,43 @@ impl DetailedIntersectionVisitor {
 impl TwoPlinesIntersectVisitor<f64, Control<()>> for DetailedIntersectionVisitor {
     fn visit(
         &mut self,
-        intersect: PlineSegIntr<f64>,
+        intersect: SegmentIntersections<f64>,
         pline1_context: &PlineIntersectVisitContext<f64>,
         pline2_context: &PlineIntersectVisitContext<f64>,
     ) -> Control<()> {
         let detail = match intersect {
-            PlineSegIntr::NoIntersect => IntersectionDetail::NoIntersection,
-            PlineSegIntr::TangentIntersect { hit } => IntersectionDetail::Tangent {
+            SegmentIntersections::None => IntersectionDetail::NoIntersection,
+            SegmentIntersections::Tangent(hit) => IntersectionDetail::Tangent {
                 point: (hit.point.x, hit.point.y),
                 seg1: pline1_context.vertex_index,
                 seg2: pline2_context.vertex_index,
             },
-            PlineSegIntr::OneIntersect { hit } => IntersectionDetail::Basic {
+            SegmentIntersections::One(hit) => IntersectionDetail::Basic {
                 point: (hit.point.x, hit.point.y),
                 seg1: pline1_context.vertex_index,
                 seg2: pline2_context.vertex_index,
             },
-            PlineSegIntr::TwoIntersects { hit1, hit2 } => IntersectionDetail::Double {
+            SegmentIntersections::Two([hit1, hit2]) => IntersectionDetail::Double {
                 point1: (hit1.point.x, hit1.point.y),
                 point2: (hit2.point.x, hit2.point.y),
                 seg1: pline1_context.vertex_index,
                 seg2: pline2_context.vertex_index,
             },
-            PlineSegIntr::OverlappingLines { point1, point2 } => {
-                IntersectionDetail::OverlappingLine {
-                    start: (point1.x, point1.y),
-                    end: (point2.x, point2.y),
-                    seg1: pline1_context.vertex_index,
-                    seg2: pline2_context.vertex_index,
-                }
-            }
-            PlineSegIntr::OverlappingArcs { point1, point2 } => {
-                IntersectionDetail::OverlappingArc {
-                    start: (point1.x, point1.y),
-                    end: (point2.x, point2.y),
-                    seg1: pline1_context.vertex_index,
-                    seg2: pline2_context.vertex_index,
+            SegmentIntersections::Overlap { start, end } => {
+                if pline1_context.v1.bulge_is_zero() {
+                    IntersectionDetail::OverlappingLine {
+                        start: (start.point.x, start.point.y),
+                        end: (end.point.x, end.point.y),
+                        seg1: pline1_context.vertex_index,
+                        seg2: pline2_context.vertex_index,
+                    }
+                } else {
+                    IntersectionDetail::OverlappingArc {
+                        start: (start.point.x, start.point.y),
+                        end: (end.point.x, end.point.y),
+                        seg1: pline1_context.vertex_index,
+                        seg2: pline2_context.vertex_index,
+                    }
                 }
             }
         };

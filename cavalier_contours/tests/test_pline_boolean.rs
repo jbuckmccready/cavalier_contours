@@ -580,7 +580,7 @@ mod test_specific {
         }
         overlapping_pill_shaped_ends_reported {
             // reported case which failed, caused by numerical stability problem in
-            // line_circle_intr function
+            // line-circle intersection function
             (
                 pline_closed_userdata![[4], (161.29, 113.665, 0.0), (167.64, 113.665, 0.0), (167.64, 114.935, 0.0), (161.29, 114.935, 1.0)],
                 pline_closed_userdata![[117], (155.575, 113.665, 0.0), (161.29, 113.665, 1.0), (161.29, 114.935, 0.0), (155.575, 114.935, 0.0)]
@@ -611,7 +611,7 @@ mod test_specific {
         }
         overlapping_pill_shaped_ends_reported3 {
             // reported case which failed, caused by fuzzy compare between squared numbers which are
-            //  not to scale with epsilon value in line_circle_intr function
+            //  not to scale with epsilon value in the line-circle intersection function
             (
                 pline_closed_userdata![[4], (113.1450199999994, 99.04090098302, 0.0), (113.1449999999994, 114.30000098302, 1.0), (111.6450000000006, 114.29999901698, 0.0), (111.6450200000006, 99.04089901698, 1.0)],
                 pline_closed_userdata![[117], (113.145, 114.3, 0.0), (113.145, 117.475, 1.0), (111.645, 117.475, 0.0), (111.645, 114.3, 1.0)]

@@ -11,8 +11,8 @@ use crate::{
     polyline::{
         FindIntersectsOptions, PlineBasicIntersect, PlineIntersect, PlineIntersectFilterItem,
         PlineIntersectVisitContext, PlineIntersectVisitor, PlineIntersectsCollection,
-        PlineOverlappingIntersect, PlineSegIntr, PlineSegIntrPoint, PlineSource, PlineView,
-        PlineViewData, TwoPlinesIntersectFilterItem, TwoPlinesIntersectVisitor,
+        PlineOverlappingIntersect, PlineSource, PlineView, PlineViewData, SegmentIntersection,
+        SegmentIntersections, TwoPlinesIntersectFilterItem, TwoPlinesIntersectVisitor,
         dist_from_segment_start, pline_seg_intr, seg_fast_approx_bounding_box, seg_split_at_point,
         seg_tangent_vector,
     },
@@ -92,15 +92,15 @@ where
                 )));
             } else {
                 match pline_seg_intr(v1, v2, v2, v3, pos_equal_eps) {
-                    PlineSegIntr::NoIntersect => {}
-                    PlineSegIntr::TangentIntersect { hit } | PlineSegIntr::OneIntersect { hit } => {
+                    SegmentIntersections::None => {}
+                    SegmentIntersections::Tangent(hit) | SegmentIntersections::One(hit) => {
                         if !hit.point.fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
                             try_cf!(visitor.visit(PlineIntersect::Basic(
                                 PlineBasicIntersect::from_seg_hit(i, j, hit)
                             )));
                         }
                     }
-                    PlineSegIntr::TwoIntersects { hit1, hit2 } => {
+                    SegmentIntersections::Two([hit1, hit2]) => {
                         if !hit1.point.fuzzy_eq_eps(v2.pos(), pos_equal_eps) {
                             try_cf!(visitor.visit(PlineIntersect::Basic(
                                 PlineBasicIntersect::from_seg_hit(i, j, hit1)
@@ -113,10 +113,9 @@ where
                             )));
                         }
                     }
-                    PlineSegIntr::OverlappingLines { point1, point2 }
-                    | PlineSegIntr::OverlappingArcs { point1, point2 } => {
+                    SegmentIntersections::Overlap { start, end } => {
                         try_cf!(visitor.visit(PlineIntersect::Overlapping(
-                            PlineOverlappingIntersect::new(i, j, point1, point2)
+                            PlineOverlappingIntersect::new(i, j, start.point, end.point)
                         )));
                     }
                 }
@@ -206,8 +205,8 @@ where
             let u1 = polyline.at(hit_i);
             let u2 = polyline.at(hit_j);
             match pline_seg_intr(v1, v2, u1, u2, pos_equal_eps) {
-                PlineSegIntr::NoIntersect => {}
-                PlineSegIntr::TangentIntersect { hit } | PlineSegIntr::OneIntersect { hit } => {
+                SegmentIntersections::None => {}
+                SegmentIntersections::Tangent(hit) | SegmentIntersections::One(hit) => {
                     cf = visitor.visit(PlineIntersect::Basic(PlineBasicIntersect::from_seg_hit(
                         i, hit_i, hit,
                     )));
@@ -215,7 +214,7 @@ where
                         return aabb_index::Control::Break(());
                     }
                 }
-                PlineSegIntr::TwoIntersects { hit1, hit2 } => {
+                SegmentIntersections::Two([hit1, hit2]) => {
                     cf = visitor.visit(PlineIntersect::Basic(PlineBasicIntersect::from_seg_hit(
                         i, hit_i, hit1,
                     )));
@@ -230,10 +229,9 @@ where
                         return aabb_index::Control::Break(());
                     }
                 }
-                PlineSegIntr::OverlappingLines { point1, point2 }
-                | PlineSegIntr::OverlappingArcs { point1, point2 } => {
+                SegmentIntersections::Overlap { start, end } => {
                     cf = visitor.visit(PlineIntersect::Overlapping(
-                        PlineOverlappingIntersect::new(i, hit_i, point1, point2),
+                        PlineOverlappingIntersect::new(i, hit_i, start.point, end.point),
                     ));
                     if cf.should_break() {
                         return aabb_index::Control::Break(());
@@ -499,7 +497,7 @@ where
         &mut self,
         start_index1: usize,
         start_index2: usize,
-        hit: PlineSegIntrPoint<T>,
+        hit: SegmentIntersection<T>,
     ) {
         self.raw_basic_intersects
             .push(PlineBasicIntersect::from_seg_hit(
@@ -511,7 +509,7 @@ where
 
     fn visit_intersect(
         &mut self,
-        intersect: PlineSegIntr<T>,
+        intersect: SegmentIntersections<T>,
         pline1_context: &PlineIntersectVisitContext<T>,
         pline2_context: &PlineIntersectVisitContext<T>,
     ) -> Control {
@@ -519,19 +517,23 @@ where
         let i2 = pline2_context.vertex_index;
 
         match intersect {
-            PlineSegIntr::NoIntersect => {}
-            PlineSegIntr::TangentIntersect { hit } | PlineSegIntr::OneIntersect { hit } => {
+            SegmentIntersections::None => {}
+            SegmentIntersections::Tangent(hit) | SegmentIntersections::One(hit) => {
                 self.add_basic_intersect(i1, i2, hit);
             }
-            PlineSegIntr::TwoIntersects { hit1, hit2 } => {
+            SegmentIntersections::Two([hit1, hit2]) => {
                 self.add_basic_intersect(i1, i2, hit1);
                 self.add_basic_intersect(i1, i2, hit2);
             }
-            PlineSegIntr::OverlappingLines { point1, point2 }
-            | PlineSegIntr::OverlappingArcs { point1, point2 } => {
+            SegmentIntersections::Overlap { start, end } => {
                 self.result
                     .overlapping_intersects
-                    .push(PlineOverlappingIntersect::new(i1, i2, point1, point2));
+                    .push(PlineOverlappingIntersect::new(
+                        i1,
+                        i2,
+                        start.point,
+                        end.point,
+                    ));
             }
         }
         Control::Continue
@@ -574,7 +576,7 @@ where
 
     fn visit(
         &mut self,
-        intersect: PlineSegIntr<T>,
+        intersect: SegmentIntersections<T>,
         pline1_context: &PlineIntersectVisitContext<T>,
         pline2_context: &PlineIntersectVisitContext<T>,
     ) -> Control {
@@ -655,16 +657,15 @@ where
 {
     let mut found_intersect = false;
 
-    let mut visitor = |intersect: PlineSegIntr<T>,
+    let mut visitor = |intersect: SegmentIntersections<T>,
                        _: &PlineIntersectVisitContext<T>,
                        _: &PlineIntersectVisitContext<T>| {
         match intersect {
-            PlineSegIntr::NoIntersect => aabb_index::Control::Continue,
-            PlineSegIntr::TangentIntersect { .. }
-            | PlineSegIntr::OneIntersect { .. }
-            | PlineSegIntr::TwoIntersects { .. }
-            | PlineSegIntr::OverlappingLines { .. }
-            | PlineSegIntr::OverlappingArcs { .. } => {
+            SegmentIntersections::None => aabb_index::Control::Continue,
+            SegmentIntersections::Tangent(_)
+            | SegmentIntersections::One(_)
+            | SegmentIntersections::Two(_)
+            | SegmentIntersections::Overlap { .. } => {
                 found_intersect = true;
                 aabb_index::Control::Break(())
             }
@@ -1352,7 +1353,7 @@ mod find_intersects_tests {
             intrs.basic_intersects[0].point,
             Vector2::new(crossing_x, 0.0)
         );
-        let PlineSegIntr::OneIntersect { hit } =
+        let SegmentIntersections::One(hit) =
             pline_seg_intr(pline1[0], pline1[1], pline2[0], pline2[1], epsilon)
         else {
             panic!("selected support pair did not reproduce the intersection");

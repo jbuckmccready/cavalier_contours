@@ -3,6 +3,7 @@ use crate::core::{math::Vector2, traits::Real};
 
 /// Intersects two full circles.
 #[must_use]
+#[inline(always)]
 pub fn intersect_circles<T>(
     circle1: Circle<T>,
     circle2: Circle<T>,
