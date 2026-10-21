@@ -2038,6 +2038,34 @@ mod test_topology_stitching {
             }
         }
     );
+
+    fn open_channel_offset_by_half_width_source() -> Polyline<f64> {
+        pline_open_userdata![
+            [4],
+            (10.0, 2.0, 0.0),
+            (1.0, 2.0, 0.41421356237309503),
+            (0.5, 1.5, 0.0),
+            (0.5, 0.5, 0.41421356237309503),
+            (1.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0)
+        ]
+    }
+
+    topology_tests_by_coincident_behavior!(
+        // Tests an open channel offset by exactly half its width. The raw leg offsets are
+        // coincident and the end segment's two crossings merge into one point. There is no
+        // relation between the coincident legs at that point because their contact is one overlap.
+        // Preserve must pass through the zero-length end span and return one out-and-back open
+        // path, while Discard must remove the entire coincident result.
+        open_channel_offset_by_half_width {
+            (open_channel_offset_by_half_width_source(), 1.0) => {
+                Preserve => [
+                PlineProperties::new(3, 0.0, 17.0, 1.5, 1.0, 10.0, 1.0, vec![4]),
+                ],
+                Discard => [],
+            }
+        }
+    );
 }
 
 #[test]

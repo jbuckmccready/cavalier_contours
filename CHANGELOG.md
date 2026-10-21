@@ -2,6 +2,13 @@
 
 All notable changes to the cavalier_contours crate will be documented in this file.
 
+## Unreleased
+
+### Fixed 🐛
+
+- Fixed parallel offsets breaking into separate paths when coincident segments connect through a
+  zero-length raw span, such as an open channel offset by half its width.
+
 ## 0.9.0 - 2026-08-19
 
 Focus of this release is on robustness and performance of polyline offset generation.

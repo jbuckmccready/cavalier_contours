@@ -1736,11 +1736,58 @@ fn unvisited_start(
     starts_by_occurrence[occurrence.0].filter(|&index| !visited[index])
 }
 
+/// Visits each occurrence reached from `end_occurrence` by passing through related occurrences that
+/// start no dissected slice.
+///
+/// Dissection can reduce a raw span to zero length and leave its occurrence without a slice. For
+/// example, a raw segment's crossings with two coincident raw segments merge into one contact node.
+/// The coincident segments have no relation of their own at that point because their contact is
+/// reported as one overlap. Raw traversal still passes through the zero-length span, so routing
+/// may continue from that occurrence to its related occurrences.
+///
+/// Direct partners of `end_occurrence` are not visited. Each other occurrence is visited at most
+/// once, and only relations accepted by `relation_can_continue` are followed. All visited
+/// occurrences share the contact node of `end_occurrence`.
+fn visit_pass_through_occurrences<T, C, V>(
+    topology: &OffsetSliceSet<T>,
+    end_occurrence: OccurrenceId,
+    starts_by_occurrence: &[Option<usize>],
+    relation_can_continue: C,
+    mut visitor: V,
+) where
+    C: Fn(&ContactRelation) -> bool,
+    V: FnMut(OccurrenceId),
+{
+    let mut seen: SmallVec<[OccurrenceId; 4]> = SmallVec::new();
+    seen.push(end_occurrence);
+    // Occurrences whose relations are not yet followed: `end_occurrence`, then reached
+    // occurrences that start no slice.
+    let mut pending: SmallVec<[OccurrenceId; 4]> = SmallVec::new();
+    pending.push(end_occurrence);
+    while let Some(through) = pending.pop() {
+        for relation in incident_relations(topology, through) {
+            let partner = relation_partner(relation, through);
+            if !relation_can_continue(relation) || seen.contains(&partner) {
+                continue;
+            }
+            seen.push(partner);
+            if through != end_occurrence {
+                visitor(partner);
+            }
+            if starts_by_occurrence[partner.0].is_none() {
+                pending.push(partner);
+            }
+        }
+    }
+}
+
 /// Chooses the next slice while preserving raw offset traversal through contacts.
 ///
 /// It tries, in order: an unvisited slice starting at the ending occurrence, an unvisited slice
-/// starting at a related occurrence, closing at the component's initial occurrence, then stopping.
-/// It tries closing last so touching loops and repeated slices are consumed first.
+/// starting at a related occurrence, an unvisited slice reached by passing through related
+/// occurrences that start no slice (see [`visit_pass_through_occurrences`]), closing at the
+/// component's initial occurrence, then stopping. It tries closing last so touching loops and
+/// repeated slices are consumed first.
 fn choose_preserve_continuation<T>(
     topology: &OffsetSliceSet<T>,
     end_occurrence: OccurrenceId,
@@ -1779,12 +1826,35 @@ where
         return Continuation::Next(slice_index);
     }
 
-    if initial_occurrence.is_some_and(|initial| {
-        initial == end_occurrence
-            || incident_relations(topology, end_occurrence)
-                .filter(|relation| relation_can_continue(relation))
-                .any(|relation| relation_partner(relation, end_occurrence) == initial)
-    }) {
+    let mut pass_through_next: Option<(OccurrenceId, usize)> = None;
+    let mut pass_through_reaches_initial = false;
+    visit_pass_through_occurrences(
+        topology,
+        end_occurrence,
+        starts_by_occurrence,
+        relation_can_continue,
+        |occurrence| {
+            pass_through_reaches_initial |= initial_occurrence == Some(occurrence);
+            if let Some(slice_index) = unvisited_start(occurrence, starts_by_occurrence, visited)
+                && pass_through_next
+                    .is_none_or(|(best, _)| occurrence_order(topology, occurrence, best).is_lt())
+            {
+                pass_through_next = Some((occurrence, slice_index));
+            }
+        },
+    );
+    if let Some((_, slice_index)) = pass_through_next {
+        return Continuation::Next(slice_index);
+    }
+
+    if pass_through_reaches_initial
+        || initial_occurrence.is_some_and(|initial| {
+            initial == end_occurrence
+                || incident_relations(topology, end_occurrence)
+                    .filter(|relation| relation_can_continue(relation))
+                    .any(|relation| relation_partner(relation, end_occurrence) == initial)
+        })
+    {
         return Continuation::Close;
     }
 
