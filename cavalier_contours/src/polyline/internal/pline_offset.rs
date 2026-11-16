@@ -2208,7 +2208,24 @@ where
     }
 
     // Sanitize repeat positions to prevent unstable/degenerate segments.
-    let mut result = if let Some(cleaned) = polyline.remove_repeat_pos(options.pos_equal_eps) {
+    let cleaned = polyline.remove_repeat_pos(options.pos_equal_eps);
+    let cleaned_vertex_count = cleaned
+        .as_ref()
+        .map_or_else(|| polyline.vertex_count(), PlineSource::vertex_count);
+    if let Some(join_types) = options.join_types {
+        assert_eq!(
+            join_types.len(),
+            cleaned_vertex_count,
+            "join type count must match the vertex count after repeated positions are removed"
+        );
+        assert!(
+            join_types
+                .iter()
+                .all(|join_type| *join_type == crate::polyline::JoinType::Round),
+            "miter joins are not yet implemented"
+        );
+    }
+    let mut result = if let Some(cleaned) = cleaned {
         if cleaned.vertex_count() < 2 {
             Vec::<O>::new()
         } else {

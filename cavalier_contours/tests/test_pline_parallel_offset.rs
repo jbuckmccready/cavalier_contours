@@ -8,6 +8,31 @@ use test_utils::{
     create_property_set, property_sets_match,
 };
 
+#[test]
+fn join_type_count_uses_cleaned_vertex_count() {
+    use cavalier_contours::{pline_open, polyline::JoinType};
+
+    let pline = pline_open![(0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (2.0, 0.0, 0.0)];
+    let options = PlineOffsetOptions {
+        join_types: Some(&[JoinType::Round, JoinType::Round]),
+        ..Default::default()
+    };
+    assert_eq!(pline.parallel_offset_opt(1.0, &options).len(), 1);
+}
+
+#[test]
+#[should_panic(expected = "join type count must match")]
+fn join_type_count_rejects_uncleaned_vertex_count() {
+    use cavalier_contours::{pline_open, polyline::JoinType};
+
+    let pline = pline_open![(0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (2.0, 0.0, 0.0)];
+    let options = PlineOffsetOptions {
+        join_types: Some(&[JoinType::Round; 3]),
+        ..Default::default()
+    };
+    pline.parallel_offset_opt(1.0, &options);
+}
+
 fn offset_into_properties_set(
     polyline: &Polyline<f64>,
     offset: f64,

@@ -213,6 +213,9 @@ enum JoinClass {
     Trimmed,
     /// An outer join bridged by an arc centered at the shared source vertex.
     OuterRound,
+    /// An outer join bridged by two straight segments meeting at a miter tip.
+    #[allow(dead_code)] // Constructed when miter join generation is implemented.
+    OuterMiter,
     /// Opposite collinear tangents bridged by an arc centered at the shared source vertex.
     ReversalRound,
     /// An inner join has no usable intersection, so its straight connector is invalid.
@@ -238,6 +241,8 @@ struct JoinBoundary<T> {
     next_param: T,
     /// Bulge of the connector from `current_end` to `next_start`.
     connector_bulge: T,
+    /// Miter tip, present only for an `OuterMiter` join.
+    miter_tip: Option<Vector2<T>>,
 }
 
 impl<T> JoinBoundary<T>
@@ -246,6 +251,10 @@ where
 {
     #[inline]
     fn connector_is_invalid(&self) -> bool {
+        debug_assert_eq!(
+            matches!(self.class, JoinClass::OuterMiter),
+            self.miter_tip.is_some()
+        );
         matches!(
             self.class,
             JoinClass::InvalidInnerGap | JoinClass::InvalidDegenerateGap
@@ -328,6 +337,7 @@ where
             next_start,
             next_param: T::zero(),
             connector_bulge,
+            miter_tip: None,
         }
     }
 
@@ -344,6 +354,7 @@ where
             next_start,
             next_param: T::zero(),
             connector_bulge: T::zero(),
+            miter_tip: None,
         }
     }
 
@@ -522,6 +533,7 @@ where
             next_start: point,
             next_param,
             connector_bulge: T::zero(),
+            miter_tip: None,
         }
     }
 
