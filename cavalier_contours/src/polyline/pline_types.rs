@@ -41,6 +41,16 @@ where
     pub distance: T,
 }
 
+/// Controls how an outer corner is joined when offsetting a polyline.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum JoinType {
+    /// Connect offset segments with an arc centered on the source vertex.
+    #[default]
+    Round,
+    /// Connect offset segments with a miter.
+    Miter,
+}
+
 /// Controls how tangent contacts between offset loops are handled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TouchingLoopBehavior {
@@ -66,6 +76,12 @@ pub struct PlineOffsetOptions<'a, T = f64>
 where
     T: Real,
 {
+    /// Join types indexed by vertex after repeated positions are removed. `None` uses round joins.
+    ///
+    /// Miters exceeding four times the offset distance fall back to round joins. Entries for
+    /// the endpoints of an open polyline are ignored. Miter joins on self-intersecting input have
+    /// not yet been validated.
+    pub join_types: Option<&'a [JoinType]>,
     /// Spatial index of all the polyline segment bounding boxes (or boxes no smaller, e.g. using
     /// [`PlineSource::create_approx_aabb_index`] is valid). If `None` is given then it will be
     /// computed internally. [`PlineSource::create_approx_aabb_index`] or
@@ -97,6 +113,7 @@ where
     #[must_use]
     pub fn new() -> Self {
         Self {
+            join_types: None,
             aabb_index: None,
             handle_self_intersects: false,
             pos_equal_eps: T::from(1e-5).unwrap(),

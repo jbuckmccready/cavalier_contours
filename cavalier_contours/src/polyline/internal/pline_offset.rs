@@ -2166,7 +2166,8 @@ where
         &constructed_index
     };
 
-    let raw_offset: RawOffsetResult<O> = create_raw_offset(polyline, offset, options.pos_equal_eps);
+    let raw_offset: RawOffsetResult<O> =
+        create_raw_offset(polyline, offset, options.pos_equal_eps, options.join_types);
     if raw_offset.polyline.is_empty() {
         Vec::new()
     } else if polyline.is_closed() && !options.handle_self_intersects {
@@ -2174,7 +2175,7 @@ where
         stitch_slices_together(&raw_offset.polyline, &slices, true, options)
     } else {
         let dual_raw_offset: RawOffsetResult<O> =
-            create_raw_offset(polyline, -offset, options.pos_equal_eps);
+            create_raw_offset(polyline, -offset, options.pos_equal_eps, None);
         let slices = slices_from_dual_raw_offsets(
             polyline,
             &raw_offset,
@@ -2208,7 +2209,18 @@ where
     }
 
     // Sanitize repeat positions to prevent unstable/degenerate segments.
-    let mut result = if let Some(cleaned) = polyline.remove_repeat_pos(options.pos_equal_eps) {
+    let cleaned = polyline.remove_repeat_pos(options.pos_equal_eps);
+    let cleaned_vertex_count = cleaned
+        .as_ref()
+        .map_or_else(|| polyline.vertex_count(), PlineSource::vertex_count);
+    if let Some(join_types) = options.join_types {
+        assert_eq!(
+            join_types.len(),
+            cleaned_vertex_count,
+            "join type count must match the vertex count after repeated positions are removed"
+        );
+    }
+    let mut result = if let Some(cleaned) = cleaned {
         if cleaned.vertex_count() < 2 {
             Vec::<O>::new()
         } else {

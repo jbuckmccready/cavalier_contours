@@ -14,7 +14,7 @@ use crate::{
         traits::Real,
     },
     polyline::{
-        PlineCreation, PlineSource, PlineSourceMut, PlineVertex, line_seg_bounding_box,
+        JoinType, PlineCreation, PlineSource, PlineSourceMut, PlineVertex, line_seg_bounding_box,
         seg_arc_radius_and_center,
     },
 };
@@ -213,6 +213,8 @@ enum JoinClass {
     Trimmed,
     /// An outer join bridged by an arc centered at the shared source vertex.
     OuterRound,
+    /// An outer join bridged by two straight segments meeting at a miter tip.
+    OuterMiter,
     /// Opposite collinear tangents bridged by an arc centered at the shared source vertex.
     ReversalRound,
     /// An inner join has no usable intersection, so its straight connector is invalid.
@@ -238,6 +240,8 @@ struct JoinBoundary<T> {
     next_param: T,
     /// Bulge of the connector from `current_end` to `next_start`.
     connector_bulge: T,
+    /// Miter tip, present only for an `OuterMiter` join.
+    miter_tip: Option<Vector2<T>>,
 }
 
 impl<T> JoinBoundary<T>
@@ -246,6 +250,10 @@ where
 {
     #[inline]
     fn connector_is_invalid(&self) -> bool {
+        debug_assert_eq!(
+            matches!(self.class, JoinClass::OuterMiter),
+            self.miter_tip.is_some()
+        );
         matches!(
             self.class,
             JoinClass::InvalidInnerGap | JoinClass::InvalidDegenerateGap
@@ -260,6 +268,7 @@ where
     O: PlineSourceMut<Num = T>,
 {
     source: &'a P,
+    join_types: Option<&'a [JoinType]>,
     raw_segments: Vec<RawOffsetSeg<T>>,
     polyline: O,
     invalid_segment_indexes: Vec<usize>,
@@ -274,9 +283,16 @@ where
     T: Real,
     O: PlineCreation<Num = T>,
 {
-    fn new(source: &'a P, raw_segments: Vec<RawOffsetSeg<T>>, offset: T, pos_equal_eps: T) -> Self {
+    fn new(
+        source: &'a P,
+        raw_segments: Vec<RawOffsetSeg<T>>,
+        offset: T,
+        pos_equal_eps: T,
+        join_types: Option<&'a [JoinType]>,
+    ) -> Self {
         Self {
             source,
+            join_types,
             polyline: O::with_capacity(source.vertex_count() + 1, false),
             invalid_segment_indexes: Vec::new(),
             raw_segments,
@@ -328,6 +344,7 @@ where
             next_start,
             next_param: T::zero(),
             connector_bulge,
+            miter_tip: None,
         }
     }
 
@@ -344,6 +361,7 @@ where
             next_start,
             next_param: T::zero(),
             connector_bulge: T::zero(),
+            miter_tip: None,
         }
     }
 
@@ -353,6 +371,7 @@ where
         current: &RawOffsetSeg<T>,
         next: &RawOffsetSeg<T>,
         shared_source_vertex: Vector2<T>,
+        join_type: JoinType,
     ) -> Option<JoinBoundary<T>> {
         let incoming = current.end_tangent();
         let outgoing = next.start_tangent();
@@ -394,6 +413,26 @@ where
             // Inner join: defer classification until the offset primitives are intersected.
             None
         } else {
+            if join_type == JoinType::Miter && !current.is_collapsed() && !next.is_collapsed() {
+                let t = (next.start() - current.end()).perp_dot(outgoing) / turn;
+                let tip = current.end() + incoming.scale(t);
+                let limit = self.offset.abs() * T::four();
+                if tip.x.abs() <= <T as Real>::max_value()
+                    && tip.y.abs() <= <T as Real>::max_value()
+                    && limit <= <T as Real>::max_value()
+                    && (tip - shared_source_vertex).length() <= limit
+                {
+                    return Some(JoinBoundary {
+                        class: JoinClass::OuterMiter,
+                        current_end: current.end(),
+                        current_param: T::one(),
+                        next_start: next.start(),
+                        next_param: T::zero(),
+                        connector_bulge: T::zero(),
+                        miter_tip: Some(tip),
+                    });
+                }
+            }
             // Outer round: bridge the offset endpoints with an arc.
             Some(self.arc_connection_boundary(
                 JoinClass::OuterRound,
@@ -418,7 +457,11 @@ where
             );
         }
 
-        if let Some(boundary) = self.join_without_intersection(current, next, shared_source_vertex)
+        let join_type = self
+            .join_types
+            .map_or(JoinType::Round, |types| types[next_index]);
+        if let Some(boundary) =
+            self.join_without_intersection(current, next, shared_source_vertex, join_type)
         {
             return boundary;
         }
@@ -522,6 +565,7 @@ where
             next_start: point,
             next_param,
             connector_bulge: T::zero(),
+            miter_tip: None,
         }
     }
 
@@ -800,11 +844,40 @@ where
                 .pos()
                 .fuzzy_eq_eps(boundary.current_end, self.pos_equal_eps)
         );
+        self.emit_miter_tip(&boundary);
         self.emit_segment(
             boundary.next_start,
-            boundary.connector_bulge,
+            if boundary.class == JoinClass::OuterMiter {
+                T::zero()
+            } else {
+                boundary.connector_bulge
+            },
             boundary.connector_is_invalid(),
         );
+    }
+
+    fn emit_miter_tip(&mut self, boundary: &JoinBoundary<T>) {
+        debug_assert_eq!(
+            matches!(boundary.class, JoinClass::OuterMiter),
+            boundary.miter_tip.is_some()
+        );
+        if boundary.class == JoinClass::OuterMiter {
+            self.emit_segment(
+                boundary.miter_tip.expect("miter join must have a tip"),
+                T::zero(),
+                false,
+            );
+        }
+    }
+
+    fn close_join(&mut self, boundary: JoinBoundary<T>) {
+        self.emit_miter_tip(&boundary);
+        let bulge = if boundary.class == JoinClass::OuterMiter {
+            T::zero()
+        } else {
+            boundary.connector_bulge
+        };
+        self.close_segment(bulge, boundary.connector_is_invalid());
     }
 
     fn build_open(mut self) -> RawOffsetResult<O> {
@@ -863,14 +936,14 @@ where
 
         // Fold a connector-free closing join into the final source span.
         let raw_segment = self.raw_segments[last_index];
-        let (closing_bulge, is_invalid_source) = if closing_boundary
+        if closing_boundary
             .current_end
             .fuzzy_eq_eps(closing_boundary.next_start, self.pos_equal_eps)
         {
-            (
+            self.close_segment(
                 raw_segment.span_bulge(source_start_param, closing_boundary.current_param),
                 raw_segment.span_is_invalid(source_start_param, closing_boundary.current_param),
-            )
+            );
         } else {
             self.emit_source_span(
                 last_index,
@@ -879,12 +952,8 @@ where
                 closing_boundary.current_end,
                 closing_boundary.current_param,
             );
-            (
-                closing_boundary.connector_bulge,
-                closing_boundary.connector_is_invalid(),
-            )
-        };
-        self.close_segment(closing_bulge, is_invalid_source);
+            self.close_join(closing_boundary);
+        }
         self.finish(true)
     }
 
@@ -990,7 +1059,12 @@ where
 }
 
 /// Constructs raw offset geometry and marks locally invalid output segments.
-pub fn create_raw_offset<P, T, O>(polyline: &P, offset: T, pos_equal_eps: T) -> RawOffsetResult<O>
+pub fn create_raw_offset<P, T, O>(
+    polyline: &P,
+    offset: T,
+    pos_equal_eps: T,
+    join_types: Option<&[JoinType]>,
+) -> RawOffsetResult<O>
 where
     P: PlineSource<Num = T> + ?Sized,
     T: Real,
@@ -1017,7 +1091,8 @@ where
         return RawOffsetResult::empty();
     }
 
-    let builder = RawOffsetBuilder::<P, T, O>::new(polyline, raw_segments, offset, pos_equal_eps);
+    let builder =
+        RawOffsetBuilder::<P, T, O>::new(polyline, raw_segments, offset, pos_equal_eps, join_types);
     if polyline.is_closed() {
         builder.build_closed()
     } else {
@@ -1047,7 +1122,8 @@ mod tests {
 
     fn join_at(input: &Polyline, offset: f64, current_index: usize) -> JoinBoundary<f64> {
         let raw_segments = create_untrimmed_raw_offset_segs(input, offset);
-        let builder = RawOffsetBuilder::<_, _, Polyline>::new(input, raw_segments, offset, 1e-5);
+        let builder =
+            RawOffsetBuilder::<_, _, Polyline>::new(input, raw_segments, offset, 1e-5, None);
         builder.analyze_join(current_index, current_index + 1)
     }
 
@@ -1093,8 +1169,13 @@ mod tests {
         ] {
             let next = Vector2::new(sweep.cos(), sweep.sin());
             for offset in [-1.0, 1.0] {
-                let builder =
-                    RawOffsetBuilder::<_, _, Polyline>::new(&source, Vec::new(), offset, 1e-5);
+                let builder = RawOffsetBuilder::<_, _, Polyline>::new(
+                    &source,
+                    Vec::new(),
+                    offset,
+                    1e-5,
+                    None,
+                );
                 let boundary = builder.arc_connection_boundary(
                     JoinClass::OuterRound,
                     Vector2::new(1.0, 0.0),
@@ -1113,7 +1194,7 @@ mod tests {
     #[test]
     fn normal_raw_offsets_have_no_invalid_segments() {
         let input = open(&[(0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 10.0, 0.0)]);
-        let result: RawOffsetResult<Polyline> = create_raw_offset(&input, -1.0, 1e-5);
+        let result: RawOffsetResult<Polyline> = create_raw_offset(&input, -1.0, 1e-5, None);
         assert!(!result.invalid_segments.contains(&true));
         assert_eq!(result.polyline.segment_count(), 3);
     }
@@ -1126,7 +1207,7 @@ mod tests {
             (-451.9166112272101, -41.09344423983177, 0.0),
             (-452.0787206022149, -40.854568155450046, 0.0),
         ]);
-        let result: RawOffsetResult<Polyline> = create_raw_offset(&input, 11.0, 1e-5);
+        let result: RawOffsetResult<Polyline> = create_raw_offset(&input, 11.0, 1e-5, None);
         assert_eq!(result.invalid_segments, [false, true, false, false, false]);
 
         let source_segments = create_untrimmed_raw_offset_segs(&input, 11.0);
@@ -1144,7 +1225,7 @@ mod tests {
     #[test]
     fn collapsed_arc_spans_are_invalid() {
         let input = open(&[(0.0, 0.0, 1.0), (2.0, 0.0, 0.0), (3.0, 1.0, 0.0)]);
-        let result: RawOffsetResult<Polyline> = create_raw_offset(&input, 2.0, 1e-5);
+        let result: RawOffsetResult<Polyline> = create_raw_offset(&input, 2.0, 1e-5, None);
         assert!(result.invalid_segments.contains(&true));
     }
     #[test]
@@ -1156,7 +1237,8 @@ mod tests {
 
         for input in fixtures {
             for offset in [-1.0, 1.0] {
-                let result: RawOffsetResult<Polyline> = create_raw_offset(&input, offset, 1e-5);
+                let result: RawOffsetResult<Polyline> =
+                    create_raw_offset(&input, offset, 1e-5, None);
                 assert!(result.polyline.is_closed());
                 assert_eq!(
                     result.invalid_segments.len(),
@@ -1182,7 +1264,8 @@ mod tests {
     fn near_collinear_corner_uses_normalized_angular_tolerance() {
         let source = open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 1.0e-10, 0.0)]);
         let raw_segments = create_untrimmed_raw_offset_segs(&source, 1.0e6);
-        let builder = RawOffsetBuilder::<_, _, Polyline>::new(&source, raw_segments, 1.0e6, 1e-5);
+        let builder =
+            RawOffsetBuilder::<_, _, Polyline>::new(&source, raw_segments, 1.0e6, 1e-5, None);
         assert_eq!(
             builder.analyze_join(0, 1).class,
             JoinClass::InvalidDegenerateGap
@@ -1217,7 +1300,8 @@ mod tests {
     fn inner_join_endpoint_tolerance_clamps_the_local_candidate() {
         let source = open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0)]);
         let raw_segments = create_untrimmed_raw_offset_segs(&source, 0.2);
-        let builder = RawOffsetBuilder::<_, _, Polyline>::new(&source, raw_segments, 0.2, 1e-5);
+        let builder =
+            RawOffsetBuilder::<_, _, Polyline>::new(&source, raw_segments, 0.2, 1e-5, None);
         let current = RawOffsetLine {
             start: Vector2::new(0.0, 0.0),
             end: Vector2::new(1.0, 0.0),
@@ -1236,7 +1320,8 @@ mod tests {
     fn unusable_nearest_line_arc_candidate_does_not_select_farther_crossing() {
         let source = open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 1.0), (2.0, 0.0, 0.0)]);
         let raw_segments = create_untrimmed_raw_offset_segs(&source, -0.2);
-        let builder = RawOffsetBuilder::<_, _, Polyline>::new(&source, raw_segments, -0.2, 1e-5);
+        let builder =
+            RawOffsetBuilder::<_, _, Polyline>::new(&source, raw_segments, -0.2, 1e-5, None);
         let line = RawOffsetLine {
             start: Vector2::new(0.5, 0.0),
             end: Vector2::new(2.0, 0.0),
@@ -1264,7 +1349,7 @@ mod tests {
     #[test]
     fn failed_inner_join_connector_is_recorded_as_invalid() {
         let input = open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0)]);
-        let result: RawOffsetResult<Polyline> = create_raw_offset(&input, 2.0, 1e-5);
+        let result: RawOffsetResult<Polyline> = create_raw_offset(&input, 2.0, 1e-5, None);
         assert_eq!(result.polyline.segment_count(), 3);
         assert_eq!(result.invalid_segments, [false, true, false]);
     }
@@ -1278,7 +1363,7 @@ mod tests {
         ]);
         input.set_userdata_values([3, 5]);
 
-        let result: RawOffsetResult<Polyline> = create_raw_offset(&input, -0.0, 1e-5);
+        let result: RawOffsetResult<Polyline> = create_raw_offset(&input, -0.0, 1e-5, None);
         assert_eq!(
             result.polyline.iter_vertexes().collect::<Vec<_>>(),
             input.iter_vertexes().collect::<Vec<_>>()
