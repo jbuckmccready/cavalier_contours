@@ -812,11 +812,40 @@ where
                 .pos()
                 .fuzzy_eq_eps(boundary.current_end, self.pos_equal_eps)
         );
+        self.emit_miter_tip(&boundary);
         self.emit_segment(
             boundary.next_start,
-            boundary.connector_bulge,
+            if boundary.class == JoinClass::OuterMiter {
+                T::zero()
+            } else {
+                boundary.connector_bulge
+            },
             boundary.connector_is_invalid(),
         );
+    }
+
+    fn emit_miter_tip(&mut self, boundary: &JoinBoundary<T>) {
+        debug_assert_eq!(
+            matches!(boundary.class, JoinClass::OuterMiter),
+            boundary.miter_tip.is_some()
+        );
+        if boundary.class == JoinClass::OuterMiter {
+            self.emit_segment(
+                boundary.miter_tip.expect("miter join must have a tip"),
+                T::zero(),
+                false,
+            );
+        }
+    }
+
+    fn close_join(&mut self, boundary: JoinBoundary<T>) {
+        self.emit_miter_tip(&boundary);
+        let bulge = if boundary.class == JoinClass::OuterMiter {
+            T::zero()
+        } else {
+            boundary.connector_bulge
+        };
+        self.close_segment(bulge, boundary.connector_is_invalid());
     }
 
     fn build_open(mut self) -> RawOffsetResult<O> {
@@ -875,14 +904,14 @@ where
 
         // Fold a connector-free closing join into the final source span.
         let raw_segment = self.raw_segments[last_index];
-        let (closing_bulge, is_invalid_source) = if closing_boundary
+        if closing_boundary
             .current_end
             .fuzzy_eq_eps(closing_boundary.next_start, self.pos_equal_eps)
         {
-            (
+            self.close_segment(
                 raw_segment.span_bulge(source_start_param, closing_boundary.current_param),
                 raw_segment.span_is_invalid(source_start_param, closing_boundary.current_param),
-            )
+            );
         } else {
             self.emit_source_span(
                 last_index,
@@ -891,12 +920,8 @@ where
                 closing_boundary.current_end,
                 closing_boundary.current_param,
             );
-            (
-                closing_boundary.connector_bulge,
-                closing_boundary.connector_is_invalid(),
-            )
-        };
-        self.close_segment(closing_bulge, is_invalid_source);
+            self.close_join(closing_boundary);
+        }
         self.finish(true)
     }
 
@@ -1061,6 +1086,48 @@ mod tests {
         let raw_segments = create_untrimmed_raw_offset_segs(input, offset);
         let builder = RawOffsetBuilder::<_, _, Polyline>::new(input, raw_segments, offset, 1e-5);
         builder.analyze_join(current_index, current_index + 1)
+    }
+
+    #[test]
+    fn miter_boundary_emits_two_lines_for_open_and_closing_joins() {
+        let input = open(&[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]);
+        let boundary = JoinBoundary {
+            class: JoinClass::OuterMiter,
+            current_end: Vector2::new(0.0, 0.0),
+            current_param: 1.0,
+            next_start: Vector2::new(1.0, 1.0),
+            next_param: 0.0,
+            connector_bulge: 0.0,
+            miter_tip: Some(Vector2::new(1.0, 0.0)),
+        };
+
+        let mut builder = RawOffsetBuilder::<_, _, Polyline>::new(&input, vec![], 1.0, 1e-5);
+        builder.add_first(boundary.current_end);
+        builder.emit_join(boundary);
+        assert_eq!(
+            builder.polyline.vertex_data,
+            vec![
+                PlineVertex::new(0.0, 0.0, 0.0),
+                PlineVertex::new(1.0, 0.0, 0.0),
+                PlineVertex::new(1.0, 1.0, 0.0),
+            ]
+        );
+
+        let mut builder = RawOffsetBuilder::<_, _, Polyline>::new(&input, vec![], 1.0, 1e-5);
+        builder.add_first(boundary.next_start);
+        builder.emit_segment(boundary.current_end, 0.0, false);
+        builder.close_join(boundary);
+        let result = builder.finish(true);
+        assert!(result.polyline.is_closed());
+        assert_eq!(
+            result.polyline.vertex_data,
+            vec![
+                PlineVertex::new(1.0, 1.0, 0.0),
+                PlineVertex::new(0.0, 0.0, 0.0),
+                PlineVertex::new(1.0, 0.0, 0.0),
+            ]
+        );
+        assert_eq!(result.invalid_segments, vec![false; 3]);
     }
 
     #[test]
