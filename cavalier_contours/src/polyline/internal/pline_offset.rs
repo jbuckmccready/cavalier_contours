@@ -2166,7 +2166,8 @@ where
         &constructed_index
     };
 
-    let raw_offset: RawOffsetResult<O> = create_raw_offset(polyline, offset, options.pos_equal_eps);
+    let raw_offset: RawOffsetResult<O> =
+        create_raw_offset(polyline, offset, options.pos_equal_eps, options.join_types);
     if raw_offset.polyline.is_empty() {
         Vec::new()
     } else if polyline.is_closed() && !options.handle_self_intersects {
@@ -2174,7 +2175,7 @@ where
         stitch_slices_together(&raw_offset.polyline, &slices, true, options)
     } else {
         let dual_raw_offset: RawOffsetResult<O> =
-            create_raw_offset(polyline, -offset, options.pos_equal_eps);
+            create_raw_offset(polyline, -offset, options.pos_equal_eps, None);
         let slices = slices_from_dual_raw_offsets(
             polyline,
             &raw_offset,
@@ -2217,12 +2218,6 @@ where
             join_types.len(),
             cleaned_vertex_count,
             "join type count must match the vertex count after repeated positions are removed"
-        );
-        assert!(
-            join_types
-                .iter()
-                .all(|join_type| *join_type == crate::polyline::JoinType::Round),
-            "miter joins are not yet implemented"
         );
     }
     let mut result = if let Some(cleaned) = cleaned {

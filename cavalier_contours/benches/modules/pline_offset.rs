@@ -99,6 +99,7 @@ pub fn raw_offset_round_join_group(c: &mut Criterion) {
                         black_box(polyline),
                         black_box(*offset),
                         black_box(1e-5),
+                        None,
                     ))
                 });
             },
@@ -122,11 +123,13 @@ fn repeat_raw_offsets(polyline: &Polyline<f64>, offset: f64, count: u32) {
             polyline,
             black_box(offset),
             1e-5,
+            None,
         ));
         black_box(create_raw_offset::<_, _, Polyline<f64>>(
             polyline,
             black_box(-offset),
             1e-5,
+            None,
         ));
     }
 }

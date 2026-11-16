@@ -78,8 +78,9 @@ where
 {
     /// Join types indexed by vertex after repeated positions are removed. `None` uses round joins.
     ///
-    /// Requesting a miter join for a nonzero offset currently panics; its construction is not yet
-    /// implemented.
+    /// Miters exceeding four times the offset distance fall back to round joins. Entries for
+    /// the endpoints of an open polyline are ignored. Miter joins on self-intersecting input have
+    /// not yet been validated.
     pub join_types: Option<&'a [JoinType]>,
     /// Spatial index of all the polyline segment bounding boxes (or boxes no smaller, e.g. using
     /// [`PlineSource::create_approx_aabb_index`] is valid). If `None` is given then it will be

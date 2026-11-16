@@ -1580,8 +1580,7 @@ pub trait PlineSource {
     /// # Panics
     ///
     /// For a nonzero offset with at least two input vertices, panics if the supplied join type
-    /// count does not match the vertex count after repeated positions are removed, or if a miter
-    /// join is requested (miter construction is not yet implemented).
+    /// count does not match the vertex count after repeated positions are removed.
     ///
     /// Panics if `Self::Num` type fails to cast to/from a `u16` (required for spatial index).
     ///

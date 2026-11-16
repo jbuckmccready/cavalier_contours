@@ -557,7 +557,12 @@ fn build_offset(
 fn build_raw_offset(pline: &Polyline, offset: f64, show_invalid_segments: bool) -> SceneState {
     let offset_opt = PlineOffsetOptions::default();
 
-    let raw_offset = create_raw_offset(pline, offset, offset_opt.pos_equal_eps);
+    let raw_offset = create_raw_offset(
+        pline,
+        offset,
+        offset_opt.pos_equal_eps,
+        offset_opt.join_types,
+    );
     let invalid_segments = if show_invalid_segments {
         invalid_raw_offset_segments(&raw_offset.polyline, &raw_offset.invalid_segments)
     } else {
