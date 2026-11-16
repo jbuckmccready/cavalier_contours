@@ -1,4 +1,4 @@
-use cavalier_contours::polyline::{PlineSource, PlineSourceMut, PlineVertex, Polyline};
+use cavalier_contours::polyline::{JoinType, PlineSource, PlineSourceMut, PlineVertex, Polyline};
 use egui::{ScrollArea, TextEdit, Ui, Vec2, Window};
 
 pub mod components;
@@ -61,6 +61,8 @@ pub enum JsonFormat {
 pub struct PolylineEditor {
     show_window: bool,
     pending_state: Vec<Polyline>,
+    join_types: Option<Vec<JoinType>>,
+    pending_join_types: Vec<JoinType>,
     current_json: String,
     pending_json: String,
     json_error: Option<String>,
@@ -77,6 +79,9 @@ impl PolylineEditor {
         self.ensure_polyline_capacity(polyline_index);
         let new_vertex = self.create_vertex_for_pline(polyline_index);
         self.pending_state[polyline_index].add(new_vertex.x, new_vertex.y, new_vertex.bulge);
+        if polyline_index == 0 && self.join_types.is_some() {
+            self.pending_join_types.push(JoinType::Round);
+        }
     }
 
     /// Remove a vertex from the specified polyline
@@ -85,6 +90,9 @@ impl PolylineEditor {
             let pline = &mut self.pending_state[polyline_index];
             if vertex_index < pline.vertex_count() {
                 pline.remove(vertex_index);
+                if polyline_index == 0 && self.join_types.is_some() {
+                    self.pending_join_types.remove(vertex_index);
+                }
             }
         }
     }
@@ -112,6 +120,9 @@ impl PolylineEditor {
     /// Cancel all pending changes, reverting to the current state
     pub fn cancel_changes(&mut self, polylines: &[Polyline]) {
         self.pending_state = polylines.to_vec();
+        if let Some(join_types) = &self.join_types {
+            self.pending_join_types.clone_from(join_types);
+        }
         self.pending_json = self.current_json.clone();
         self.json_error = None;
     }
@@ -119,6 +130,13 @@ impl PolylineEditor {
     /// Check if there are any pending changes in the table editor
     #[must_use]
     pub fn has_pending_table_changes(&self, polylines: &[Polyline]) -> bool {
+        if self
+            .join_types
+            .as_ref()
+            .is_some_and(|types| *types != self.pending_join_types)
+        {
+            return true;
+        }
         if polylines.len() != self.pending_state.len() {
             return true;
         }
@@ -167,6 +185,9 @@ impl PolylineEditor {
     /// Apply all pending table changes to the provided polylines
     pub fn apply_table_changes(&mut self, polylines: &mut Vec<Polyline>) {
         polylines.clone_from(&self.pending_state);
+        if let Some(join_types) = &mut self.join_types {
+            join_types.clone_from(&self.pending_join_types);
+        }
         self.current_json = self.serialize_polylines(polylines);
         self.pending_json = self.current_json.clone();
         self.json_error = None;
@@ -184,6 +205,16 @@ impl PolylineEditor {
             table_layout: TableLayout::Single,
             json_format: JsonFormat::Single,
         })
+    }
+
+    /// Enable per-vertex join selection for a single-polyline editor.
+    pub fn enable_join_types(&mut self) {
+        self.join_types = Some(Vec::new());
+    }
+
+    #[must_use]
+    pub fn join_types(&self) -> Option<&[JoinType]> {
+        self.join_types.as_deref()
     }
 
     /// Creates a polyline editor configured for editing two polylines side-by-side
@@ -217,6 +248,8 @@ impl PolylineEditor {
         Self {
             show_window: false,
             pending_state: Vec::new(),
+            join_types: None,
+            pending_join_types: Vec::new(),
             current_json: String::new(),
             pending_json: String::new(),
             json_error: None,
@@ -237,6 +270,15 @@ impl PolylineEditor {
 
     pub fn initialize_with_polylines(&mut self, polylines: Vec<Polyline>) {
         self.pending_state = polylines;
+        if let Some(join_types) = &mut self.join_types {
+            *join_types = vec![
+                JoinType::Round;
+                self.pending_state
+                    .first()
+                    .map_or(0, PlineSource::vertex_count)
+            ];
+            self.pending_join_types.clone_from(join_types);
+        }
         self.current_json = self.serialize_polylines(&self.pending_state);
         self.pending_json = self.current_json.clone();
         self.json_error = None;
@@ -251,6 +293,9 @@ impl PolylineEditor {
         // Detect first opening and refresh state with passed in (current) state
         if self.show_window && !self.is_initialized {
             self.pending_state.clone_from(polylines);
+            if let Some(join_types) = &self.join_types {
+                self.pending_join_types.clone_from(join_types);
+            }
             self.current_json = self.serialize_polylines(&self.pending_state);
             self.pending_json = self.current_json.clone();
             self.json_error = None;
@@ -365,6 +410,9 @@ impl PolylineEditor {
                         ui,
                         &mut pline.vertex_data,
                         "single_vertex_table",
+                        self.join_types
+                            .as_ref()
+                            .map(|_| &mut self.pending_join_types),
                     );
                 }
             });
@@ -435,6 +483,7 @@ impl PolylineEditor {
                                         ui,
                                         &mut pline.vertex_data,
                                         "pline1_vertex_table",
+                                        None,
                                     );
                                 }
                             });
@@ -460,6 +509,7 @@ impl PolylineEditor {
                                         ui,
                                         &mut pline.vertex_data,
                                         "pline2_vertex_table",
+                                        None,
                                     );
                                 }
                             });
@@ -549,7 +599,12 @@ impl PolylineEditor {
                         // Vertex table for this polyline
                         if let Some(pline) = self.pending_state.get_mut(i) {
                             let table_id = format!("polyline_{i}_table");
-                            components::show_vertex_table(ui, &mut pline.vertex_data, &table_id);
+                            components::show_vertex_table(
+                                ui,
+                                &mut pline.vertex_data,
+                                &table_id,
+                                None,
+                            );
                         } else {
                             ui.label("No vertices");
                         }
@@ -566,6 +621,9 @@ impl PolylineEditor {
     ) {
         ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             ui.label("JSON Editor:");
+            if self.join_types.is_some() {
+                ui.label("Applying JSON resets join types to Round.");
+            }
 
             ui.horizontal(|ui| {
                 let has_pending_changes = self.has_pending_json_changes();
@@ -606,6 +664,13 @@ impl PolylineEditor {
             Ok(new_polylines) => {
                 *polylines = new_polylines;
                 self.pending_state.clone_from(polylines);
+                if let Some(join_types) = &mut self.join_types {
+                    *join_types = vec![
+                        JoinType::Round;
+                        polylines.first().map_or(0, PlineSource::vertex_count)
+                    ];
+                    self.pending_join_types.clone_from(join_types);
+                }
                 self.current_json = self.serialize_polylines(polylines);
                 self.pending_json = self.current_json.clone();
                 self.json_error = None;

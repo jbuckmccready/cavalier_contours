@@ -1,18 +1,27 @@
-use cavalier_contours::polyline::PlineVertex;
+use cavalier_contours::polyline::{JoinType, PlineVertex};
 use egui::Ui;
 
-pub fn show_vertex_table(ui: &mut Ui, vertex_data: &mut Vec<PlineVertex>, table_id: &str) -> bool {
+pub fn show_vertex_table(
+    ui: &mut Ui,
+    vertex_data: &mut Vec<PlineVertex>,
+    table_id: &str,
+    mut join_types: Option<&mut Vec<JoinType>>,
+) -> bool {
     use egui_extras::{Column, TableBuilder};
 
     let mut changed = false;
 
-    TableBuilder::new(ui)
+    let mut table = TableBuilder::new(ui)
         .id_salt(table_id)
         .striped(true) // Add alternating row colors for better readability
         .column(Column::auto().at_least(40.0).at_most(50.0)) // Index
         .column(Column::initial(80.0).at_least(60.0).at_most(120.0)) // X
         .column(Column::initial(80.0).at_least(60.0).at_most(120.0)) // Y
-        .column(Column::initial(80.0).at_least(60.0).at_most(120.0)) // Bulge
+        .column(Column::initial(80.0).at_least(60.0).at_most(120.0)); // Bulge
+    if join_types.is_some() {
+        table = table.column(Column::initial(100.0).at_least(80.0));
+    }
+    table
         .column(Column::auto().at_least(40.0).at_most(50.0)) // Delete
         .header(20.0, |mut header| {
             header.col(|ui| {
@@ -27,6 +36,11 @@ pub fn show_vertex_table(ui: &mut Ui, vertex_data: &mut Vec<PlineVertex>, table_
             header.col(|ui| {
                 ui.label("Bulge");
             });
+            if join_types.is_some() {
+                header.col(|ui| {
+                    ui.label("Join");
+                });
+            }
             header.col(|ui| {
                 ui.label("Delete");
             });
@@ -35,7 +49,7 @@ pub fn show_vertex_table(ui: &mut Ui, vertex_data: &mut Vec<PlineVertex>, table_
             let mut to_delete: Option<usize> = None;
 
             for (i, vertex) in vertex_data.iter_mut().enumerate() {
-                body.row(18.0, |mut row| {
+                body.row(24.0, |mut row| {
                     row.col(|ui| {
                         ui.label(format!("{i}"));
                     });
@@ -54,6 +68,24 @@ pub fn show_vertex_table(ui: &mut Ui, vertex_data: &mut Vec<PlineVertex>, table_
                             .add(egui::DragValue::new(&mut vertex.bulge).speed(0.01))
                             .changed();
                     });
+                    if let Some(types) = join_types.as_deref_mut() {
+                        row.col(|ui| {
+                            let join_type = &mut types[i];
+                            egui::ComboBox::from_id_salt((table_id, i, "join"))
+                                .selected_text(match join_type {
+                                    JoinType::Round => "Round",
+                                    JoinType::Miter => "Miter",
+                                })
+                                .show_ui(ui, |ui| {
+                                    changed |= ui
+                                        .selectable_value(join_type, JoinType::Round, "Round")
+                                        .changed();
+                                    changed |= ui
+                                        .selectable_value(join_type, JoinType::Miter, "Miter")
+                                        .changed();
+                                });
+                        });
+                    }
                     row.col(|ui| {
                         ui.with_layout(
                             egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
@@ -74,6 +106,9 @@ pub fn show_vertex_table(ui: &mut Ui, vertex_data: &mut Vec<PlineVertex>, table_
 
             if let Some(index) = to_delete {
                 vertex_data.remove(index);
+                if let Some(types) = join_types {
+                    types.remove(index);
+                }
             }
         });
 
