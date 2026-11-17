@@ -5,7 +5,7 @@ pub fn show_vertex_table(
     ui: &mut Ui,
     vertex_data: &mut Vec<PlineVertex>,
     table_id: &str,
-    mut join_types: Option<&mut Vec<JoinType>>,
+    show_join_types: bool,
 ) -> bool {
     use egui_extras::{Column, TableBuilder};
 
@@ -18,7 +18,7 @@ pub fn show_vertex_table(
         .column(Column::initial(80.0).at_least(60.0).at_most(120.0)) // X
         .column(Column::initial(80.0).at_least(60.0).at_most(120.0)) // Y
         .column(Column::initial(80.0).at_least(60.0).at_most(120.0)); // Bulge
-    if join_types.is_some() {
+    if show_join_types {
         table = table.column(Column::initial(100.0).at_least(80.0));
     }
     table
@@ -36,7 +36,7 @@ pub fn show_vertex_table(
             header.col(|ui| {
                 ui.label("Bulge");
             });
-            if join_types.is_some() {
+            if show_join_types {
                 header.col(|ui| {
                     ui.label("Join");
                 });
@@ -68,9 +68,9 @@ pub fn show_vertex_table(
                             .add(egui::DragValue::new(&mut vertex.bulge).speed(0.01))
                             .changed();
                     });
-                    if let Some(types) = join_types.as_deref_mut() {
+                    if show_join_types {
                         row.col(|ui| {
-                            let join_type = &mut types[i];
+                            let join_type = &mut vertex.join_type;
                             egui::ComboBox::from_id_salt((table_id, i, "join"))
                                 .selected_text(match join_type {
                                     JoinType::Round => "Round",
@@ -106,9 +106,6 @@ pub fn show_vertex_table(
 
             if let Some(index) = to_delete {
                 vertex_data.remove(index);
-                if let Some(types) = join_types {
-                    types.remove(index);
-                }
             }
         });
 

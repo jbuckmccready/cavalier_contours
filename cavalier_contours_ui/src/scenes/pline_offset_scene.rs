@@ -308,7 +308,7 @@ fn controls_panel(
                 }
 
                 // TODO: cache scene state to only update when the polyline or controls change.
-                let current_scene_state = build_scene_state(pline, mode, *offset, polyline_editor.join_types().unwrap_or_default());
+                let current_scene_state = build_scene_state(pline, mode, *offset);
                 if let SceneState::Offset {
                     first_offset_count,
                     ..
@@ -327,12 +327,7 @@ fn controls_panel(
     scene_state.expect("controls panel contents should always be rendered")
 }
 
-fn build_scene_state(
-    pline: &Polyline,
-    mode: &Mode,
-    offset: f64,
-    join_types: &[JoinType],
-) -> SceneState {
+fn build_scene_state(pline: &Polyline, mode: &Mode, offset: f64) -> SceneState {
     match mode {
         Mode::Offset {
             handle_self_intersects,
@@ -346,11 +341,10 @@ fn build_scene_state(
             *max_offset_count,
             *touching_loop_behavior,
             *coincident_segment_behavior,
-            join_types,
         ),
         Mode::RawOffset {
             show_invalid_segments,
-        } => build_raw_offset(pline, offset, *show_invalid_segments, join_types),
+        } => build_raw_offset(pline, offset, *show_invalid_segments),
         Mode::RawOffsetSegments => build_raw_offset_segments(pline, offset),
     }
 }
@@ -487,38 +481,6 @@ fn plot_area(
     polyline_editor.ui_show(ui.ctx(), plines, &colors);
 }
 
-// Match remove_repeat_pos: retain the last join in a consecutive run and the first at the seam.
-fn clean_join_types<'a>(
-    pline: &'a Polyline,
-    join_types: &[JoinType],
-    eps: f64,
-) -> (Cow<'a, Polyline>, Vec<JoinType>) {
-    let Some(cleaned) = pline.remove_repeat_pos(eps) else {
-        return (Cow::Borrowed(pline), join_types.to_vec());
-    };
-    let mut result = Vec::new();
-    let mut prev = pline.at(0).pos();
-    result.push(join_types[0]);
-    for (i, vertex) in pline.iter_vertexes().enumerate().skip(1) {
-        if vertex.pos().fuzzy_eq_eps(prev, eps) {
-            *result.last_mut().unwrap() = join_types[i];
-        } else {
-            result.push(join_types[i]);
-            prev = vertex.pos();
-        }
-    }
-    if pline.is_closed()
-        && pline
-            .last()
-            .unwrap()
-            .pos()
-            .fuzzy_eq_eps(pline.at(0).pos(), eps)
-    {
-        result.pop();
-    }
-    (Cow::Owned(cleaned), result)
-}
-
 fn build_offset(
     pline: &Polyline,
     offset: f64,
@@ -526,7 +488,6 @@ fn build_offset(
     max_offset_count: usize,
     touching_loop_behavior: TouchingLoopBehavior,
     coincident_segment_behavior: CoincidentSegmentBehavior,
-    join_types: &[JoinType],
 ) -> SceneState {
     let mut all_offset_plines = Vec::new();
     if max_offset_count == 0 {
@@ -545,26 +506,23 @@ fn build_offset(
 
     // remove redundant vertices if necessary to avoid any problems with offsetting (sanitizing
     // input)
-    let has_miters = join_types.contains(&JoinType::Miter);
-    let (pline, cleaned_joins) = if has_miters {
-        clean_join_types(pline, join_types, offset_opt.pos_equal_eps)
+    let has_miters = pline
+        .iter_vertexes()
+        .any(|v| v.join_type == JoinType::Miter);
+    let pline = if has_miters {
+        pline
+            .remove_repeat_pos(offset_opt.pos_equal_eps)
+            .map_or(Cow::Borrowed(pline), Cow::Owned)
     } else {
-        (
-            pline
-                .remove_redundant(offset_opt.pos_equal_eps)
-                .map_or(Cow::Borrowed(pline), Cow::Owned),
-            Vec::new(),
-        )
+        pline
+            .remove_redundant(offset_opt.pos_equal_eps)
+            .map_or(Cow::Borrowed(pline), Cow::Owned)
     };
 
     let orientation = pline.orientation();
 
     // current offset polylines
-    let mut first_options = offset_opt.clone();
-    if has_miters {
-        first_options.join_types = Some(&cleaned_joins);
-    }
-    let mut offset_plines = pline.parallel_offset_opt(offset, &first_options);
+    let mut offset_plines = pline.parallel_offset_opt(offset, &offset_opt);
     let first_offset_count = offset_plines.len();
 
     let mut same_orientation = Vec::new();
@@ -605,27 +563,20 @@ fn build_offset(
     }
 }
 
-fn build_raw_offset(
-    pline: &Polyline,
-    offset: f64,
-    show_invalid_segments: bool,
-    join_types: &[JoinType],
-) -> SceneState {
+fn build_raw_offset(pline: &Polyline, offset: f64, show_invalid_segments: bool) -> SceneState {
     let offset_opt = PlineOffsetOptions::default();
 
-    let has_miters = join_types.contains(&JoinType::Miter);
-    let (pline, cleaned_joins) = if has_miters {
-        clean_join_types(pline, join_types, offset_opt.pos_equal_eps)
+    let pline = if pline
+        .iter_vertexes()
+        .any(|v| v.join_type == JoinType::Miter)
+    {
+        pline
+            .remove_repeat_pos(offset_opt.pos_equal_eps)
+            .map_or(Cow::Borrowed(pline), Cow::Owned)
     } else {
-        (Cow::Borrowed(pline), Vec::new())
+        Cow::Borrowed(pline)
     };
-
-    let raw_offset = create_raw_offset(
-        &*pline,
-        offset,
-        offset_opt.pos_equal_eps,
-        has_miters.then_some(cleaned_joins.as_slice()),
-    );
+    let raw_offset = create_raw_offset(&*pline, offset, offset_opt.pos_equal_eps, None);
     let invalid_segments = if show_invalid_segments {
         invalid_raw_offset_segments(&raw_offset.polyline, &raw_offset.invalid_segments)
     } else {
@@ -691,7 +642,6 @@ mod tests {
             0,
             TouchingLoopBehavior::Preserve,
             CoincidentSegmentBehavior::Preserve,
-            &[],
         );
 
         let SceneState::Offset {
@@ -714,7 +664,6 @@ mod tests {
             1,
             TouchingLoopBehavior::Preserve,
             CoincidentSegmentBehavior::Preserve,
-            &[],
         );
 
         let SceneState::Offset {

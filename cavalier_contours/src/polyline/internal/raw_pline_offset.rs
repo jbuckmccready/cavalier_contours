@@ -268,7 +268,7 @@ where
     O: PlineSourceMut<Num = T>,
 {
     source: &'a P,
-    join_types: Option<&'a [JoinType]>,
+    join_type_override: Option<JoinType>,
     raw_segments: Vec<RawOffsetSeg<T>>,
     polyline: O,
     invalid_segment_indexes: Vec<usize>,
@@ -288,11 +288,11 @@ where
         raw_segments: Vec<RawOffsetSeg<T>>,
         offset: T,
         pos_equal_eps: T,
-        join_types: Option<&'a [JoinType]>,
+        join_type_override: Option<JoinType>,
     ) -> Self {
         Self {
             source,
-            join_types,
+            join_type_override,
             polyline: O::with_capacity(source.vertex_count() + 1, false),
             invalid_segment_indexes: Vec::new(),
             raw_segments,
@@ -458,8 +458,8 @@ where
         }
 
         let join_type = self
-            .join_types
-            .map_or(JoinType::Round, |types| types[next_index]);
+            .join_type_override
+            .unwrap_or(self.source.at(next_index).join_type);
         if let Some(boundary) =
             self.join_without_intersection(current, next, shared_source_vertex, join_type)
         {
@@ -862,11 +862,17 @@ where
             boundary.miter_tip.is_some()
         );
         if boundary.class == JoinClass::OuterMiter {
+            let previous_count = self.polyline.vertex_count();
             self.emit_segment(
                 boundary.miter_tip.expect("miter join must have a tip"),
                 T::zero(),
                 false,
             );
+            if self.polyline.vertex_count() > previous_count {
+                let mut tip = self.polyline.last().unwrap();
+                tip.join_type = JoinType::Miter;
+                self.polyline.set_last(tip);
+            }
         }
     }
 
@@ -1059,11 +1065,12 @@ where
 }
 
 /// Constructs raw offset geometry and marks locally invalid output segments.
+/// When given, `join_type_override` replaces the source vertex join types.
 pub fn create_raw_offset<P, T, O>(
     polyline: &P,
     offset: T,
     pos_equal_eps: T,
-    join_types: Option<&[JoinType]>,
+    join_type_override: Option<JoinType>,
 ) -> RawOffsetResult<O>
 where
     P: PlineSource<Num = T> + ?Sized,
@@ -1091,8 +1098,13 @@ where
         return RawOffsetResult::empty();
     }
 
-    let builder =
-        RawOffsetBuilder::<P, T, O>::new(polyline, raw_segments, offset, pos_equal_eps, join_types);
+    let builder = RawOffsetBuilder::<P, T, O>::new(
+        polyline,
+        raw_segments,
+        offset,
+        pos_equal_eps,
+        join_type_override,
+    );
     if polyline.is_closed() {
         builder.build_closed()
     } else {

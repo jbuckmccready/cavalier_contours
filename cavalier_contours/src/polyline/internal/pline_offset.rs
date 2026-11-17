@@ -35,10 +35,10 @@ use crate::{
         traits::Real,
     },
     polyline::{
-        CoincidentSegmentBehavior, FindIntersectsOptions, PlineBasicIntersect, PlineCreation,
-        PlineIntersect, PlineIntersectFilterItem, PlineIntersectVisitor, PlineOffsetOptions,
-        PlineOverlappingIntersect, PlineSegIntr, PlineSource, PlineVertex, PlineViewData,
-        TouchingLoopBehavior, TwoPlinesIntersectFilterItem, dist_from_segment_start,
+        CoincidentSegmentBehavior, FindIntersectsOptions, JoinType, PlineBasicIntersect,
+        PlineCreation, PlineIntersect, PlineIntersectFilterItem, PlineIntersectVisitor,
+        PlineOffsetOptions, PlineOverlappingIntersect, PlineSegIntr, PlineSource, PlineVertex,
+        PlineViewData, TouchingLoopBehavior, TwoPlinesIntersectFilterItem, dist_from_segment_start,
         internal::{
             pline_intersects::{
                 find_intersects, find_intersects_filtered, visit_global_self_intersects,
@@ -2166,16 +2166,24 @@ where
         &constructed_index
     };
 
-    let raw_offset: RawOffsetResult<O> =
-        create_raw_offset(polyline, offset, options.pos_equal_eps, options.join_types);
+    let raw_offset: RawOffsetResult<O> = create_raw_offset(
+        polyline,
+        offset,
+        options.pos_equal_eps,
+        options.join_type_override,
+    );
     if raw_offset.polyline.is_empty() {
         Vec::new()
     } else if polyline.is_closed() && !options.handle_self_intersects {
         let slices = slices_from_raw_offset(polyline, &raw_offset, index, offset, options);
         stitch_slices_together(&raw_offset.polyline, &slices, true, options)
     } else {
-        let dual_raw_offset: RawOffsetResult<O> =
-            create_raw_offset(polyline, -offset, options.pos_equal_eps, None);
+        let dual_raw_offset: RawOffsetResult<O> = create_raw_offset(
+            polyline,
+            -offset,
+            options.pos_equal_eps,
+            Some(JoinType::Round),
+        );
         let slices = slices_from_dual_raw_offsets(
             polyline,
             &raw_offset,
@@ -2210,16 +2218,6 @@ where
 
     // Sanitize repeat positions to prevent unstable/degenerate segments.
     let cleaned = polyline.remove_repeat_pos(options.pos_equal_eps);
-    let cleaned_vertex_count = cleaned
-        .as_ref()
-        .map_or_else(|| polyline.vertex_count(), PlineSource::vertex_count);
-    if let Some(join_types) = options.join_types {
-        assert_eq!(
-            join_types.len(),
-            cleaned_vertex_count,
-            "join type count must match the vertex count after repeated positions are removed"
-        );
-    }
     let mut result = if let Some(cleaned) = cleaned {
         if cleaned.vertex_count() < 2 {
             Vec::<O>::new()

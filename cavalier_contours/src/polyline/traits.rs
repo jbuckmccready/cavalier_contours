@@ -465,12 +465,16 @@ pub trait PlineSource {
             let is_repeat = v.pos().fuzzy_eq_eps(prev_pos, pos_equal_eps);
 
             if is_repeat {
-                // repeat position just update bulge (remove vertex by not adding it to result)
+                // Retain the position and use the last vertex's bulge and join type.
                 let r = result.get_or_insert_with(|| {
                     Self::OutputPolyline::from_iter(self.iter_vertexes().take(i), self.is_closed())
                 });
                 let last = r.last().unwrap();
-                r.set_last(last.with_bulge(v.bulge));
+                r.set_last(PlineVertex {
+                    bulge: v.bulge,
+                    join_type: v.join_type,
+                    ..last
+                });
             } else {
                 if let Some(ref mut r) = result {
                     // not repeat position and result is initialized
