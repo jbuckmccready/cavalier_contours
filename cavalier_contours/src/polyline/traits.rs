@@ -1902,7 +1902,15 @@ pub trait PlineSourceMut: PlineSource {
     /// vertex structure.
     #[inline]
     fn set(&mut self, index: usize, x: Self::Num, y: Self::Num, bulge: Self::Num) {
-        self.set_vertex(index, PlineVertex::new(x, y, bulge));
+        self.set_vertex(
+            index,
+            PlineVertex {
+                x,
+                y,
+                bulge,
+                ..self.at(index)
+            },
+        );
     }
 
     /// Set the last vertex of the polyline.
@@ -2077,7 +2085,14 @@ pub trait PlineSourceMut: PlineSource {
     fn scale_mut(&mut self, scale_factor: Self::Num) {
         for i in 0..self.vertex_count() {
             let v = self.at(i);
-            self.set(i, scale_factor * v.x, scale_factor * v.y, v.bulge);
+            self.set_vertex(
+                i,
+                PlineVertex {
+                    x: scale_factor * v.x,
+                    y: scale_factor * v.y,
+                    ..v
+                },
+            );
         }
     }
 
@@ -2099,7 +2114,14 @@ pub trait PlineSourceMut: PlineSource {
     fn translate_mut(&mut self, x: Self::Num, y: Self::Num) {
         for i in 0..self.vertex_count() {
             let v = self.at(i);
-            self.set(i, v.x + x, v.y + y, v.bulge);
+            self.set_vertex(
+                i,
+                PlineVertex {
+                    x: v.x + x,
+                    y: v.y + y,
+                    ..v
+                },
+            );
         }
     }
 

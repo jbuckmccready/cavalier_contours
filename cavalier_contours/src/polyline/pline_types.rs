@@ -42,6 +42,7 @@ where
 }
 
 /// Controls how an outer corner is joined when offsetting a polyline.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum JoinType {
     /// Connect offset segments with an arc centered on the source vertex.
