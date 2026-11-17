@@ -2180,6 +2180,7 @@ where
     } else {
         let dual_raw_offset: RawOffsetResult<O> = create_raw_offset(
             polyline,
+            // TODO: Should this use the max of `offset` and the largest miter join height?
             -offset,
             options.pos_equal_eps,
             Some(JoinType::Round),
