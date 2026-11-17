@@ -1,8 +1,9 @@
 use std::fmt::Display;
 
+use super::JoinType;
 use crate::core::{math::Vector2, traits::Real};
 
-/// A polyline vertex is represented by an `x`, `y`, and `bulge` value.
+/// A polyline vertex is represented by an `x`, `y`, `bulge` value, and `join_type` for offsetting.
 ///
 /// `x` and `y` describe the 2D position of the vertex. `bulge` describes the arc sweep angle for
 /// the polyline segment that starts with this vertex. `bulge` is defined as
@@ -20,6 +21,8 @@ pub struct PlineVertex<T = f64> {
     pub y: T,
     /// Bulge for the polyline segment that starts with this vertex.
     pub bulge: T,
+    /// Join type to use when offsetting this vertex.
+    pub join_type: JoinType,
 }
 
 impl<T> Display for PlineVertex<T>
@@ -34,7 +37,12 @@ where
 #[cfg(feature = "serde")]
 mod serde_impl {
     use super::PlineVertex;
-    use serde::{Deserialize, Serialize, ser::SerializeTuple};
+    use serde::{
+        Deserialize, Serialize,
+        de::{Error, SeqAccess, Visitor},
+        ser::SerializeTuple,
+    };
+    use std::{fmt, marker::PhantomData};
 
     impl<T> Serialize for PlineVertex<T>
     where
@@ -44,10 +52,11 @@ mod serde_impl {
         where
             S: serde::Serializer,
         {
-            let mut tuple = serializer.serialize_tuple(3)?;
+            let mut tuple = serializer.serialize_tuple(4)?;
             tuple.serialize_element(&self.x)?;
             tuple.serialize_element(&self.y)?;
             tuple.serialize_element(&self.bulge)?;
+            tuple.serialize_element(&self.join_type)?;
             tuple.end()
         }
     }
@@ -60,8 +69,34 @@ mod serde_impl {
         where
             D: serde::Deserializer<'de>,
         {
-            let [x, y, bulge]: [T; 3] = Deserialize::deserialize(deserializer)?;
-            Ok(PlineVertex { x, y, bulge })
+            struct VertexVisitor<T>(PhantomData<T>);
+            impl<'de, T: Deserialize<'de>> Visitor<'de> for VertexVisitor<T> {
+                type Value = PlineVertex<T>;
+
+                fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    formatter.write_str("a vertex with three coordinates and an optional join type")
+                }
+
+                fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                    let x = seq
+                        .next_element()?
+                        .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+                    let y = seq
+                        .next_element()?
+                        .ok_or_else(|| A::Error::invalid_length(1, &self))?;
+                    let bulge = seq
+                        .next_element()?
+                        .ok_or_else(|| A::Error::invalid_length(2, &self))?;
+                    let join_type = seq.next_element()?.unwrap_or_default();
+                    Ok(PlineVertex {
+                        x,
+                        y,
+                        bulge,
+                        join_type,
+                    })
+                }
+            }
+            deserializer.deserialize_tuple(4, VertexVisitor(PhantomData))
         }
     }
 }
@@ -77,7 +112,12 @@ where
 {
     #[inline]
     pub fn new(x: T, y: T, bulge: T) -> Self {
-        PlineVertex { x, y, bulge }
+        PlineVertex {
+            x,
+            y,
+            bulge,
+            join_type: JoinType::Round,
+        }
     }
 
     /// Construct a vertex from a [x, y, bulge] slice.
@@ -98,11 +138,18 @@ where
         PlineVertex::new(vector2.x, vector2.y, bulge)
     }
 
-    /// Create a copy of the vertex with new bulge value but same `x` and `y` values.
+    /// Create a copy of the vertex with new `bulge` value but same `x`, `y`, and `join_type` values.
     #[inline]
     #[must_use]
     pub fn with_bulge(&self, bulge: T) -> Self {
-        PlineVertex::new(self.x, self.y, bulge)
+        PlineVertex { bulge, ..*self }
+    }
+
+    /// Create a copy of the vertex with a new `join_type`.
+    #[inline]
+    #[must_use]
+    pub fn with_join_type(&self, join_type: JoinType) -> Self {
+        PlineVertex { join_type, ..*self }
     }
 
     /// Return the position as a 2D vector.

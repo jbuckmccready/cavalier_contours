@@ -119,6 +119,7 @@ impl cavc_pline_parallel_offset_o {
             _ => return None,
         };
         Some(PlineOffsetOptions {
+            join_type_override: None,
             aabb_index,
             pos_equal_eps: self.pos_equal_eps,
             offset_dist_eps: self.offset_dist_eps,

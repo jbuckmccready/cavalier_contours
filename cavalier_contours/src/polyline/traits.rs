@@ -465,12 +465,16 @@ pub trait PlineSource {
             let is_repeat = v.pos().fuzzy_eq_eps(prev_pos, pos_equal_eps);
 
             if is_repeat {
-                // repeat position just update bulge (remove vertex by not adding it to result)
+                // Retain the position and use the last vertex's `bulge` and `join_type`.
                 let r = result.get_or_insert_with(|| {
                     Self::OutputPolyline::from_iter(self.iter_vertexes().take(i), self.is_closed())
                 });
                 let last = r.last().unwrap();
-                r.set_last(last.with_bulge(v.bulge));
+                r.set_last(PlineVertex {
+                    bulge: v.bulge,
+                    join_type: v.join_type,
+                    ..last
+                });
             } else {
                 if let Some(ref mut r) = result {
                     // not repeat position and result is initialized
@@ -1899,7 +1903,15 @@ pub trait PlineSourceMut: PlineSource {
     /// vertex structure.
     #[inline]
     fn set(&mut self, index: usize, x: Self::Num, y: Self::Num, bulge: Self::Num) {
-        self.set_vertex(index, PlineVertex::new(x, y, bulge));
+        self.set_vertex(
+            index,
+            PlineVertex {
+                x,
+                y,
+                bulge,
+                ..self.at(index)
+            },
+        );
     }
 
     /// Set the last vertex of the polyline.
@@ -2074,7 +2086,14 @@ pub trait PlineSourceMut: PlineSource {
     fn scale_mut(&mut self, scale_factor: Self::Num) {
         for i in 0..self.vertex_count() {
             let v = self.at(i);
-            self.set(i, scale_factor * v.x, scale_factor * v.y, v.bulge);
+            self.set_vertex(
+                i,
+                PlineVertex {
+                    x: scale_factor * v.x,
+                    y: scale_factor * v.y,
+                    ..v
+                },
+            );
         }
     }
 
@@ -2096,7 +2115,14 @@ pub trait PlineSourceMut: PlineSource {
     fn translate_mut(&mut self, x: Self::Num, y: Self::Num) {
         for i in 0..self.vertex_count() {
             let v = self.at(i);
-            self.set(i, v.x + x, v.y + y, v.bulge);
+            self.set_vertex(
+                i,
+                PlineVertex {
+                    x: v.x + x,
+                    y: v.y + y,
+                    ..v
+                },
+            );
         }
     }
 

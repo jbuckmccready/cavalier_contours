@@ -61,6 +61,7 @@ pub enum JsonFormat {
 pub struct PolylineEditor {
     show_window: bool,
     pending_state: Vec<Polyline>,
+    show_join_types: bool,
     current_json: String,
     pending_json: String,
     json_error: Option<String>,
@@ -186,6 +187,11 @@ impl PolylineEditor {
         })
     }
 
+    /// Enable per-vertex join selection for a single-polyline editor.
+    pub fn enable_join_types(&mut self) {
+        self.show_join_types = true;
+    }
+
     /// Creates a polyline editor configured for editing two polylines side-by-side
     #[must_use]
     pub fn dual(title: &str) -> Self {
@@ -217,6 +223,7 @@ impl PolylineEditor {
         Self {
             show_window: false,
             pending_state: Vec::new(),
+            show_join_types: false,
             current_json: String::new(),
             pending_json: String::new(),
             json_error: None,
@@ -365,6 +372,7 @@ impl PolylineEditor {
                         ui,
                         &mut pline.vertex_data,
                         "single_vertex_table",
+                        self.show_join_types,
                     );
                 }
             });
@@ -435,6 +443,7 @@ impl PolylineEditor {
                                         ui,
                                         &mut pline.vertex_data,
                                         "pline1_vertex_table",
+                                        false,
                                     );
                                 }
                             });
@@ -460,6 +469,7 @@ impl PolylineEditor {
                                         ui,
                                         &mut pline.vertex_data,
                                         "pline2_vertex_table",
+                                        false,
                                     );
                                 }
                             });
@@ -549,7 +559,12 @@ impl PolylineEditor {
                         // Vertex table for this polyline
                         if let Some(pline) = self.pending_state.get_mut(i) {
                             let table_id = format!("polyline_{i}_table");
-                            components::show_vertex_table(ui, &mut pline.vertex_data, &table_id);
+                            components::show_vertex_table(
+                                ui,
+                                &mut pline.vertex_data,
+                                &table_id,
+                                false,
+                            );
                         } else {
                             ui.label("No vertices");
                         }
