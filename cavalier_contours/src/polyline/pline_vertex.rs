@@ -3,7 +3,7 @@ use std::fmt::Display;
 use super::JoinType;
 use crate::core::{math::Vector2, traits::Real};
 
-/// A polyline vertex has a position, bulge, and offset join type.
+/// A polyline vertex is represented by an `x`, `y`, `bulge` value, and `join_type` for offsetting.
 ///
 /// `x` and `y` describe the 2D position of the vertex. `bulge` describes the arc sweep angle for
 /// the polyline segment that starts with this vertex. `bulge` is defined as
@@ -138,14 +138,14 @@ where
         PlineVertex::new(vector2.x, vector2.y, bulge)
     }
 
-    /// Create a copy of the vertex with a new bulge value.
+    /// Create a copy of the vertex with new `bulge` value but same `x`, `y`, and `join_type` values.
     #[inline]
     #[must_use]
     pub fn with_bulge(&self, bulge: T) -> Self {
         PlineVertex { bulge, ..*self }
     }
 
-    /// Create a copy of the vertex with a new join type.
+    /// Create a copy of the vertex with a new `join_type`.
     #[inline]
     #[must_use]
     pub fn with_join_type(&self, join_type: JoinType) -> Self {
