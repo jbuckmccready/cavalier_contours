@@ -1,8 +1,8 @@
 use cavalier_contours::{
     pline_closed,
     polyline::{
-        CoincidentSegmentBehavior, JoinType, PlineOffsetOptions, PlineSource, PlineSourceMut,
-        Polyline, TouchingLoopBehavior,
+        CoincidentSegmentBehavior, PlineOffsetOptions, PlineSource, PlineSourceMut, Polyline,
+        TouchingLoopBehavior,
         internal::raw_pline_offset::{
             RawOffsetSeg, create_raw_offset, create_untrimmed_raw_offset_segs,
         },
@@ -506,18 +506,10 @@ fn build_offset(
 
     // remove redundant vertices if necessary to avoid any problems with offsetting (sanitizing
     // input)
-    let has_miters = pline
-        .iter_vertexes()
-        .any(|v| v.join_type == JoinType::Miter);
-    let pline = if has_miters {
-        pline
-            .remove_repeat_pos(offset_opt.pos_equal_eps)
-            .map_or(Cow::Borrowed(pline), Cow::Owned)
-    } else {
-        pline
-            .remove_redundant(offset_opt.pos_equal_eps)
-            .map_or(Cow::Borrowed(pline), Cow::Owned)
-    };
+    let mut pline = Cow::Borrowed(pline);
+    if let Some(pl) = pline.remove_redundant(offset_opt.pos_equal_eps) {
+        pline = Cow::Owned(pl);
+    }
 
     let orientation = pline.orientation();
 
@@ -566,17 +558,7 @@ fn build_offset(
 fn build_raw_offset(pline: &Polyline, offset: f64, show_invalid_segments: bool) -> SceneState {
     let offset_opt = PlineOffsetOptions::default();
 
-    let pline = if pline
-        .iter_vertexes()
-        .any(|v| v.join_type == JoinType::Miter)
-    {
-        pline
-            .remove_repeat_pos(offset_opt.pos_equal_eps)
-            .map_or(Cow::Borrowed(pline), Cow::Owned)
-    } else {
-        Cow::Borrowed(pline)
-    };
-    let raw_offset = create_raw_offset(&*pline, offset, offset_opt.pos_equal_eps, None);
+    let raw_offset = create_raw_offset(pline, offset, offset_opt.pos_equal_eps, None);
     let invalid_segments = if show_invalid_segments {
         invalid_raw_offset_segments(&raw_offset.polyline, &raw_offset.invalid_segments)
     } else {
